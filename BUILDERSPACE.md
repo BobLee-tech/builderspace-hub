@@ -98,7 +98,7 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 ## 部署（Vercel + Neon）
 
-> 项目、数据库、环境变量和数据库迁移这几步已经按下面的做法实际做过。**第一次线上构建还没跑**，构建和运行时有没有坑尚未验证，跑通后请回来修正本节。
+> 第 1–6 步已经按下面的做法实际走通：线上构建成功，登录页和健康检查（含数据库连接）正常。第 7、8 步（注册、初始化、关闭注册）还没在线上做过，做完请回来修正本节。
 
 应用是一个 Next.js 单体（`apps/web`），没有常驻进程和 WebSocket，可以直接跑在 Vercel 上。数据库用 Vercel Marketplace 里的 Neon（免费档，闲置时自动休眠、访问时自动唤醒）。
 
@@ -122,13 +122,13 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
    `NEXT_PUBLIC_ALLOW_CREDENTIALS` 名字里带 credentials，CLI 会当成密钥拦一下。它只是「允许邮箱密码登录」的开关，加 `--type config` 即可。
 5. **迁移。** 用直连地址在本机跑：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`。以后每次同步上游带来新迁移时都要再跑一次。
-6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。
+6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
 7. **注册并初始化。** 核心团队各自注册账号，按上一节初始化项目结构，再在每个项目的 成员 页用邀请链接互相拉进来。
 8. **关闭公开注册。** 把 `NEXT_PUBLIC_DISABLE_SIGN_UP` 设为 `true` 重新部署。之后只有「已被邮箱邀请」的人能注册，而邮箱邀请需要先配好 SMTP；没配 SMTP 时要加新人，就临时打开注册，等对方注册并通过邀请链接加入后再关上。
 
 两点注意：
 
-- **访问保护。** 如果 Vercel 团队的 Deployment Protection 覆盖了生产环境的 `*.vercel.app` 域名，不在 Vercel 团队里的同事打不开，初始化脚本也调不通 API。要么绑一个自定义域名（自定义域名不受该保护影响），要么把保护范围改成只保护预览部署。Hub 自己有登录，不依赖这层保护。
+- **访问保护。** 实测：项目的生产域名 `<项目名>.vercel.app` 可以公开访问；带哈希的单次部署地址和预览地址受团队的 Deployment Protection 保护，要登录 Vercel 才能看。把生产域名发给同事即可，不要发带哈希的地址。
 - **限流。** 没配 Redis 时限流按实例内存计数，在 Serverless 上约束力有限；对外开放注册前应配上 `REDIS_URL`。
 
 ## 开发约定
