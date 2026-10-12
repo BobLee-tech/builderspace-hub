@@ -96,31 +96,40 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 `packages/builderspace/tasks.local.json` 已被 git 忽略。任务、成员、评论这些真实数据只存在数据库里，不进仓库。
 
-## 部署（Vercel + Postgres）
+## 部署（Vercel + Neon）
 
-> 以下步骤是按代码整理出来的，**还没有实际部署验证过**，第一次部署时请对照检查并回来修正本节。
+> 项目、数据库、环境变量和数据库迁移这几步已经按下面的做法实际做过。**第一次线上构建还没跑**，构建和运行时有没有坑尚未验证，跑通后请回来修正本节。
 
-应用是一个 Next.js 单体（`apps/web`），没有常驻进程和 WebSocket，可以直接跑在 Vercel 上。需要一个外部 Postgres：Vercel Marketplace 里的 Neon，或者 Supabase，免费额度都够用。
+应用是一个 Next.js 单体（`apps/web`），没有常驻进程和 WebSocket，可以直接跑在 Vercel 上。数据库用 Vercel Marketplace 里的 Neon（免费档，闲置时自动休眠、访问时自动唤醒）。
 
-1. 把这个仓库推到 GitHub（AGPL 要求见下，建议公开）。
-2. Vercel 新建项目并导入仓库，Root Directory 设为 `apps/web`。
-3. 创建数据库，拿到连接串。Serverless 环境请用**连接池**地址。
-4. 在 Vercel 设置环境变量：
+1. **关联项目。** 在仓库根目录执行 `vercel link`，它会自动关联 GitHub 仓库，生产分支是 `main`。它还会改 `.gitignore` 并生成一个 `.env.local`，这两处都不需要，还原和删掉即可。
+2. **项目设置。** Root Directory 设为 `apps/web`，Framework 选 Next.js，Node 22，函数区域选离团队最近的。
+3. **数据库。** 只连到生产环境，区域和函数保持一致：
+
+   ```bash
+   vercel integration add neon --name <名字> --plan free_v3 -m region=<区域> -m auth=false -e production --no-env-pull
+   ```
+
+   它会自动注入 `POSTGRES_URL`（连接池地址，应用直接用）和 `POSTGRES_URL_NON_POOLING`（直连地址，迁移用）。CLI 还会往仓库里放 `.agents/`、`.claude/skills/` 和 `skills-lock.json`，不要提交。
+4. **环境变量（生产环境）。**
 
    | 变量 | 值 |
    | --- | --- |
-   | `NEXT_PUBLIC_BASE_URL` | 线上地址，如 `https://hub.example.com` |
-   | `BETTER_AUTH_SECRET` | 新生成的随机串，**不要复用本地的** |
-   | `POSTGRES_URL` | 数据库连接池地址 |
+   | `NEXT_PUBLIC_BASE_URL` | 线上地址，要和实际访问的域名完全一致 |
+   | `BETTER_AUTH_SECRET` | 新生成的随机串，设为 sensitive，**不要复用本地的** |
    | `NEXT_PUBLIC_ALLOW_CREDENTIALS` | `true` |
    | `NEXT_PUBLIC_DISABLE_EMAIL` | `true`（配好 SMTP 之前） |
 
-5. 在本机对线上库跑一次迁移（用直连地址，不走连接池）：`POSTGRES_URL=<直连地址> NODE_ENV=production pnpm db:migrate`
-6. 部署，核心团队各自注册账号。
-7. 按上一节初始化项目结构，再在每个项目的 成员 页用邀请链接把核心团队拉进来。
-8. **把 `NEXT_PUBLIC_DISABLE_SIGN_UP` 设为 `true` 重新部署**，关闭公开注册。之后只有「已被邮箱邀请」的人能注册，而邮箱邀请需要先配好 SMTP；没配 SMTP 时要加新人，就临时打开注册，等对方注册并通过邀请链接加入后再关上。
+   `NEXT_PUBLIC_ALLOW_CREDENTIALS` 名字里带 credentials，CLI 会当成密钥拦一下。它只是「允许邮箱密码登录」的开关，加 `--type config` 即可。
+5. **迁移。** 用直连地址在本机跑：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`。以后每次同步上游带来新迁移时都要再跑一次。
+6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。
+7. **注册并初始化。** 核心团队各自注册账号，按上一节初始化项目结构，再在每个项目的 成员 页用邀请链接互相拉进来。
+8. **关闭公开注册。** 把 `NEXT_PUBLIC_DISABLE_SIGN_UP` 设为 `true` 重新部署。之后只有「已被邮箱邀请」的人能注册，而邮箱邀请需要先配好 SMTP；没配 SMTP 时要加新人，就临时打开注册，等对方注册并通过邀请链接加入后再关上。
 
-没配 Redis 时限流是按实例内存计数的，在 Serverless 上约束力有限；对外开放注册前应配上 `REDIS_URL`。
+两点注意：
+
+- **访问保护。** 如果 Vercel 团队的 Deployment Protection 覆盖了生产环境的 `*.vercel.app` 域名，不在 Vercel 团队里的同事打不开，初始化脚本也调不通 API。要么绑一个自定义域名（自定义域名不受该保护影响），要么把保护范围改成只保护预览部署。Hub 自己有登录，不依赖这层保护。
+- **限流。** 没配 Redis 时限流按实例内存计数，在 Serverless 上约束力有限；对外开放注册前应配上 `REDIS_URL`。
 
 ## 开发约定
 
