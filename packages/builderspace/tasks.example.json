@@ -1,0 +1,9 @@
+[
+  {
+    "project": "community",
+    "function": "ops",
+    "title": "示例任务：写清楚要交付什么",
+    "description": "每行一段。\nproject 和 function 填 src/structure.ts 里的 key，labels 填那里定义过的标签。",
+    "labels": ["P1"]
+  }
+]
