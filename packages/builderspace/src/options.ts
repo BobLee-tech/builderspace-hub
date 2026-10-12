@@ -1,3 +1,5 @@
+import { isAbsolute, resolve } from "node:path";
+
 export interface SeedCliOptions {
   baseUrl: string;
   apiKey: string;
@@ -63,7 +65,14 @@ export function parseOptions(
 
   if (errors.length > 0) return { ok: false, errors };
 
-  const tasksFile = env.HUB_TASKS_FILE?.trim() ?? "";
+  // pnpm runs the script from this package's directory and records where the
+  // user actually ran it in INIT_CWD; resolve relative paths from there.
+  const rawTasksFile = env.HUB_TASKS_FILE?.trim() ?? "";
+  const invokedFrom = env.INIT_CWD?.trim() ?? "";
+  const tasksFile =
+    rawTasksFile !== "" && invokedFrom !== "" && !isAbsolute(rawTasksFile)
+      ? resolve(invokedFrom, rawTasksFile)
+      : rawTasksFile;
 
   return {
     ok: true,

@@ -28,6 +28,29 @@ describe("parseOptions", () => {
     expect(result.ok && result.options.tasksFile).toBe("./tasks.local.json");
   });
 
+  it("resolves a relative tasks file against the directory the command was run from", () => {
+    // pnpm runs the script inside packages/builderspace but records where
+    // the user actually was in INIT_CWD.
+    const result = parseOptions(
+      env({
+        HUB_TASKS_FILE: "packages/builderspace/tasks.local.json",
+        INIT_CWD: "/repo",
+      }),
+      [],
+    );
+    expect(result.ok && result.options.tasksFile).toBe(
+      "/repo/packages/builderspace/tasks.local.json",
+    );
+  });
+
+  it("keeps an absolute tasks file path as it is", () => {
+    const result = parseOptions(
+      env({ HUB_TASKS_FILE: "/private/tasks.json", INIT_CWD: "/repo" }),
+      [],
+    );
+    expect(result.ok && result.options.tasksFile).toBe("/private/tasks.json");
+  });
+
   it("leaves the tasks file unset when the variable is blank", () => {
     const result = parseOptions(env({ HUB_TASKS_FILE: "  " }), []);
     expect(result.ok && "tasksFile" in result.options).toBe(false);
