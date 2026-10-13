@@ -7,6 +7,7 @@ import * as schema from "@kan/db/schema";
 import { sendEmail } from "@kan/email";
 
 import { createDatabaseHooks, createMiddlewareHooks } from "./hooks";
+import { hubAuthPlugin } from "./hub-plugin";
 import { createPlugins } from "./plugins";
 import { configuredProviders } from "./providers";
 
@@ -61,7 +62,8 @@ export const initAuth = (db: dbClient) => {
         },
       },
     },
-    plugins: createPlugins(db),
+    // hub-seam: registration gate (docs/hub/UPSTREAM_SEAMS.md)
+    plugins: [...createPlugins(db), hubAuthPlugin(db)],
     databaseHooks: createDatabaseHooks(db),
     hooks: createMiddlewareHooks(db),
     advanced: {
