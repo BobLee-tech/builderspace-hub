@@ -95,7 +95,7 @@ describe("who may use the back office", () => {
 });
 
 describe("hub.me", () => {
-  it("tells anyone signed in their role and permissions", async () => {
+  it("tells anyone signed in their role, permissions and website access", async () => {
     const member = await withRole("member@example.test", null);
 
     await expect(callerFor(member).me.get()).resolves.toEqual({
@@ -103,6 +103,7 @@ describe("hub.me", () => {
       email: "member@example.test",
       role: null,
       permissions: [],
+      siteAccess: null,
     });
     await expect(callerFor(owner).me.get()).resolves.toMatchObject({
       role: "owner",

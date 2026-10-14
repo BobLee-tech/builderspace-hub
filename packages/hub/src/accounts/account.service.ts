@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AuditActor } from "../audit";
 import type { Db } from "../db";
 import type { ProjectMembership } from "../kan/accounts.gateway";
+import type { SiteAccess } from "../site/site.policy";
 import type { AccountFacts } from "./account.repo";
 import type { HubRole } from "./roles";
 import { findOpenGrantByEmail, markGrantRevoked } from "../access/grant.repo";
@@ -24,6 +25,7 @@ import { findUserByEmail } from "../kan/users.gateway";
 import { hubRoles, projectRoles } from "../schema";
 import { normalizeEmail } from "../shared/email";
 import { HubError } from "../shared/errors";
+import { siteAccessLabels } from "../site/site.policy";
 import {
   countOwners,
   findAccount,
@@ -46,6 +48,7 @@ export interface AccountSummary {
   email: string;
   createdAt: Date;
   role: HubRole | null;
+  siteAccess: AccountFacts["siteAccess"];
   status: AccountFacts["status"];
   projects: ProjectMembership[];
 }
@@ -344,6 +347,40 @@ export async function changeHubRole(
       entityId: userId,
       summary: `${user.email} 的后台角色：${target.role ? roleLabels[target.role] : "无"} → ${role ? roleLabels[role] : "无"}`,
       detail: { from: target.role, to: role },
+    }),
+  );
+}
+
+/**
+ * Gives someone access to the official website's data, or takes it away.
+ * Only owners decide this, for anyone including themselves: the website's
+ * lists hold personal details, so access follows who works on the website,
+ * not who runs the back office.
+ */
+export async function setSiteAccess(
+  db: Db,
+  actor: AdminActor,
+  userId: string,
+  siteAccess: SiteAccess | null,
+  now: Date = new Date(),
+): Promise<void> {
+  requirePermission(actor, "admins.manage", "只有所有者能设置官网权限");
+  const user = await requireUser(db, userId);
+  const target = await getAccessFacts(db, userId);
+  if (target.siteAccess === siteAccess) return;
+
+  const label = (access: SiteAccess | null) =>
+    access ? siteAccessLabels[access] : "无";
+  await withAudit(
+    db,
+    (tx) => upsertAccount(tx, userId, { siteAccess, now }),
+    () => ({
+      actor,
+      action: "account.site_access_changed",
+      entityType: "account",
+      entityId: userId,
+      summary: `${user.email} 的官网权限：${label(target.siteAccess)} → ${label(siteAccess)}`,
+      detail: { from: target.siteAccess, to: siteAccess },
     }),
   );
 }

@@ -6,9 +6,13 @@ import { twMerge } from "tailwind-merge";
 import { can } from "@kan/hub/public";
 
 import { copy } from "~/hub/copy/zh";
+import { adminHome } from "~/hub/lib/routes";
 import { api } from "~/utils/api";
 
-/** The sidebar's way into the back office. Rendered for back-office members only. */
+/**
+ * The sidebar's way into the back office. Rendered for back-office members and
+ * for those with website access, who land in the 官网 section.
+ */
 export function HubAdminLink({
   isCollapsed,
   onCloseSideNav,
@@ -21,11 +25,12 @@ export function HubAdminLink({
     retry: false,
     staleTime: 60_000,
   });
-  if (!can(me.data?.role ?? null, "admin.view")) return null;
+  const role = me.data?.role ?? null;
+  if (!can(role, "admin.view") && !me.data?.siteAccess) return null;
 
   return (
     <Link
-      href="/admin"
+      href={adminHome(role)}
       onClick={onCloseSideNav}
       title={copy.admin.entry}
       className={twMerge(

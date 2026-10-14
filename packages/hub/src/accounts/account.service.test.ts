@@ -21,6 +21,7 @@ import {
   resetPassword,
   restoreAccount,
   setProjectRole,
+  setSiteAccess,
   suspendAccount,
 } from "./account.service";
 
@@ -336,6 +337,7 @@ describe("suspendAccount / restoreAccount", () => {
 
     expect(await getAccessFacts(db, member.userId)).toEqual({
       role: null,
+      siteAccess: null,
       status: "suspended",
     });
     expect(
@@ -422,5 +424,62 @@ describe("listAccounts", () => {
 
     const found = await listAccounts(db, { page: 1, search: "ADMIN@" });
     expect(found.items.map((a) => a.email)).toEqual(["admin@example.test"]);
+  });
+});
+
+describe("setSiteAccess", () => {
+  it("lets an owner grant website access to anyone, themselves included", async () => {
+    const member = await seedUser(db, { email: "web@example.test" });
+
+    await setSiteAccess(db, owner, member.id, "manage", now);
+    await setSiteAccess(db, owner, owner.userId, "people", now);
+
+    expect(await getAccessFacts(db, member.id)).toMatchObject({
+      role: null,
+      siteAccess: "manage",
+    });
+    expect((await getAccount(db, owner.userId))?.siteAccess).toBe("people");
+    const [latest] = await listAudit(db, { limit: 1, offset: 0 });
+    expect(latest).toMatchObject({
+      action: "account.site_access_changed",
+      summary: "owner@example.test 的官网权限：无 → 名单",
+    });
+  });
+
+  it("keeps the back-office role when website access changes, and back", async () => {
+    await setSiteAccess(db, owner, admin.userId, "people", now);
+    await setSiteAccess(db, owner, admin.userId, null, now);
+    expect(await getAccessFacts(db, admin.userId)).toMatchObject({
+      role: "admin",
+      siteAccess: null,
+    });
+  });
+
+  it("refuses admins: only owners decide who sees the website's data", async () => {
+    const member = await seedUser(db, { email: "web@example.test" });
+    await expect(
+      setSiteAccess(db, admin, member.id, "manage", now),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      setSiteAccess(db, admin, admin.userId, "manage", now),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("does nothing, and logs nothing, when access is unchanged", async () => {
+    const before = (await actions()).length;
+    await setSiteAccess(db, owner, admin.userId, null, now);
+    expect(await actions()).toHaveLength(before);
+  });
+
+  it("refuses an unknown account", async () => {
+    await expect(
+      setSiteAccess(
+        db,
+        owner,
+        "00000000-0000-4000-8000-000000000000",
+        "manage",
+        now,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

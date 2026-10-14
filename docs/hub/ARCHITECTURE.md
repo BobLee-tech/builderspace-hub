@@ -110,6 +110,17 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **时间**：库里存绝对时刻（UTC），哪一天、几点由浏览器的时钟决定。页面的格子换算在 `apps/web/src/hub/lib/schedule-layout.ts`，是不依赖 React 的纯函数，测试在三个时区下都跑过。
 - **交互**：先选一种「画笔」（没空 / 有空 / 会议，或者点右边的一个任务），再在时间表上拖。点一下是一小时；拖块移动，拖块的下沿缩放。
 
+## 官网后台
+
+`packages/hub/src/site/` 负责后台的「官网」分区（`/admin/site`）：审核官网访客提交的项目卡和项目进展，跟进志愿者申请，查看加入登记。数据不在 Hub 的库里，而在官网自己的 Supabase 库里。
+
+- **两个数据库。** 官网的表定义在 `site/site.tables.ts`，故意放在 `schema/` 外面，drizzle-kit 不会把它们写进 Hub 的迁移；表由官网仓库的迁移创建，这里只列后台用到的列，官网以后加列不影响。连接在 `site/site.db.ts`：读 `HUB_SITE_DATABASE_URL`，每个实例建一个小连接池；没设就是「未连接」。
+- **专用角色，最小权限。** Hub 以 `hub_site_admin` 登录官网的库（建角色的迁移在官网仓库）。它只有四张表的 select、审核状态和志愿者状态 / 备注这几列的 update，外加放行这些操作的 RLS 策略。连非本机地址时一律 TLS 校验证书，URL 里的 `sslmode` 会被忽略（node-postgres 会让 URL 覆盖 `ssl` 选项）。
+- **官网权限和后台角色无关。** `hub_account.siteAccess`：`people`（名单）或 `manage`（管理），只有所有者能设，可以给自己设。规则在 `site/site.policy.ts` 的 `canOnSite()`；接口层用 `hubSiteProcedure(权限)`，用例里再查一遍。只有官网权限、没有后台角色的人，后台入口直接进 `/admin/site`，侧栏只显示「官网」一组。
+- **操作日志跨库。** 改官网数据的用例在写日志的 Hub 事务里执行官网那一步：官网那步失败，什么都不记；只有官网已提交、Hub 随后失败这一种极少见的情况会漏记。日志只写志愿者「改了备注」，不写备注内容；导出名单也记一条，写明筛选条件和条数。
+- **出错时。** 官网库连不上或者报错，用例记一条服务端日志，页面只看到「暂时连不上官网数据库」（`UNAVAILABLE` → `SERVICE_UNAVAILABLE`）。
+- **已知限制。** 封面和视频存在官网的私有存储里，Hub 没有存储的密钥，审核页只显示「有封面 / 视频时长」，原图和视频看企业微信的推送。志愿者备注是接口入参，会和日程标题一样出现在请求日志里。访客填的链接只有 `http(s)` 才渲染成链接；导出的表格会给 `= + - @` 开头的单元格加 `'`，防止在表格软件里被当成公式执行。
+
 ## 操作日志
 
 每个会改数据的用例都用 `withAudit()` 包起来：改动和日志在同一个事务里，要么都写要么都不写。日志存操作人邮箱的副本（账号删了也能查）、动作名、对象类型和 ID、一句人能读的摘要。新增动作时在 `audit/audit.ts` 的 `AuditAction` 里加一项。
@@ -117,6 +128,6 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 ## 测试
 
 - 纯规则：普通单元测试。
-- 用例和 gateway：`createHubTestDb()` 起一个内存 Postgres（PGlite），先跑 Kan 的迁移再跑我们的，每个测试一个全新的库。
+- 用例和 gateway：`createHubTestDb()` 起一个内存 Postgres（PGlite），先跑 Kan 的迁移再跑我们的，每个测试一个全新的库。官网后台的用例另外用 `createSiteTestDb()` 起一个只有官网那几张表的内存库。
 - 注册闸门：`packages/auth/src/hub-plugin.integration.test.ts` 用 Kan 真实的 Better Auth 配置跑在内存库上，走 HTTP 接口。升级 Better Auth 时它会第一个告诉你钩子的行为变没变。
 - 覆盖率门槛 80%，范围是 `packages/hub`。界面的关键流程之后用 Playwright 覆盖。

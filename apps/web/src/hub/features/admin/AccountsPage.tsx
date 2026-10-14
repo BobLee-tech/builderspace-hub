@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { useState } from "react";
 
 import type { HubRole } from "@kan/hub/public";
-import { can, roleLabels } from "@kan/hub/public";
+import { can, roleLabels, siteAccessLabels } from "@kan/hub/public";
 
 import type { ProjectRole } from "./ProjectRolePicker";
 import { copy } from "~/hub/copy/zh";
@@ -213,6 +213,14 @@ function AccountsContent() {
                     <span className={tableClass.sub}>
                       {copy.admin.roles.none}
                     </span>
+                  )}
+                  {account.siteAccess && (
+                    <div className="mt-1">
+                      <Pill>
+                        {copy.admin.groups.site} ·{" "}
+                        {siteAccessLabels[account.siteAccess]}
+                      </Pill>
+                    </div>
                   )}
                 </td>
                 <td className={tableClass.td}>
