@@ -27,6 +27,8 @@ export type AuditAction =
   | "project.permission_changed"
   | "project.repo_linked"
   | "project.repo_unlinked"
+  | "github.connected"
+  | "github.disconnected"
   | "settings.function_colors_changed";
 
 export interface AuditActor {
