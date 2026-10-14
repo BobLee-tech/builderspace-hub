@@ -177,7 +177,7 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
    **不要用 `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` 这两个名字**：那是 Kan 自己的变量，设了会打开「用 GitHub 登录」，绕过注册闸门。没设这两个变量时，个人页显示「GitHub 连接还没开通」。然后在后台「项目仓库」里给每个项目配好仓库。
 
 5. **迁移。** 用直连地址在本机跑两条：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`（Kan 的），再把末尾换成 `pnpm --filter @kan/hub migrate`（Hub 的）。之后用同样的变量跑 `pnpm --filter @kan/hub cli doctor` 确认 Hub 迁移已是最新。同步上游带来新迁移，或者 PR 里带了新的 Hub 迁移时，都要在合并前再跑一次。
-6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
+6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库；合并前的构建检查由 CI 的 `web` 任务代替，它红了就不要合并。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
 7. **注册并初始化。** 先给第一位所有者发注册许可（`--hub-role owner`，对线上操作时带上线上的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`）。他注册后执行 `pnpm --filter @kan/hub cli setup-projects --owner <他的邮箱>`，按标准结构建好三个项目和九块看板，他成为各项目管理员。之后再给其他人发许可，用 `--project <项目ID>:<角色>` 预设项目（项目 ID 用 `cli projects` 查）。
 8. **不要设置 `NEXT_PUBLIC_DISABLE_SIGN_UP`。** 那是 Kan 自己的开关，和 Hub 的注册闸门是「与」的关系：打开之后光有注册链接也会被拒。有闸门在，没有许可的人本来就注册不了。
 
@@ -217,6 +217,7 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 - 我们的代码放在自己的目录里（`packages/hub`、`apps/web/src/hub` 等）；上游文件只在登记过的接缝处改，见 [docs/hub/UPSTREAM_SEAMS.md](docs/hub/UPSTREAM_SEAMS.md)，用 `pnpm --filter @kan/hub check-seams` 检查。
 - 先写测试再写实现，覆盖率不低于 80%：`pnpm --filter @kan/hub test:coverage`
 - 提交前：`pnpm lint`、`pnpm typecheck`、`pnpm format:fix`
+- 改了网页（`apps/web`）的：`pnpm --filter @kan/web build && pnpm --filter @kan/hub check-web-types`。Kan 自己的网页代码有类型错误，`@kan/web` 的 typecheck 本来就不过，后一条只看 Hub 自己的文件。
 - 不提交任何密钥，也不提交内部数据（任务、成员名单、会议内容）。`.env`、`.env*.local` 和 `tasks.local.json` 已被忽略。
 - 上游的约定（命名、数据库迁移、i18n）见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

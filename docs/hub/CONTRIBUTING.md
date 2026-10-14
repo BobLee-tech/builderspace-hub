@@ -10,6 +10,8 @@ pnpm --filter @kan/hub test:coverage     # 带覆盖率，低于 80% 会失败
 pnpm --filter @kan/hub typecheck
 pnpm --filter @kan/hub lint
 pnpm --filter @kan/hub check-seams       # 有没有越界改上游文件
+pnpm --filter @kan/web build             # 网页能不能构建（含预渲染）
+pnpm --filter @kan/hub check-web-types   # 网页里 Hub 自己的代码有没有类型错误，先 build
 pnpm --filter @kan/hub generate --name AddSomething   # 生成迁移
 pnpm --filter @kan/hub migrate           # 执行迁移（读根目录 .env）
 pnpm --filter @kan/hub cli help          # 运维命令
@@ -45,7 +47,18 @@ pnpm format:fix                          # 提交前格式化
 pnpm --filter @kan/hub test:coverage && pnpm --filter @kan/hub typecheck && pnpm --filter @kan/hub lint && pnpm --filter @kan/hub check-seams
 ```
 
+改了 `apps/web` 的，再跑一遍：
+
+```bash
+pnpm --filter @kan/web build && pnpm --filter @kan/hub check-web-types
+```
+
+- `next build` 不检查类型；Kan 自己的网页代码又有类型错误，所以 `pnpm --filter @kan/web typecheck` 永远不过。`check-web-types` 只看 `seams.json` 里 `ownPaths` 下的文件，Kan 的错误只计数、不算失败。接缝文件不在其中（里面有 Kan 的错误），改了接缝就在 `pnpm --filter @kan/web typecheck` 的输出里找一下那个文件。
+- 构建只要求有 `BETTER_AUTH_SECRET`：根目录 `.env` 里有就行，没有就在命令前加一个随便的值。构建会改写 `apps/web/.next`，别在 `pnpm dev:next` 开着时跑。
+
 改了页面的，在本地实际点一遍，PR 里说明验证了什么、没验证什么。合并到 `main` 会触发生产部署；如果 PR 带了新的 Hub 迁移，要先对生产库执行迁移再合并。
+
+CI（`.github/workflows/hub-ci.yml`）有两个任务：`hub` 跑接缝检查、lint、类型检查和各包的测试；`web` 构建网页并跑 `check-web-types`。Vercel 不构建 PR 分支，所以 `web` 是合并前唯一的构建检查：它红了就别合，合了生产构建也会失败。
 
 ## 安全
 
