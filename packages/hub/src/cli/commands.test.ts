@@ -66,6 +66,29 @@ describe("grant", () => {
   );
 });
 
+describe("setup-projects", () => {
+  it("builds the BuilderSpace projects and says what it did", async () => {
+    await seedUser(db, { email: "owner@example.test" });
+
+    const first = await runCommand(
+      db,
+      { name: "setup-projects", ownerEmail: "owner@example.test" },
+      env,
+    );
+    expect(first[0]).toBe("新建项目 3 个：社群、CourseMate、EchoAgent");
+    expect(first[1]).toBe("新建看板 9 块");
+
+    const second = await runCommand(
+      db,
+      { name: "setup-projects", ownerEmail: "owner@example.test" },
+      env,
+    );
+    expect(second).toEqual([
+      "项目和看板都已存在（3 个项目、9 块看板），无需改动。",
+    ]);
+  });
+});
+
 describe("provision", () => {
   it("finishes adding a registered account to its projects", async () => {
     const admin = await seedUser(db);
@@ -146,7 +169,13 @@ describe("help", () => {
   it("lists the commands", async () => {
     const text = (await runCommand(db, { name: "help" }, env)).join("\n");
 
-    for (const command of ["grant", "provision", "projects", "doctor"]) {
+    for (const command of [
+      "grant",
+      "provision",
+      "setup-projects",
+      "projects",
+      "doctor",
+    ]) {
       expect(text).toContain(command);
     }
   });

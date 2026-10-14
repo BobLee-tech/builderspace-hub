@@ -10,6 +10,7 @@ export type CliCommand =
       projects: { projectPublicId: string; role: ProjectRole }[];
     }
   | { name: "provision"; email: string }
+  | { name: "setup-projects"; ownerEmail: string }
   | { name: "projects" }
   | { name: "doctor" }
   | { name: "help" };
@@ -78,6 +79,16 @@ export function parseCli(argv: string[]): ParsedCli {
   const [name = "help", ...rest] = argv;
 
   if (name === "grant") return parseGrant(rest);
+
+  if (name === "setup-projects") {
+    const [flag, ownerEmail, ...extra] = rest;
+    if (flag === undefined) return fail("setup-projects 需要 --owner");
+    if (flag !== "--owner" || extra.length > 0) {
+      return fail("setup-projects 只接受 --owner");
+    }
+    if (ownerEmail === undefined) return fail("--owner 后面缺少值");
+    return { ok: true, command: { name: "setup-projects", ownerEmail } };
+  }
 
   if (name === "provision") {
     const [flag, email, ...extra] = rest;

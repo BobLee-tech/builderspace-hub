@@ -60,6 +60,15 @@ describe("parseCli", () => {
     });
   });
 
+  it("parses project setup", () => {
+    expect(
+      parseCli(["setup-projects", "--owner", "owner@example.test"]),
+    ).toEqual({
+      ok: true,
+      command: { name: "setup-projects", ownerEmail: "owner@example.test" },
+    });
+  });
+
   it("parses a provisioning retry", () => {
     expect(parseCli(["provision", "--email", "new@example.test"])).toEqual({
       ok: true,
@@ -97,6 +106,8 @@ describe("parseCli", () => {
     [["grant", "--email", "a@b.co", "--force"], "未知参数: --force"],
     [["doctor", "--fix"], "doctor 不接受参数"],
     [["provision"], "provision 需要 --email"],
+    [["setup-projects"], "setup-projects 需要 --owner"],
+    [["setup-projects", "--email", "x"], "setup-projects 只接受 --owner"],
     [["provision", "--user", "x"], "provision 只接受 --email"],
   ])("rejects %j", (argv, error) => {
     expect(parseCli(argv)).toEqual({ ok: false, error });

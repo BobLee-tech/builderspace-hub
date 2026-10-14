@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 
+import { hubStructure } from "@kan/builderspace";
+
 import type { Db } from "../db";
 import type { CliCommand } from "./args";
 import { GRANT_TTL_DAYS, issueGrant, provisionUser } from "../access";
@@ -16,6 +18,7 @@ import { hubMigrationsFolder } from "../migrations-path";
 import { buildJoinLink } from "../public";
 import { normalizeEmail } from "../shared/email";
 import { HubError } from "../shared/errors";
+import { ensureStandardProjects } from "../structure";
 
 export interface CliEnv {
   /** Where the Hub is served, e.g. `https://hub.example.com`. */
@@ -31,6 +34,8 @@ export const USAGE = [
   "            给一个邮箱开通注册，打印一次性注册链接",
   "  provision --email <邮箱>",
   "            注册成功但没被加进项目时，手动补齐（可重复执行）",
+  "  setup-projects --owner <邮箱>",
+  "            按标准结构建好项目和看板，该邮箱成为项目管理员（可重复执行）",
   "  projects  列出所有项目的 ID 和名称",
   "  doctor    检查 Hub 的数据库迁移是否已是最新",
   "  help      显示这段说明",
@@ -103,6 +108,26 @@ export async function runCommand(
       return [
         `✗ Hub 迁移还没跑完（${applied} / ${expected}）`,
         "  运行: pnpm --filter @kan/hub migrate",
+      ];
+    }
+
+    case "setup-projects": {
+      const report = await ensureStandardProjects(db, {
+        ownerEmail: command.ownerEmail,
+        structure: hubStructure,
+      });
+
+      if (
+        report.projectsCreated.length === 0 &&
+        report.boardsCreated.length === 0
+      ) {
+        return [
+          `项目和看板都已存在（${report.projectsExisting.length} 个项目、${report.boardsExisting.length} 块看板），无需改动。`,
+        ];
+      }
+      return [
+        `新建项目 ${report.projectsCreated.length} 个：${report.projectsCreated.join("、") || "无"}`,
+        `新建看板 ${report.boardsCreated.length} 块`,
       ];
     }
 
