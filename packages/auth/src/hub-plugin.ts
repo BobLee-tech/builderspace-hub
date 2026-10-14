@@ -1,11 +1,11 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, getIp } from "better-auth/api";
 
 import type { dbClient } from "@kan/db/client";
 import { decideUserCreate, provisionUser } from "@kan/hub/access";
 import { isSessionAllowed } from "@kan/hub/accounts";
 import { HUB_GRANT_HEADER } from "@kan/hub/public";
-import { rateLimitStorage } from "@kan/hub/rate-limit";
+import { consumeRateLimit, rateLimitStorage } from "@kan/hub/rate-limit";
 import { createLogger } from "@kan/logger";
 
 const log = createLogger("hub-auth");
@@ -14,6 +14,11 @@ const log = createLogger("hub-auth");
  * Stricter limits than Better Auth's default (3 requests per 10 seconds per
  * IP on every sign-in and sign-up path), for the endpoints worth guessing
  * against. Counted per client IP and path, in the database.
+ *
+ * Better Auth's own limiter reads a counter and writes it back in two steps,
+ * so concurrent requests all read the same count and all get through. For
+ * these paths the plugin therefore also counts each request in one atomic
+ * statement (`onRequest` below), which is what actually holds under a burst.
  */
 export const HUB_AUTH_RATE_LIMITS: {
   pathMatcher: (path: string) => boolean;
@@ -47,16 +52,59 @@ export const HUB_AUTH_RATE_LIMITS: {
  * Auth keeps them in memory by default, and on serverless hosting every
  * instance would count on its own, letting guesses spread across them.
  * Plugin options only fill in what Kan's options leave unset, so turning rate
- * limiting off with DISABLE_RATE_LIMIT still works.
+ * limiting off with DISABLE_RATE_LIMIT still works, for both layers.
  */
 export function hubAuthPlugin(db: dbClient): BetterAuthPlugin {
   return {
     id: "builderspace-hub",
     rateLimit: HUB_AUTH_RATE_LIMITS,
+    async onRequest(request, ctx) {
+      if (!ctx.rateLimit.enabled) return;
+      const path = new URL(request.url).pathname.replace(
+        ctx.options.basePath ?? "/api/auth",
+        "",
+      );
+      const rule = HUB_AUTH_RATE_LIMITS.find((r) => r.pathMatcher(path));
+      if (!rule) return;
+      const ip = getIp(request, ctx.options);
+      if (!ip) return;
+
+      // Fails open, like Better Auth's storage: a database hiccup must not
+      // lock the team out. Logged so it does not go unnoticed.
+      const decision = await consumeRateLimit(
+        db,
+        `hub-auth:${ip}${path}`,
+        rule,
+      ).catch((error: unknown) => {
+        log.error({ err: error, path }, "Sign-in rate limit check failed");
+        return null;
+      });
+      if (decision && !decision.allowed) {
+        return {
+          response: new Response(
+            JSON.stringify({
+              message: "Too many requests. Please try again later.",
+            }),
+            {
+              status: 429,
+              headers: {
+                "content-type": "application/json",
+                "X-Retry-After": String(decision.retryAfterSeconds),
+              },
+            },
+          ),
+        };
+      }
+    },
     init() {
       return {
         options: {
-          rateLimit: { customStorage: rateLimitStorage(db) },
+          rateLimit: {
+            customStorage: rateLimitStorage(db, {
+              onError: (error) =>
+                log.error({ err: error }, "Rate limit storage failed"),
+            }),
+          },
           databaseHooks: {
             user: {
               create: {

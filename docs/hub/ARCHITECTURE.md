@@ -95,8 +95,10 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 
 登录、注册和注册链接检查都有按 IP 的限流，计数存在 `hub_rate_limit` 表里（`packages/hub/src/rate-limit/`）。放在数据库而不是内存，是因为线上跑在多个无服务器实例上，各自在内存里计数等于没有限制。
 
-- Better Auth 自带限流逻辑，`hubAuthPlugin` 只给它换上数据库存储（`rateLimitStorage`），并对邮箱密码登录、注册、申请重置密码加了更严的规则（`HUB_AUTH_RATE_LIMITS`）。插件的选项只填补 Kan 没设置的项，所以 `DISABLE_RATE_LIMIT` 仍然有效（测试里就用它关掉）。
-- Hub 自己的 API 路由用 `withHubRateLimit`（`apps/web/src/hub/server/rate-limit.ts`），背后是一条原子的 `INSERT … ON CONFLICT` 语句，并发请求也不会多放行。
+- Better Auth 自带限流逻辑，`hubAuthPlugin` 给它换上数据库存储（`rateLimitStorage`），并对邮箱密码登录、注册、申请重置密码加了更严的规则（`HUB_AUTH_RATE_LIMITS`）。插件的选项只填补 Kan 没设置的项，所以 `DISABLE_RATE_LIMIT` 仍然有效（测试里就用它关掉）。
+- Better Auth 的计数是「先读再写」两步，并发请求会读到同一个旧值、一起放行。所以这三类路径在插件的 `onRequest` 里另用 `consumeRateLimit` 原子计数一次（key 以 `hub-auth:` 开头），并发打进来也只放行规定的次数；Better Auth 自己那层照常保留。
+- 两层在数据库出错时都放行（不因为数据库抖动把人挡在门外），但都会记错误日志（`Sign-in rate limit check failed`、`Rate limit storage failed`）。
+- Hub 自己的 API 路由用 `withHubRateLimit`（`apps/web/src/hub/server/rate-limit.ts`），背后是一条原子的 `INSERT … ON CONFLICT` 语句，并发请求也不会多放行；`DISABLE_RATE_LIMIT=true` 时同样关闭。
 - 计数按 `X-Forwarded-For` 的第一个地址算，自己部署时代理必须改写这个头，见根目录的 [SECURITY.md](../../SECURITY.md)。
 
 ## 个人日程

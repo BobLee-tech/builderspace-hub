@@ -79,13 +79,16 @@ export interface StoredRateLimit {
 /**
  * Better Auth's `rateLimit.customStorage`. Errors are swallowed on write, as
  * Better Auth's own database storage does, so a database hiccup never blocks
- * sign-in; a failed read counts as "no record yet".
+ * sign-in; a failed read counts as "no record yet". Either way the error is
+ * handed to `onError`, so a limit that has silently stopped working shows up
+ * in the logs.
  */
 export function rateLimitStorage(
   db: DbOrTx,
-  options: { random?: () => number } = {},
+  options: { random?: () => number; onError?: (error: unknown) => void } = {},
 ) {
   const random = options.random ?? Math.random;
+  const onError = options.onError ?? (() => undefined);
   return {
     async get(key: string): Promise<StoredRateLimit | undefined> {
       try {
@@ -95,7 +98,8 @@ export function rateLimitStorage(
           .where(eq(hubRateLimits.key, key))
           .limit(1);
         return row;
-      } catch {
+      } catch (error) {
+        onError(error);
         return undefined;
       }
     },
@@ -110,8 +114,9 @@ export function rateLimitStorage(
           });
         // Now and then, clear out counters nobody has touched for a day.
         if (random() < 0.01) await pruneRateLimits(db, value.lastRequest);
-      } catch {
+      } catch (error) {
         // Never fail a sign-in because a counter could not be saved.
+        onError(error);
       }
     },
   };

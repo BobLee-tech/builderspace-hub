@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { env } from "next-runtime-env";
 
 import type { RateLimitRule } from "@kan/hub/rate-limit";
 import { consumeRateLimit } from "@kan/hub/rate-limit";
@@ -31,6 +32,8 @@ export function clientIp(req: NextApiRequest): string {
  * yet), the request goes through. Only use it where that is safe, that is
  * where the route is not the only thing standing between a guesser and an
  * account.
+ *
+ * DISABLE_RATE_LIMIT=true turns it off, like every other limit in the app.
  */
 export function withHubRateLimit<T>(
   name: string,
@@ -38,6 +41,7 @@ export function withHubRateLimit<T>(
   handler: (req: NextApiRequest, res: NextApiResponse<T>) => Promise<void>,
 ) {
   return async (req: NextApiRequest, res: NextApiResponse<T>) => {
+    if (env("DISABLE_RATE_LIMIT") === "true") return handler(req, res);
     const decision = await consumeRateLimit(
       getHubDb(),
       `hub:${name}:${clientIp(req)}`,
