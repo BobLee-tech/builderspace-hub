@@ -1,0 +1,56 @@
+name: Security
+
+# Secret scanning with gitleaks, on top of GitHub's own secret scanning and
+# push protection. A pull request scans only its own commits, a push to main
+# only what it adds, and once a week the whole history is scanned again.
+# Known false positives (placeholder keys in Kan's docs) are listed, one by
+# one, in .gitleaksignore.
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Choose the commits to scan
+        id: range
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) echo "log_opts=$BASE_SHA..$SHA" >> "$GITHUB_OUTPUT" ;;
+            push)
+              if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$'; then
+                echo "log_opts=$BEFORE..$SHA" >> "$GITHUB_OUTPUT"
+              else
+                echo "log_opts=--all" >> "$GITHUB_OUTPUT"
+              fi ;;
+            *) echo "log_opts=--all" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Scan for secrets
+        env:
+          LOG_OPTS: ${{ steps.range.outputs.log_opts }}
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks:v8.24.2 \
+            git /repo --redact --no-banner --exit-code 1 \
+            --log-opts="$LOG_OPTS"
