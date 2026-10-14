@@ -1,0 +1,19 @@
+# Code that decides who gets in and what they may do. A pull request touching
+# any of it needs a maintainer's review (see SECURITY.md).
+
+/packages/auth/                              @EdwinjJ1
+/packages/hub/src/access/                    @EdwinjJ1
+/packages/hub/src/accounts/                  @EdwinjJ1
+/packages/hub/src/permissions/               @EdwinjJ1
+/packages/hub/src/rate-limit/                @EdwinjJ1
+/packages/hub/src/kan/                       @EdwinjJ1
+/packages/hub/migrations/                    @EdwinjJ1
+/packages/api/src/routers/hub/procedures.ts  @EdwinjJ1
+/packages/api/src/routers/hub/guards.ts      @EdwinjJ1
+/apps/web/src/pages/api/hub/                 @EdwinjJ1
+/apps/web/src/hub/server/                    @EdwinjJ1
+
+# How the repository itself is built, checked and protected.
+/.github/                                    @EdwinjJ1
+/.gitleaksignore                             @EdwinjJ1
+/SECURITY.md                                 @EdwinjJ1
