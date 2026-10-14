@@ -9,6 +9,7 @@ import {
   DAY_HEIGHT,
   dayIndexAt,
   dragSpan,
+  endDayOf,
   HOUR_HEIGHT,
   moveSpanTo,
   resizeSpanTo,
@@ -31,7 +32,13 @@ const FIRST_VISIBLE_HOUR = 8;
 const weekdayFormat = new Intl.DateTimeFormat("zh-CN", { weekday: "short" });
 
 type Gesture =
-  | { type: "create"; anchor: Date; current: Date }
+  | {
+      type: "create";
+      /** The column the press started in; the whole drag stays on it. */
+      day: Date;
+      anchor: Date;
+      current: Date;
+    }
   | {
       type: "move" | "resize";
       block: DisplayBlock;
@@ -102,11 +109,19 @@ export function WeekGrid({
       : drawn;
   }, [blocks, gesture, preview]);
 
-  const timeAt = (event: React.PointerEvent): Date => {
+  const dayAt = (event: React.PointerEvent): Date => {
     const rect = gridRef.current?.getBoundingClientRect();
     if (!rect) return weekStart;
-    const day = days[dayIndexAt(event.clientX, rect.left, rect.width)];
-    return timeAtOffset(day ?? weekStart, event.clientY - rect.top);
+    return days[dayIndexAt(event.clientX, rect.left, rect.width)] ?? weekStart;
+  };
+
+  /** The time under the pointer, read on `day` (by default the column under it). */
+  const timeAt = (
+    event: React.PointerEvent,
+    day: Date = dayAt(event),
+  ): Date => {
+    const top = gridRef.current?.getBoundingClientRect().top ?? 0;
+    return timeAtOffset(day, event.clientY - top);
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -119,7 +134,12 @@ export function WeekGrid({
     if (!blockEl) {
       // Not deselected yet: closing the editor above the grid would shift it
       // under the pointer in the middle of the drag.
-      setGesture({ type: "create", anchor: pointer, current: pointer });
+      setGesture({
+        type: "create",
+        day: dayAt(event),
+        anchor: pointer,
+        current: pointer,
+      });
       return;
     }
     const block = blocks.find((b) => b.id === blockEl.dataset.blockId);
@@ -136,19 +156,24 @@ export function WeekGrid({
 
   const onPointerMove = (event: React.PointerEvent) => {
     if (!gesture) return;
-    const pointer = timeAt(event);
     if (gesture.type === "create") {
-      setGesture({ ...gesture, current: pointer });
+      // Only the height counts: drifting sideways must not stretch the new
+      // block into the next day.
+      setGesture({ ...gesture, current: timeAt(event, gesture.day) });
       return;
     }
     const original = {
       startsAt: gesture.block.startsAt,
       endsAt: gesture.block.endsAt,
     };
+    // A move may change day; a resize happens on the block's own last day.
     const span =
       gesture.type === "move"
-        ? moveSpanTo(original, new Date(pointer.getTime() - gesture.grabMs))
-        : resizeSpanTo(original, pointer);
+        ? moveSpanTo(
+            original,
+            new Date(timeAt(event).getTime() - gesture.grabMs),
+          )
+        : resizeSpanTo(original, timeAt(event, endDayOf(original)));
     const travelled = Math.hypot(
       event.clientX - gesture.from.x,
       event.clientY - gesture.from.y,
@@ -164,7 +189,11 @@ export function WeekGrid({
     if (!gesture) return;
     setGesture(null);
     if (gesture.type === "create") {
+      const isClick = gesture.anchor.getTime() === gesture.current.getTime();
       onSelect(null);
+      // With a block selected, a click on empty time only lets go of it;
+      // otherwise every attempt to deselect left a stray block behind.
+      if (isClick && selectedId !== null) return;
       onCreate(dragSpan(gesture.anchor, gesture.current));
       return;
     }
@@ -301,51 +330,59 @@ function DayColumn({
   return (
     <div className="relative flex-1 border-l border-light-300 dark:border-dark-300">
       {segments.map(
-        ({ block, top, height, startsHere, endsHere, lane, lanes }) => (
-          <div
-            key={block.id}
-            data-block-id={block.ghost ? undefined : block.id}
-            className={twMerge(
-              "absolute overflow-hidden px-1.5 py-0.5 text-xs leading-4",
-              blockStyle[block.kind],
-              block.ghost
-                ? "pointer-events-none opacity-60"
-                : "cursor-grab active:cursor-grabbing",
-              startsHere ? "rounded-t-md" : "border-t-0",
-              endsHere ? "rounded-b-md" : "border-b-0",
-              block.task?.stage === "done" && "opacity-60",
-              block.id === selectedId &&
-                "ring-2 ring-light-1000 ring-offset-1 dark:ring-dark-1000",
-              block.id === draggingId && "z-10 shadow-lg",
-            )}
-            style={{
-              top,
-              height: height - 1,
-              left: `calc(${(lane / lanes) * 100}% + 1px)`,
-              width: `calc(${100 / lanes}% - 3px)`,
-            }}
-          >
-            <span
+        ({ block, top, height, startsHere, endsHere, lane, lanes }) => {
+          // Once picked, a block squeezed into a narrow lane takes the whole
+          // column, so it is easy to drag, resize or delete.
+          const lifted = block.id === selectedId || block.id === draggingId;
+          return (
+            <div
+              key={block.id}
+              data-block-id={block.ghost ? undefined : block.id}
               className={twMerge(
-                "block truncate font-medium",
-                block.task?.stage === "done" && "line-through",
+                "absolute overflow-hidden px-1.5 py-0.5 text-xs leading-4",
+                blockStyle[block.kind],
+                block.ghost
+                  ? "pointer-events-none opacity-60"
+                  : "cursor-grab active:cursor-grabbing",
+                startsHere ? "rounded-t-md" : "border-t-0",
+                endsHere ? "rounded-b-md" : "border-b-0",
+                block.task?.stage === "done" && "opacity-60",
+                block.id === selectedId &&
+                  "ring-2 ring-light-1000 ring-offset-1 dark:ring-dark-1000",
+                lifted && "z-10",
+                block.id === draggingId && "shadow-lg",
               )}
+              style={{
+                top,
+                height: height - 1,
+                left: lifted ? "1px" : `calc(${(lane / lanes) * 100}% + 1px)`,
+                width: lifted
+                  ? "calc(100% - 3px)"
+                  : `calc(${100 / lanes}% - 3px)`,
+              }}
             >
-              {labelOf(block)}
-            </span>
-            {height >= 40 && (
-              <span className="block truncate tabular-nums opacity-70">
-                {formatTime(block.startsAt)}–{formatTime(block.endsAt)}
-              </span>
-            )}
-            {endsHere && !block.ghost && (
               <span
-                data-resize
-                className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
-              />
-            )}
-          </div>
-        ),
+                className={twMerge(
+                  "block truncate font-medium",
+                  block.task?.stage === "done" && "line-through",
+                )}
+              >
+                {labelOf(block)}
+              </span>
+              {height >= 40 && (
+                <span className="block truncate tabular-nums opacity-70">
+                  {formatTime(block.startsAt)}–{formatTime(block.endsAt)}
+                </span>
+              )}
+              {endsHere && !block.ghost && (
+                <span
+                  data-resize
+                  className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+                />
+              )}
+            </div>
+          );
+        },
       )}
 
       {isToday && <NowLine now={now} />}

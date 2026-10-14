@@ -4,6 +4,7 @@ import {
   addDays,
   dayIndexAt,
   dragSpan,
+  endDayOf,
   HOUR_HEIGHT,
   moveSpanTo,
   resizeSpanTo,
@@ -174,6 +175,36 @@ describe("moveSpanTo and resizeSpanTo", () => {
     );
     expect(resizeSpanTo(original, local(14, 8))).toEqual(
       span(local(14, 9), local(14, 9, 15)),
+    );
+  });
+});
+
+describe("endDayOf", () => {
+  it("is the day the span's last piece sits on", () => {
+    expect(endDayOf(span(local(14, 15), local(14, 17)))).toEqual(local(14));
+    expect(endDayOf(span(local(14, 22), local(15, 2)))).toEqual(local(15));
+  });
+
+  it("counts a span ending at midnight as ending the day before", () => {
+    expect(endDayOf(span(local(14, 22), local(15)))).toEqual(local(14));
+  });
+});
+
+describe("drawing stays on one day", () => {
+  // What the grid does: both ends of a new block are read on the day the
+  // press started, so drifting sideways cannot stretch it across days.
+  const day = local(14);
+  const at = (hour: number) => timeAtOffset(day, hour * HOUR_HEIGHT);
+
+  it("keeps a drag on its own day whatever the pointer's column", () => {
+    const drawn = dragSpan(at(15), at(17));
+    expect(drawn).toEqual(span(local(14, 15), local(14, 17)));
+    expect(endDayOf(drawn)).toEqual(day);
+  });
+
+  it("can reach the end of the day but no further", () => {
+    expect(dragSpan(at(23), timeAtOffset(day, 30 * HOUR_HEIGHT))).toEqual(
+      span(local(14, 23), local(15)),
     );
   });
 });

@@ -610,6 +610,9 @@ importers:
       drizzle-orm:
         specifier: ^0.42.0
         version: 0.42.0(@electric-sql/pglite@0.3.7)(@types/pg@8.15.5)(kysely@0.28.8)(pg@8.16.3)
+      pg:
+        specifier: ^8.11.3
+        version: 8.16.3
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -626,6 +629,9 @@ importers:
       '@types/node':
         specifier: ^20.17.7
         version: 20.19.26
+      '@types/pg':
+        specifier: ^8.10.9
+        version: 8.15.5
       '@vitest/coverage-v8':
         specifier: 3.2.4
         version: 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@20.19.26)(jiti@2.6.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.8.1))
