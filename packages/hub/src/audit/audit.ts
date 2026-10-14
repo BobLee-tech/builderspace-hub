@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { count, desc } from "drizzle-orm";
 
 import { generateUID } from "@kan/shared/utils";
 
@@ -14,7 +14,15 @@ export type AuditAction =
   | "grant.revoked"
   | "grant.consumed"
   | "project.created"
-  | "board.created";
+  | "board.created"
+  | "account.created"
+  | "account.renamed"
+  | "account.password_reset"
+  | "account.role_changed"
+  | "account.suspended"
+  | "account.restored"
+  | "account.project_role_changed"
+  | "account.project_removed";
 
 export interface AuditActor {
   userId: string | null;
@@ -81,4 +89,9 @@ export async function listAudit(
     .orderBy(desc(hubAuditLog.at), desc(hubAuditLog.id))
     .limit(page.limit)
     .offset(page.offset);
+}
+
+export async function countAudit(db: DbOrTx): Promise<number> {
+  const [row] = await db.select({ total: count() }).from(hubAuditLog);
+  return row?.total ?? 0;
 }

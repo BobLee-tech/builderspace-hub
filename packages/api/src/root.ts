@@ -4,6 +4,8 @@ import { cardRouter } from "./routers/card";
 import { checklistRouter } from "./routers/checklist";
 import { feedbackRouter } from "./routers/feedback";
 import { healthRouter } from "./routers/health";
+// hub-seam: the back office API (docs/hub/UPSTREAM_SEAMS.md)
+import { hubRouter } from "./routers/hub";
 import { importRouter } from "./routers/import";
 import { integrationRouter } from "./routers/integration";
 import { labelRouter } from "./routers/label";
@@ -22,6 +24,7 @@ export const appRouter = createTRPCRouter({
   checklist: checklistRouter,
   feedback: feedbackRouter,
   health: healthRouter,
+  hub: hubRouter,
   label: labelRouter,
   list: listRouter,
   member: memberRouter,

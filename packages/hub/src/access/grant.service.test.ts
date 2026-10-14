@@ -9,7 +9,12 @@ import { listAudit } from "../audit";
 import { hubAccessGrantProjects, hubAccessGrants } from "../schema";
 import { hashGrantToken } from "../shared/token";
 import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
-import { describeGrantForJoin, issueGrant, revokeGrant } from "./grant.service";
+import {
+  describeGrantForJoin,
+  issueGrant,
+  listGrants,
+  revokeGrant,
+} from "./grant.service";
 
 const now = new Date("2026-10-13T12:00:00Z");
 const weekLater = new Date("2026-10-20T12:00:00Z");
@@ -191,6 +196,37 @@ describe("issueGrant", () => {
 
     await expect(attempt).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(await allGrants()).toEqual([]);
+  });
+});
+
+describe("listGrants", () => {
+  it("lists grants newest first with state and projects, never the token", async () => {
+    const first = await issueGrant(db, actor, {
+      email: "a@example.test",
+      source: "direct",
+      projects: [{ projectPublicId: project.publicId, role: "member" }],
+      now,
+    });
+    await issueGrant(db, actor, {
+      email: "b@example.test",
+      source: "cli",
+      hubRole: "admin",
+      projects: [],
+      now: new Date("2026-10-14T12:00:00Z"),
+    });
+    await revokeGrant(db, actor, first.publicId, now);
+
+    const page = await listGrants(db, { page: 1, now });
+
+    expect(page.total).toBe(2);
+    expect(page.items.map((g) => [g.email, g.state])).toEqual([
+      ["b@example.test", "pending"],
+      ["a@example.test", "revoked"],
+    ]);
+    expect(page.items[1]?.projects).toEqual([
+      { projectName: "社群", role: "member" },
+    ]);
+    expect(JSON.stringify(page)).not.toContain(first.token);
   });
 });
 

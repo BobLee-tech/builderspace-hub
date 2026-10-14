@@ -3,11 +3,13 @@
   "ownPaths": [
     "packages/hub/",
     "packages/builderspace/",
+    "packages/api/src/routers/hub/",
     "packages/auth/src/hub-plugin.ts",
     "packages/auth/src/hub-plugin.integration.test.ts",
     "apps/web/src/hub/",
     "apps/web/src/pages/join/",
     "apps/web/src/pages/api/hub/",
+    "apps/web/src/pages/admin/",
     "docs/hub/",
     ".github/workflows/hub-ci.yml",
     "BUILDERSPACE.md",
@@ -42,7 +44,27 @@
     {
       "file": "apps/web/src/components/SideNavigation.tsx",
       "marker": "hub-seam",
-      "why": "Shows the Hub's product name instead of Kan's in the sidebar."
+      "why": "Shows the Hub's product name instead of Kan's, and the back-office link for back-office members."
+    },
+    {
+      "file": "packages/api/package.json",
+      "marker": "\"@kan/hub\"",
+      "why": "The API package hosts the Hub's tRPC router and guards."
+    },
+    {
+      "file": "packages/api/src/root.ts",
+      "marker": "hub-seam",
+      "why": "Mounts the Hub's back-office router at api.hub."
+    },
+    {
+      "file": "packages/api/src/routers/workspace.ts",
+      "marker": "hub-seam",
+      "why": "Only back-office admins may create projects (workspaces)."
+    },
+    {
+      "file": "packages/api/src/routers/board.ts",
+      "marker": "hub-seam",
+      "why": "Only project admins may create templates."
     },
     {
       "file": "pnpm-lock.yaml",

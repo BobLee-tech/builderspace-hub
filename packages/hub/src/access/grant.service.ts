@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { AuditActor } from "../audit";
 import type { Db } from "../db";
+import type { GrantState } from "./grant.policy";
 import { recordAudit, withAudit } from "../audit";
 import { findProjectByPublicId } from "../kan/projects.gateway";
 import { findUserByEmail } from "../kan/users.gateway";
@@ -20,6 +21,8 @@ import {
   findOpenGrantByEmail,
   insertGrant,
   insertGrantProjects,
+  listGrantsPage,
+  listProjectsOfGrants,
   markGrantRevoked,
 } from "./grant.repo";
 
@@ -203,4 +206,51 @@ export async function describeGrantForJoin(
   if (state !== "pending") return { state };
 
   return { state: "valid", email: grant.email, expiresAt: grant.expiresAt };
+}
+
+export const GRANTS_PAGE_SIZE = 50;
+
+export interface GrantSummary {
+  publicId: string;
+  email: string;
+  hubRole: (typeof hubRoles)[number] | null;
+  note: string | null;
+  source: (typeof grantSources)[number];
+  state: GrantState;
+  createdAt: Date;
+  expiresAt: Date;
+  projects: { projectName: string; role: (typeof projectRoles)[number] }[];
+}
+
+/** Grants newest first, with their state as of `now`. Never includes tokens. */
+export async function listGrants(
+  db: Db,
+  query: { page: number; now?: Date },
+): Promise<{ items: GrantSummary[]; total: number; pageSize: number }> {
+  const page = Math.max(1, Math.floor(query.page));
+  const now = query.now ?? new Date();
+  const { rows, total } = await listGrantsPage(db, {
+    limit: GRANTS_PAGE_SIZE,
+    offset: (page - 1) * GRANTS_PAGE_SIZE,
+  });
+  const projects = await listProjectsOfGrants(
+    db,
+    rows.map((row) => row.id),
+  );
+
+  return {
+    items: rows.map((row) => ({
+      publicId: row.publicId,
+      email: row.email,
+      hubRole: row.hubRole,
+      note: row.note,
+      source: row.source,
+      state: grantState(row, now),
+      createdAt: row.createdAt,
+      expiresAt: row.expiresAt,
+      projects: projects.get(row.id) ?? [],
+    })),
+    total,
+    pageSize: GRANTS_PAGE_SIZE,
+  };
 }

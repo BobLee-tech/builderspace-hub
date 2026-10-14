@@ -11,6 +11,7 @@ export type CliCommand =
     }
   | { name: "provision"; email: string }
   | { name: "setup-projects"; ownerEmail: string }
+  | { name: "set-role"; email: string; role: HubRole | null }
   | { name: "projects" }
   | { name: "doctor" }
   | { name: "help" };
@@ -79,6 +80,30 @@ export function parseCli(argv: string[]): ParsedCli {
   const [name = "help", ...rest] = argv;
 
   if (name === "grant") return parseGrant(rest);
+
+  if (name === "set-role") {
+    const flags = new Map<string, string>();
+    for (let i = 0; i < rest.length; i += 2) {
+      const flag = rest[i];
+      const value = rest[i + 1];
+      if ((flag !== "--email" && flag !== "--role") || value === undefined) {
+        return fail("set-role 需要 --email 和 --role");
+      }
+      flags.set(flag, value);
+    }
+    const email = flags.get("--email");
+    const role = flags.get("--role");
+    if (email === undefined || role === undefined) {
+      return fail("set-role 需要 --email 和 --role");
+    }
+    if (role !== "none" && !isHubRole(role)) {
+      return fail("--role 只能是 owner、admin、viewer 或 none");
+    }
+    return {
+      ok: true,
+      command: { name: "set-role", email, role: role === "none" ? null : role },
+    };
+  }
 
   if (name === "setup-projects") {
     const [flag, ownerEmail, ...extra] = rest;

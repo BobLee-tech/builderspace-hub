@@ -16,3 +16,12 @@ export const HUB_JOIN_PATH = "/join";
 export function buildJoinLink(origin: string, token: string): string {
   return `${origin}${HUB_JOIN_PATH}#${token}`;
 }
+
+export type { Decision, HubPermission, HubRole } from "./accounts/roles";
+export {
+  can,
+  hubPermissions,
+  hubRoles,
+  permissionsOf,
+  roleLabels,
+} from "./accounts/roles";

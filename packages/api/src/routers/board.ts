@@ -24,6 +24,8 @@ import {
 } from "../schemas";
 import { createAvatarUrlResolver } from "../utils/avatarUrls";
 import { assertCanDelete, assertCanEdit, assertPermission } from "../utils/permissions";
+// hub-seam: templates are for project admins (docs/hub/UPSTREAM_SEAMS.md)
+import { assertCanCreateTemplate } from "./hub/guards";
 
 export const boardRouter = createTRPCRouter({
   all: protectedProcedure
@@ -328,6 +330,9 @@ export const boardRouter = createTRPCRouter({
         });
 
       await assertPermission(ctx.db, userId, workspace.id, "board:create");
+      if (input.type === "template") {
+        await assertCanCreateTemplate(ctx.db, userId, workspace.id); // hub-seam
+      }
 
       // If sourceBoardPublicId is provided, clone the source board
       if (input.sourceBoardPublicId) {

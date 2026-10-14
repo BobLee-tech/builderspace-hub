@@ -7,7 +7,9 @@ import { hubStructure } from "@kan/builderspace";
 import type { Db } from "../db";
 import type { CliCommand } from "./args";
 import { GRANT_TTL_DAYS, issueGrant, provisionUser } from "../access";
-import { CLI_ACTOR } from "../audit";
+import { upsertAccount } from "../accounts/account.repo";
+import { roleLabels } from "../accounts/roles";
+import { CLI_ACTOR, withAudit } from "../audit";
 import { listProjects } from "../kan/projects.gateway";
 import { findUserByEmail } from "../kan/users.gateway";
 import {
@@ -36,6 +38,8 @@ export const USAGE = [
   "            注册成功但没被加进项目时，手动补齐（可重复执行）",
   "  setup-projects --owner <邮箱>",
   "            按标准结构建好项目和看板，该邮箱成为项目管理员（可重复执行）",
+  "  set-role --email <邮箱> --role owner|admin|viewer|none",
+  "            直接设置后台角色（补救用：例如没有人能进后台时）",
   "  projects  列出所有项目的 ID 和名称",
   "  doctor    检查 Hub 的数据库迁移是否已是最新",
   "  help      显示这段说明",
@@ -109,6 +113,34 @@ export async function runCommand(
         `✗ Hub 迁移还没跑完（${applied} / ${expected}）`,
         "  运行: pnpm --filter @kan/hub migrate",
       ];
+    }
+
+    case "set-role": {
+      const email = normalizeEmail(command.email);
+      const user = email ? await findUserByEmail(db, email) : null;
+      if (!email || !user) {
+        throw new HubError("NOT_FOUND", `${command.email} 还没有注册账号`);
+      }
+      const role = command.role;
+      const label = role ? roleLabels[role] : "无";
+
+      // The command line is the break-glass path, so it skips the back
+      // office's role rules; it is still logged.
+      await withAudit(
+        db,
+        (tx) => upsertAccount(tx, user.id, { role, now: env.now }),
+        () => ({
+          actor: CLI_ACTOR,
+          action: "account.role_changed",
+          entityType: "account",
+          entityId: user.id,
+          summary: `命令行把 ${email} 的后台角色设为 ${label}`,
+        }),
+      );
+
+      return role
+        ? [`${email} 的后台角色已设为 ${label}。`]
+        : [`${email} 已没有后台角色。`];
     }
 
     case "setup-projects": {

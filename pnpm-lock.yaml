@@ -326,6 +326,9 @@ importers:
       '@kan/email':
         specifier: workspace:^
         version: link:../email
+      '@kan/hub':
+        specifier: workspace:*
+        version: link:../hub
       '@kan/logger':
         specifier: workspace:^
         version: link:../logger
@@ -601,6 +604,9 @@ importers:
       '@kan/shared':
         specifier: workspace:*
         version: link:../shared
+      better-auth:
+        specifier: ^1.4.6
+        version: 1.4.6(next@16.0.8(@playwright/test@1.62.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       drizzle-orm:
         specifier: ^0.42.0
         version: 0.42.0(@electric-sql/pglite@0.3.7)(@types/pg@8.15.5)(kysely@0.28.8)(pg@8.16.3)

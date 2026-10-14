@@ -28,8 +28,9 @@ import ButtonComponent from "~/components/Button";
 import ReactiveButton from "~/components/ReactiveButton";
 import UserMenu from "~/components/UserMenu";
 import WorkspaceMenu from "~/components/WorkspaceMenu";
-// hub-seam: product name (docs/hub/UPSTREAM_SEAMS.md)
+// hub-seam: product name and back-office link (docs/hub/UPSTREAM_SEAMS.md)
 import { copy } from "~/hub/copy/zh";
+import { HubAdminLink } from "~/hub/features/admin/HubAdminLink";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 
@@ -207,6 +208,7 @@ export default function SideNavigation({
               </li>
             ))}
           </ul>
+          <HubAdminLink isCollapsed={isCollapsed} onCloseSideNav={onCloseSideNav} />
         </div>
 
         <div className="space-y-2">
