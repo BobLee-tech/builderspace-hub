@@ -120,6 +120,24 @@ export async function markGrantConsumed(
   return updated.length > 0;
 }
 
+/**
+ * Changes the back-office role an open grant will give. Returns false when it
+ * was no longer open.
+ */
+export async function setGrantHubRole(
+  db: DbOrTx,
+  grantId: number,
+  hubRole: HubRole | null,
+): Promise<boolean> {
+  const updated = await db
+    .update(hubAccessGrants)
+    .set({ hubRole })
+    .where(and(eq(hubAccessGrants.id, grantId), isOpen))
+    .returning({ id: hubAccessGrants.id });
+
+  return updated.length > 0;
+}
+
 /** Marks an open grant as revoked. Returns false when it was no longer open. */
 export async function markGrantRevoked(
   db: DbOrTx,

@@ -8,6 +8,7 @@ export type {
   JoinLinkStatus,
 } from "./grant.service";
 export {
+  changeGrantHubRole,
   describeGrantForJoin,
   GRANTS_PAGE_SIZE,
   issueGrant,

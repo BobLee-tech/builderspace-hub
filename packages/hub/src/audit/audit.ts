@@ -12,6 +12,7 @@ import { hubAuditLog } from "../schema";
 export type AuditAction =
   | "grant.issued"
   | "grant.revoked"
+  | "grant.role_changed"
   | "grant.consumed"
   | "project.created"
   | "board.created"
