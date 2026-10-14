@@ -28,6 +28,10 @@
       "types": "./src/public.ts",
       "default": "./src/public.ts"
     },
+    "./rate-limit": {
+      "types": "./src/rate-limit/index.ts",
+      "default": "./src/rate-limit/index.ts"
+    },
     "./schema": {
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"

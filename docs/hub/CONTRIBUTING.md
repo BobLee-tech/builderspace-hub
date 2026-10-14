@@ -46,3 +46,9 @@ pnpm --filter @kan/hub test:coverage && pnpm --filter @kan/hub typecheck && pnpm
 ```
 
 改了页面的，在本地实际点一遍，PR 里说明验证了什么、没验证什么。合并到 `main` 会触发生产部署；如果 PR 带了新的 Hub 迁移，要先对生产库执行迁移再合并。
+
+## 安全
+
+- 登录、注册闸门、权限和数据库迁移相关的目录列在 `.github/CODEOWNERS` 里，改动它们的 PR 需要维护者审核。
+- 不要提交任何密钥、`.env` 文件或真实的成员和任务数据。推送时 GitHub 会拦截看起来像密钥的内容，CI 里还有 gitleaks 再查一遍；如果被误报，确认不是密钥后把那一条加进 `.gitleaksignore`（一条一行，写明原因），不要整目录忽略。
+- 发现漏洞请按 [SECURITY.md](../../SECURITY.md) 私下报告。

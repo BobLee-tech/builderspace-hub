@@ -78,10 +78,21 @@ async function appliedHubMigrations(db: Db): Promise<number> {
       ),
     );
     return result.rows[0]?.count ?? 0;
-  } catch {
-    // The bookkeeping table does not exist until the first migration runs.
-    return 0;
+  } catch (error) {
+    // The bookkeeping table does not exist until the first migration runs
+    // (Postgres "undefined_table"). Anything else, such as a dropped
+    // connection, is a real failure and must not read as "not migrated".
+    if (isUndefinedTable(error)) return 0;
+    throw error;
   }
+}
+
+function isUndefinedTable(error: unknown): boolean {
+  const code = (error as { code?: unknown; cause?: { code?: unknown } } | null)
+    ?.code;
+  const causeCode = (error as { cause?: { code?: unknown } } | null)?.cause
+    ?.code;
+  return code === "42P01" || causeCode === "42P01";
 }
 
 function expectedHubMigrations(): number {

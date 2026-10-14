@@ -4,3 +4,4 @@ export * from "./access";
 export * from "./accounts";
 export * from "./audit";
 export * from "./settings";
+export * from "./rate-limit";

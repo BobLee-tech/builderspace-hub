@@ -15,7 +15,13 @@
     "docs/hub/",
     ".github/workflows/hub-ci.yml",
     "BUILDERSPACE.md",
-    "BUILDERSPACE_PLAN.md"
+    "BUILDERSPACE_PLAN.md",
+    "packages/auth/src/hub-rate-limit.integration.test.ts",
+    ".github/workflows/security.yml",
+    ".github/dependabot.yml",
+    ".github/CODEOWNERS",
+    ".gitleaksignore",
+    "SECURITY.md"
   ],
   "seams": [
     {

@@ -5,9 +5,33 @@ import type { dbClient } from "@kan/db/client";
 import { decideUserCreate, provisionUser } from "@kan/hub/access";
 import { isSessionAllowed } from "@kan/hub/accounts";
 import { HUB_GRANT_HEADER } from "@kan/hub/public";
+import { rateLimitStorage } from "@kan/hub/rate-limit";
 import { createLogger } from "@kan/logger";
 
 const log = createLogger("hub-auth");
+
+/**
+ * Stricter limits than Better Auth's default (3 requests per 10 seconds per
+ * IP on every sign-in and sign-up path), for the endpoints worth guessing
+ * against. Counted per client IP and path, in the database.
+ */
+export const HUB_AUTH_RATE_LIMITS: {
+  pathMatcher: (path: string) => boolean;
+  window: number;
+  max: number;
+}[] = [
+  // Password guessing: 5 tries a minute.
+  { pathMatcher: (path) => path === "/sign-in/email", window: 60, max: 5 },
+  // Registration needs a link; nobody legitimate tries often.
+  { pathMatcher: (path) => path.startsWith("/sign-up"), window: 600, max: 5 },
+  // Reset mails cost money and annoy the recipient.
+  {
+    pathMatcher: (path) =>
+      path === "/forget-password" || path === "/request-password-reset",
+    window: 600,
+    max: 3,
+  },
+];
 
 /**
  * BuilderSpace Hub's registration gate and suspension check, as a Better
@@ -18,13 +42,21 @@ const log = createLogger("hub-auth");
  * false. So with this plugin installed an account can only be created by
  * someone presenting a live registration link for that exact address, whatever
  * the sign-up method.
+ *
+ * It also moves Better Auth's rate-limit counters into the database. Better
+ * Auth keeps them in memory by default, and on serverless hosting every
+ * instance would count on its own, letting guesses spread across them.
+ * Plugin options only fill in what Kan's options leave unset, so turning rate
+ * limiting off with DISABLE_RATE_LIMIT still works.
  */
 export function hubAuthPlugin(db: dbClient): BetterAuthPlugin {
   return {
     id: "builderspace-hub",
+    rateLimit: HUB_AUTH_RATE_LIMITS,
     init() {
       return {
         options: {
+          rateLimit: { customStorage: rateLimitStorage(db) },
           databaseHooks: {
             user: {
               create: {
