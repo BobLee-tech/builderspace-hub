@@ -7,7 +7,7 @@ import type { AuditActor } from "../audit";
 import type { Db } from "../db";
 import { listAudit } from "../audit";
 import { ensureProjectMember } from "../kan/members.gateway";
-import { hubAccessGrants } from "../schema";
+import { hubAccessGrants, hubAccounts } from "../schema";
 import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
 import { issueGrant } from "./grant.service";
 import { decideUserCreate, provisionUser } from "./registration";
@@ -154,6 +154,25 @@ describe("provisionUser", () => {
       entityType: "grant",
       entityId: issued.publicId,
     });
+  });
+
+  it("gives the account the back-office role the grant carried", async () => {
+    await issueGrant(db, actor, {
+      email: "boss@example.test",
+      source: "cli",
+      hubRole: "owner",
+      projects: [],
+      now,
+    });
+    const user = await seedUser(db, { email: "boss@example.test" });
+
+    await provisionUser(db, { userId: user.id, email: user.email, now });
+
+    const [row] = await db
+      .select()
+      .from(hubAccounts)
+      .where(eq(hubAccounts.userId, user.id));
+    expect(row).toMatchObject({ role: "owner", status: "active" });
   });
 
   it("does nothing the second time", async () => {

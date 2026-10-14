@@ -13,11 +13,13 @@ import {
 
 import { users, workspaces } from "@kan/db/schema";
 
+import type { HubRole } from "../accounts/roles";
+
 export const grantSources = ["direct", "application", "cli"] as const;
 export type GrantSource = (typeof grantSources)[number];
 
-export const hubRoles = ["owner", "admin", "viewer"] as const;
-export type HubRole = (typeof hubRoles)[number];
+export { hubRoles } from "../accounts/roles";
+export type { HubRole } from "../accounts/roles";
 
 export const projectRoles = ["admin", "member", "guest"] as const;
 export type ProjectRole = (typeof projectRoles)[number];

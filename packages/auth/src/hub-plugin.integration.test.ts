@@ -5,6 +5,12 @@ import type { dbClient } from "@kan/db/client";
 import type * as HubAccess from "@kan/hub/access";
 import { users, workspaceMembers } from "@kan/db/schema";
 import { issueGrant } from "@kan/hub/access";
+import {
+  createAccount,
+  resetPassword,
+  restoreAccount,
+  suspendAccount,
+} from "@kan/hub/accounts";
 import { hubAccessGrants } from "@kan/hub/schema";
 import { createHubTestDb, seedProject, seedUser } from "@kan/hub/testing";
 
@@ -169,5 +175,86 @@ describe("registration gate on the real sign-up endpoint", () => {
     expect(await userByEmail(INVITED)).toBeDefined();
     const [grant] = await db.select().from(hubAccessGrants);
     expect(grant?.consumedAt).toBeNull();
+  });
+});
+
+describe("accounts managed from the back office", () => {
+  const signIn = (email: string, password: string) =>
+    auth.handler(
+      new Request(`${BASE_URL}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BASE_URL },
+        body: JSON.stringify({ email, password }),
+      }),
+    );
+
+  let owner: { userId: string; email: string; role: "owner" };
+
+  beforeEach(async () => {
+    const [admin] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, "admin@example.test"));
+    if (!admin) throw new Error("seed missing");
+    owner = { userId: admin.id, email: admin.email, role: "owner" };
+  });
+
+  it("an account added by an admin signs in with its temporary password", async () => {
+    const created = await createAccount(db, owner, {
+      name: "Added",
+      email: "added@example.test",
+      hubRole: null,
+      projects: [],
+    });
+
+    expect(
+      (await signIn("added@example.test", created.temporaryPassword)).status,
+    ).toBe(200);
+    expect(
+      (await signIn("added@example.test", "wrong-password-1")).status,
+    ).toBe(401);
+  });
+
+  it("a password reset replaces the old password", async () => {
+    const created = await createAccount(db, owner, {
+      name: "Added",
+      email: "added@example.test",
+      hubRole: null,
+      projects: [],
+    });
+    const { temporaryPassword } = await resetPassword(
+      db,
+      owner,
+      created.userId,
+    );
+
+    expect(
+      (await signIn("added@example.test", created.temporaryPassword)).status,
+    ).toBe(401);
+    expect((await signIn("added@example.test", temporaryPassword)).status).toBe(
+      200,
+    );
+  });
+
+  it("a suspended account cannot sign in until restored", async () => {
+    const created = await createAccount(db, owner, {
+      name: "Added",
+      email: "added@example.test",
+      hubRole: null,
+      projects: [],
+    });
+    await suspendAccount(db, owner, created.userId);
+
+    const refused = await signIn(
+      "added@example.test",
+      created.temporaryPassword,
+    );
+    expect(refused.status).toBe(403);
+    expect(await refused.text()).toContain("HUB_ACCOUNT_SUSPENDED");
+
+    await restoreAccount(db, owner, created.userId);
+    expect(
+      (await signIn("added@example.test", created.temporaryPassword)).status,
+    ).toBe(200);
   });
 });

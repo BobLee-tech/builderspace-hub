@@ -1,5 +1,6 @@
 import type { Db } from "../db";
 import type { GrantDecision } from "./grant.policy";
+import { upsertAccount } from "../accounts/account.repo";
 import { recordAudit } from "../audit";
 import { ensureProjectMember } from "../kan/members.gateway";
 import { normalizeEmail } from "../shared/email";
@@ -77,6 +78,12 @@ export async function provisionUser(
       at: account.now,
     });
     if (won) {
+      if (grant.hubRole) {
+        await upsertAccount(tx, account.userId, {
+          role: grant.hubRole,
+          now: account.now,
+        });
+      }
       await recordAudit(tx, {
         actor: { userId: account.userId, email },
         action: "grant.consumed",

@@ -8,6 +8,13 @@
       "when": 1791906886426,
       "tag": "20261013155446_InitAccessAndAudit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791949198087,
+      "tag": "20261014033958_AddAccounts",
+      "breakpoints": true
     }
   ]
 }

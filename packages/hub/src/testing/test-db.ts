@@ -7,6 +7,8 @@ import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import * as kanSchema from "@kan/db/schema";
 
 import type { Db } from "../db";
+import type { AccountStatus, HubRole } from "../schema";
+import { upsertAccount } from "../accounts/account.repo";
 import {
   HUB_MIGRATIONS_SCHEMA,
   HUB_MIGRATIONS_TABLE,
@@ -100,4 +102,13 @@ export async function seedProject(
   if (!row) throw new Error("seedProject: workspace not found after insert");
 
   return { id: row.id, publicId: row.publicId, name: row.name };
+}
+
+/** Gives a seeded user a back-office role and/or status. */
+export async function seedHubAccount(
+  db: Db,
+  userId: string,
+  facts: { role?: HubRole | null; status?: AccountStatus },
+): Promise<void> {
+  await upsertAccount(db, userId, { ...facts, now: new Date() });
 }

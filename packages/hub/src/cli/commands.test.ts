@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Db } from "../db";
 import { describeGrantForJoin } from "../access";
+import { getAccessFacts } from "../accounts";
 import { listAudit } from "../audit";
 import {
   createHubTestDb,
@@ -64,6 +65,45 @@ describe("grant", () => {
       expect(await listAudit(db, { limit: 5, offset: 0 })).toEqual([]);
     },
   );
+});
+
+describe("set-role", () => {
+  it("sets and removes a back-office role, logged as the command line", async () => {
+    const user = await seedUser(db, { email: "boss@example.test" });
+
+    expect(
+      await runCommand(
+        db,
+        { name: "set-role", email: "Boss@Example.test", role: "owner" },
+        env,
+      ),
+    ).toEqual(["boss@example.test 的后台角色已设为 所有者。"]);
+    expect((await getAccessFacts(db, user.id)).role).toBe("owner");
+
+    expect(
+      await runCommand(
+        db,
+        { name: "set-role", email: "boss@example.test", role: null },
+        env,
+      ),
+    ).toEqual(["boss@example.test 已没有后台角色。"]);
+
+    const [entry] = await listAudit(db, { limit: 1, offset: 0 });
+    expect(entry).toMatchObject({
+      action: "account.role_changed",
+      actorEmail: "cli",
+    });
+  });
+
+  it("reports an address without an account", async () => {
+    await expect(
+      runCommand(
+        db,
+        { name: "set-role", email: "ghost@example.test", role: "owner" },
+        env,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 });
 
 describe("setup-projects", () => {
@@ -175,6 +215,7 @@ describe("help", () => {
       "grant",
       "provision",
       "setup-projects",
+      "set-role",
       "projects",
       "doctor",
     ]) {

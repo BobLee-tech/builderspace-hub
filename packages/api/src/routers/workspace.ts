@@ -19,6 +19,8 @@ import {
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { createAvatarUrlResolver } from "../utils/avatarUrls";
 import { assertPermission } from "../utils/permissions";
+// hub-seam: only back-office admins create projects (docs/hub/UPSTREAM_SEAMS.md)
+import { assertCanCreateProject } from "./hub/guards";
 
 export const workspaceRouter = createTRPCRouter({
   all: protectedProcedure
@@ -305,6 +307,8 @@ export const workspaceRouter = createTRPCRouter({
           message: `User not authenticated`,
           code: "UNAUTHORIZED",
         });
+
+      await assertCanCreateProject(ctx.db, userId); // hub-seam
 
       // Check if slug is provided in cloud environment
       if (input.slug && env("NEXT_PUBLIC_KAN_ENV") === "cloud") {

@@ -1,5 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
+import { workspaces } from "@kan/db/schema";
 import { generateUID } from "@kan/shared/utils";
 
 import type { DbOrTx } from "../db";
@@ -132,4 +133,61 @@ export async function markGrantRevoked(
     .returning({ id: hubAccessGrants.id });
 
   return updated.length > 0;
+}
+
+export async function listGrantsPage(
+  db: DbOrTx,
+  page: { limit: number; offset: number },
+): Promise<{ rows: GrantRow[]; total: number }> {
+  const [rows, totals] = await Promise.all([
+    db
+      .select()
+      .from(hubAccessGrants)
+      .orderBy(desc(hubAccessGrants.createdAt), desc(hubAccessGrants.id))
+      .limit(page.limit)
+      .offset(page.offset),
+    db.select({ total: count() }).from(hubAccessGrants),
+  ]);
+  return { rows, total: totals[0]?.total ?? 0 };
+}
+
+/** Project names and roles preset on each of the given grants. */
+export async function listProjectsOfGrants(
+  db: DbOrTx,
+  grantIds: number[],
+): Promise<Map<number, { projectName: string; role: ProjectRole }[]>> {
+  const byGrant = new Map<
+    number,
+    { projectName: string; role: ProjectRole }[]
+  >();
+  if (grantIds.length === 0) return byGrant;
+
+  const rows = await db
+    .select({
+      grantId: hubAccessGrantProjects.grantId,
+      projectName: workspaces.name,
+      role: hubAccessGrantProjects.role,
+    })
+    .from(hubAccessGrantProjects)
+    .innerJoin(
+      workspaces,
+      eq(workspaces.id, hubAccessGrantProjects.workspaceId),
+    )
+    .where(inArray(hubAccessGrantProjects.grantId, grantIds))
+    .orderBy(hubAccessGrantProjects.id);
+
+  for (const row of rows) {
+    const list = byGrant.get(row.grantId) ?? [];
+    list.push({ projectName: row.projectName, role: row.role });
+    byGrant.set(row.grantId, list);
+  }
+  return byGrant;
+}
+
+export async function countOpenGrants(db: DbOrTx): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(hubAccessGrants)
+    .where(isOpen);
+  return row?.total ?? 0;
 }

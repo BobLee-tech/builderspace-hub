@@ -72,6 +72,7 @@
     "@kan/auth": "workspace:*",
     "@kan/db": "workspace:*",
     "@kan/email": "workspace:^",
+    "@kan/hub": "workspace:*",
     "@kan/logger": "workspace:^",
     "@kan/shared": "workspace:^",
     "@kan/stripe": "workspace:^",
