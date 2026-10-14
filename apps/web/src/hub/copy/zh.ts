@@ -162,6 +162,40 @@ export const zh = {
     },
   },
 
+  personal: {
+    tabs: {
+      schedule: "日程",
+      done: "我完成的",
+    },
+  },
+
+  archive: {
+    title: "我完成的",
+    description:
+      "卡片移到「已完成」的那一刻，它就自动归到这里。有负责人的任务记给负责人，没人负责的记给把它移过去的人。任务被重新打开就不再算。这里只有你自己能看到。",
+    total: "累计完成",
+    thisMonth: "本月完成",
+    months: {
+      title: "最近 12 个月",
+      axis: (month: number) => `${month}月`,
+      tooltip: (year: number, month: number, count: number) =>
+        `${year} 年 ${month} 月 · ${count} 个`,
+      tableCaption: "每月完成的任务数",
+      monthColumn: "月份",
+      countColumn: "完成数",
+    },
+    byProject: "按项目",
+    byFunction: "按职能",
+    otherBoards: "其他看板",
+    recent: {
+      title: "完成记录",
+      monthHeading: (year: number, month: number) => `${year} 年 ${month} 月`,
+      limited: (shown: number, total: number) =>
+        `只列出最近 ${shown} 个，统计数字包含全部 ${total} 个。`,
+      empty: "还没有完成的任务。卡片移到「已完成」后会自动出现在这里。",
+    },
+  },
+
   schedule: {
     title: "个人",
     heading: "我的时间",

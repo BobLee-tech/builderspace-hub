@@ -161,8 +161,19 @@ export async function getMyTasks(
   db: Db,
   input: { userId: string; now: Date },
 ): Promise<Task[]> {
+  return (await getVisibleTasks(db, input)).filter((task) => task.assignedToMe);
+}
+
+/**
+ * Every task in every project this person can see, whoever it belongs to.
+ * "我完成的" needs it to credit unassigned tasks to whoever finished them.
+ */
+export async function getVisibleTasks(
+  db: Db,
+  input: { userId: string; now: Date },
+): Promise<Task[]> {
   const { tasks } = await loadScope(db, input);
-  return tasks.filter((task) => task.assignedToMe).map(publicTask);
+  return tasks.map(publicTask);
 }
 
 export async function getTaskBoard(
