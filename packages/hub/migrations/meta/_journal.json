@@ -50,6 +50,13 @@
       "when": 1791989176044,
       "tag": "20261014144616_AddProjectRepos",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791989291305,
+      "tag": "20261014144811_AddGitHubConnections",
+      "breakpoints": true
     }
   ]
 }

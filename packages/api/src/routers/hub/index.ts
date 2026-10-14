@@ -26,8 +26,13 @@ import { getArchive } from "@kan/hub/archive";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import {
   addProjectRepo,
+  disconnectGitHub,
+  getGitHubSummary,
+  gitHubAppConfig,
+  gitHubDeps,
   listProjectRepos,
   removeProjectRepo,
+  syncGitHub,
 } from "@kan/hub/github";
 import {
   editablePermissions,
@@ -299,6 +304,45 @@ const reposRouter = createTRPCRouter({
     ),
 });
 
+/** The GitHub App's settings, or a refusal people can read when it is missing. */
+function requireGitHubApp() {
+  const config = gitHubAppConfig();
+  if (!config) {
+    throw new HubError(
+      "CONFLICT",
+      "管理员还没有配置 GitHub App，暂时不能连接。",
+    );
+  }
+  return config;
+}
+
+const githubRouter = createTRPCRouter({
+  /** My connection, the repositories that count for me, and my activity in them. */
+  summary: hubProcedure.query(async ({ ctx }) => ({
+    configured: gitHubAppConfig() !== null,
+    ...(await getGitHubSummary(ctx.db, {
+      userId: ctx.actor.userId,
+      now: new Date(),
+    })),
+  })),
+
+  sync: hubProcedure.mutation(({ ctx }) =>
+    runHub(() =>
+      syncGitHub(
+        ctx.db,
+        { userId: ctx.actor.userId, now: new Date() },
+        gitHubDeps(requireGitHubApp()),
+      ),
+    ),
+  ),
+
+  disconnect: hubProcedure.mutation(({ ctx }) =>
+    runHub(() =>
+      disconnectGitHub(ctx.db, ctx.actor, gitHubDeps(requireGitHubApp())),
+    ),
+  ),
+});
+
 const archiveRouter = createTRPCRouter({
   /** 我完成的: my finished tasks, counted by month in the viewer's time zone. */
   get: hubProcedure
@@ -395,6 +439,7 @@ export const hubRouter = createTRPCRouter({
   tasks: tasksRouter,
   schedule: scheduleRouter,
   repos: reposRouter,
+  github: githubRouter,
   site: siteRouter,
   archive: archiveRouter,
 
