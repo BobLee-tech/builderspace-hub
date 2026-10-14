@@ -110,6 +110,14 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **时间**：库里存绝对时刻（UTC），哪一天、几点由浏览器的时钟决定。页面的格子换算在 `apps/web/src/hub/lib/schedule-layout.ts`，是不依赖 React 的纯函数，测试在三个时区下都跑过。
 - **交互**：先选一种「画笔」（没空 / 有空 / 会议，或者点右边的一个任务），再在时间表上拖。点一下是一小时；拖块移动，拖块的下沿缩放。
 
+## GitHub
+
+`packages/hub/src/github/` 负责连接 GitHub。分两步上线：先是后台的「项目仓库」，再是个人页的「连接 GitHub」。
+
+- **项目仓库**（`hub_project_repo`）：后台给每个项目配它由哪些仓库组成，存成小写的 `owner/name`（GitHub 不区分大小写，统一写法才能正确判断重复）。粘贴的 GitHub 链接会被规范化（`repo.policy.ts`）。所有者和管理员能改（`settings.manage`），每次改动都写操作日志。
+- **一个人的活动只读他能看的项目的仓库**：`listReposForUser()` 用的是和首页同一个出口 `listViewableProjects()`。不在某个项目里的人，那个项目的仓库一个也不会被读取或统计。
+- 连接用 **GitHub App**，不用 OAuth App：GitHub App 的权限是只读的，而且只对安装了它的仓库有效；OAuth App 要读私有仓库就得要 `repo` 权限，等于对这个人所有私有仓库都有读写权（2026-10-14 定）。环境变量叫 `HUB_GITHUB_CLIENT_ID` / `HUB_GITHUB_CLIENT_SECRET`，故意不用 `GITHUB_CLIENT_ID`：那是 Kan 自己的变量名，设了就会打开「用 GitHub 登录」，绕过注册闸门。
+
 ## 操作日志
 
 每个会改数据的用例都用 `withAudit()` 包起来：改动和日志在同一个事务里，要么都写要么都不写。日志存操作人邮箱的副本（账号删了也能查）、动作名、对象类型和 ID、一句人能读的摘要。新增动作时在 `audit/audit.ts` 的 `AuditAction` 里加一项。

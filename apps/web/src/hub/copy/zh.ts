@@ -331,6 +331,16 @@ export const zh = {
       reset: "恢复默认",
       readOnly: "只有所有者和管理员能修改颜色。",
     },
+    repos: {
+      title: "项目仓库",
+      description:
+        "每个项目由哪些 GitHub 仓库组成。成员连接 GitHub 后，只统计他能看到的项目里的这些仓库；不在项目里的人，这个项目的仓库一个也不会算进去。",
+      none: "还没有关联仓库。",
+      placeholder: "owner/仓库名，或粘贴仓库链接",
+      add: "关联仓库",
+      remove: "取消关联",
+      readOnly: "只有所有者和管理员能修改项目仓库。",
+    },
     permissions: {
       title: "项目权限",
       description:

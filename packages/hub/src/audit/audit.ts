@@ -25,6 +25,8 @@ export type AuditAction =
   | "account.project_role_changed"
   | "account.project_removed"
   | "project.permission_changed"
+  | "project.repo_linked"
+  | "project.repo_unlinked"
   | "settings.function_colors_changed";
 
 export interface AuditActor {

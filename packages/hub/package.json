@@ -24,6 +24,10 @@
       "types": "./src/permissions/index.ts",
       "default": "./src/permissions/index.ts"
     },
+    "./github": {
+      "types": "./src/github/index.ts",
+      "default": "./src/github/index.ts"
+    },
     "./public": {
       "types": "./src/public.ts",
       "default": "./src/public.ts"
