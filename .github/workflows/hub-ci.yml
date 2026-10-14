@@ -1,0 +1,68 @@
+name: Hub CI
+
+# Checks for the code this fork adds on top of Kan: the hub package, the
+# registration gate, and that upstream files are only changed at registered
+# seams. Kan's own workflows are left as they are.
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: hub-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The seam check compares against Kan's history.
+          fetch-depth: 0
+
+      - name: Fetch upstream Kan
+        run: |
+          git remote add upstream https://github.com/kanbn/kan.git
+          git fetch --no-tags upstream main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Upstream seams
+        run: pnpm --filter @kan/hub check-seams
+
+      - name: Lint
+        run: pnpm --filter @kan/hub --filter @kan/builderspace lint
+
+      - name: Typecheck
+        run: pnpm --filter @kan/hub --filter @kan/builderspace --filter @kan/auth typecheck
+
+      - name: Hub tests with coverage
+        run: pnpm --filter @kan/hub test:coverage
+
+      - name: Seed tool tests
+        run: pnpm --filter @kan/builderspace test
+
+      - name: Registration gate against the real auth library
+        run: pnpm --filter @kan/auth test
+
+      - name: Web unit tests
+        run: pnpm --filter @kan/web test
