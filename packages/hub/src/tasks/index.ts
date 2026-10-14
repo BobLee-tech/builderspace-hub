@@ -13,8 +13,10 @@ export {
   taskViews,
 } from "./task.policy";
 export type {
+  BoardTarget,
   HomeSummary,
   MatrixRow,
+  ProjectAccess,
   ProjectChip,
   Scope,
   StageCounts,

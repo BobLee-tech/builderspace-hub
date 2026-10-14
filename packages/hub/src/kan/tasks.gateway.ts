@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import * as permissionRepo from "@kan/db/repository/permission.repo";
 import {
@@ -8,6 +8,7 @@ import {
   cardToWorkspaceMembers,
   labels,
   lists,
+  users,
   workspaceMembers,
   workspaces,
 } from "@kan/db/schema";
@@ -19,6 +20,10 @@ export interface ViewableProject {
   publicId: string;
   name: string;
   slug: string;
+  /** This person's membership, for assigning a new task to them. */
+  memberPublicId: string;
+  canCreateTasks: boolean;
+  canEditTasks: boolean;
 }
 
 /**
@@ -34,6 +39,7 @@ export async function listViewableProjects(
   const memberships = await db
     .select({
       memberId: workspaceMembers.id,
+      memberPublicId: workspaceMembers.publicId,
       role: workspaceMembers.role,
       roleId: workspaceMembers.roleId,
       id: workspaces.id,
@@ -69,6 +75,9 @@ export async function listViewableProjects(
         publicId: membership.publicId,
         name: membership.name,
         slug: membership.slug,
+        memberPublicId: membership.memberPublicId,
+        canCreateTasks: permissions.includes("card:create"),
+        canEditTasks: permissions.includes("card:edit"),
       });
     }
   }
@@ -85,7 +94,7 @@ export interface TaskRow {
   boardPublicId: string;
   boardName: string;
   projectId: number;
-  assigneeUserIds: string[];
+  assignees: { userId: string | null; name: string }[];
   labels: { name: string; colourCode: string | null }[];
 }
 
@@ -137,12 +146,15 @@ export async function listTaskRows(
       .select({
         cardId: cardToWorkspaceMembers.cardId,
         userId: workspaceMembers.userId,
+        name: users.name,
+        email: workspaceMembers.email,
       })
       .from(cardToWorkspaceMembers)
       .innerJoin(
         workspaceMembers,
         eq(workspaceMembers.id, cardToWorkspaceMembers.workspaceMemberId),
       )
+      .leftJoin(users, eq(users.id, workspaceMembers.userId))
       .where(
         and(
           inArray(cardToWorkspaceMembers.cardId, cardIds),
@@ -167,14 +179,72 @@ export async function listTaskRows(
 
   return rows.map(({ id, ...row }) => ({
     ...row,
-    assigneeUserIds: (assigneesByCard.get(id) ?? []).flatMap((a) =>
-      a.userId ? [a.userId] : [],
-    ),
+    assignees: (assigneesByCard.get(id) ?? []).map((a) => ({
+      userId: a.userId,
+      // Someone invited but not registered yet has no name: show the address.
+      name: a.name?.trim() ? a.name : a.email,
+    })),
     labels: (labelsByCard.get(id) ?? []).map(({ name, colourCode }) => ({
       name,
       colourCode,
     })),
   }));
+}
+
+export interface BoardWithLists {
+  publicId: string;
+  name: string;
+  projectId: number;
+  /** Live lists, left to right. */
+  lists: { publicId: string; name: string }[];
+}
+
+/**
+ * The ordinary boards of the given projects with their lists, including empty
+ * ones: the task board needs them to move a card into a column that has no
+ * cards yet, and to offer a place for a new task.
+ */
+export async function listBoardsWithLists(
+  db: Db,
+  projectIds: readonly number[],
+): Promise<BoardWithLists[]> {
+  if (projectIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      boardId: boards.id,
+      boardPublicId: boards.publicId,
+      boardName: boards.name,
+      projectId: boards.workspaceId,
+      listPublicId: lists.publicId,
+      listName: lists.name,
+    })
+    .from(boards)
+    .leftJoin(lists, and(eq(lists.boardId, boards.id), isNull(lists.deletedAt)))
+    .where(
+      and(
+        inArray(boards.workspaceId, [...projectIds]),
+        eq(boards.type, "regular"),
+        eq(boards.isArchived, false),
+        isNull(boards.deletedAt),
+      ),
+    )
+    .orderBy(asc(boards.id), asc(lists.index));
+
+  const byBoard = new Map<number, BoardWithLists>();
+  for (const row of rows) {
+    const board = byBoard.get(row.boardId) ?? {
+      publicId: row.boardPublicId,
+      name: row.boardName,
+      projectId: row.projectId,
+      lists: [],
+    };
+    if (row.listPublicId && row.listName !== null) {
+      board.lists.push({ publicId: row.listPublicId, name: row.listName });
+    }
+    byBoard.set(row.boardId, board);
+  }
+  return [...byBoard.values()];
 }
 
 function groupBy<T, K>(

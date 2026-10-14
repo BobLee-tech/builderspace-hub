@@ -436,3 +436,71 @@ describe("getTaskBoard", () => {
     ]);
   });
 });
+
+describe("what the task board lets someone do", () => {
+  it("says per project whether they may create and edit tasks", async () => {
+    await join(me, coursemate, "member");
+    await join(me, echo, "guest");
+
+    const board = await getTaskBoard(db, { userId: me.id, view: "all", now });
+
+    expect(board.access[coursemate.publicId]).toMatchObject({
+      canCreate: true,
+      canEdit: true,
+    });
+    expect(board.access[echo.publicId]).toMatchObject({
+      canCreate: false,
+      canEdit: false,
+    });
+    expect(board.access[coursemate.publicId]?.memberPublicId).toHaveLength(12);
+    expect(board.access[community.publicId]).toBeUndefined();
+  });
+
+  it("lists every board in scope with the list behind each column, cards or not", async () => {
+    await join(me, coursemate);
+    await seedBoard(coursemate, "营销");
+    await seedBoard(coursemate, "开发");
+    await seedBoard(coursemate, "Roadmap");
+    await seedBoard(community, "开发");
+
+    const board = await getTaskBoard(db, {
+      userId: me.id,
+      view: "all",
+      projectPublicId: coursemate.publicId,
+      now,
+    });
+
+    expect(board.boards.map((b) => b.name)).toEqual([
+      "开发",
+      "营销",
+      "Roadmap",
+    ]);
+    expect(Object.keys(board.boards[0]?.listsByStage ?? {})).toEqual([
+      "todo",
+      "doing",
+      "review",
+      "done",
+    ]);
+    expect(board.boards[0]?.functionKey).toBe("dev");
+    expect(board.boards[2]?.functionKey).toBeNull();
+  });
+
+  it("names the people a task is assigned to", async () => {
+    await join(me, coursemate);
+    await join(owner, coursemate, "admin");
+    const dev = await seedBoard(coursemate, "开发");
+    await seedCard(dev.todo, "两个人的任务", {
+      assignees: [
+        { user: me, project: coursemate },
+        { user: owner, project: coursemate },
+      ],
+    });
+
+    const board = await getTaskBoard(db, { userId: me.id, view: "all", now });
+    const task = board.columns[0]?.tasks[0];
+
+    expect(task?.assignees).toHaveLength(2);
+    expect(task?.assignees.every((name) => name.length > 0)).toBe(true);
+    expect(task?.assignedToMe).toBe(true);
+  });
+});

@@ -20,6 +20,7 @@ describe("can", () => {
       "audit.view",
       "projects.create",
       "permissions.manage",
+      "settings.manage",
     ],
     viewer: ["admin.view"],
   };
