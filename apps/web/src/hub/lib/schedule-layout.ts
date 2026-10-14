@@ -182,6 +182,14 @@ export function moveSpanTo(span: Span, startsAt: Date): Span {
   return { startsAt, endsAt: new Date(startsAt.getTime() + length) };
 }
 
+/**
+ * The day a span's last piece is drawn on, which is where its resize handle
+ * sits. A span ending exactly at midnight ends on the day before.
+ */
+export function endDayOf(span: Span): Date {
+  return startOfDay(new Date(span.endsAt.getTime() - 1));
+}
+
 /** `span` with a new end, never shorter than one grid step. */
 export function resizeSpanTo(span: Span, endsAt: Date): Span {
   const earliest = span.startsAt.getTime() + SNAP_MS;

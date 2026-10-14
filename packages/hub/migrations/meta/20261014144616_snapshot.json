@@ -1,6 +1,6 @@
 {
-  "id": "15f4ae1f-7bd4-4e00-9e54-7eaff2a4d8be",
-  "prevId": "293e4d57-710d-49d9-8202-d8768c51bd7a",
+  "id": "7020257c-b02d-4ad3-ac44-709e26fd2998",
+  "prevId": "a62ce096-cc4c-4697-b6ef-38c49caccc6d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -309,6 +309,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "siteAccess": {
+          "name": "siteAccess",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "varchar(16)",
@@ -379,6 +385,10 @@
         "hub_account_role_check": {
           "name": "hub_account_role_check",
           "value": "\"hub_account\".\"role\" IS NULL OR \"hub_account\".\"role\" IN ('owner', 'admin', 'viewer')"
+        },
+        "hub_account_site_access_check": {
+          "name": "hub_account_site_access_check",
+          "value": "\"hub_account\".\"siteAccess\" IS NULL OR \"hub_account\".\"siteAccess\" IN ('people', 'manage')"
         },
         "hub_account_status_check": {
           "name": "hub_account_status_check",

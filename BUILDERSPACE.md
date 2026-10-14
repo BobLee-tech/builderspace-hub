@@ -38,6 +38,8 @@ EchoAgent       →   开发 / 运营 / 营销
 
 目前核心团队三个人在三个项目里都是管理员。志愿者「可领取任务」的权限还没有做，见路线图。
 
+另有一项**官网权限**，和上面的角色、后台角色都无关，由所有者在 后台 → 账号 里逐人设置：「名单」能看志愿者申请和加入登记、改志愿者的状态和备注；「管理」在此之外还能审核官网的项目卡和项目进展。没有设置的人（包括所有者自己）看不到官网的数据。
+
 ## 开通新成员
 
 Hub 不开放公开注册，`/signup` 只是一页说明。要让一个人注册，先给他的邮箱发一条注册许可，得到一条一次性链接，私下发给本人：
@@ -181,6 +183,31 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 - **访问保护。** 实测：项目的生产域名 `<项目名>.vercel.app` 可以公开访问；带哈希的单次部署地址和预览地址受团队的 Deployment Protection 保护，要登录 Vercel 才能看。把生产域名发给同事即可，不要发带哈希的地址。
 - **限流。** 没配 Redis 时限流按实例内存计数，在 Serverless 上约束力有限；对外开放注册前应配上 `REDIS_URL`。
+
+## 连接官网（后台的「官网」分区）
+
+后台的「官网」分区直接读写官网自己的 Supabase 数据库。Hub 用一个专用的数据库角色 `hub_site_admin` 连过去：它只能读项目卡、项目进展、志愿者申请、加入登记四张表，只能改审核状态、志愿者状态和备注，不能增删行，碰不到 auth、storage 和其他表。不要把官网的 service_role key 交给 Hub。
+
+1. **建角色。** 官网仓库合并迁移 `supabase/migrations/20261015020000_hub_site_admin.sql`，并应用到官网的 Supabase 项目。这一步要由有官网 Supabase 权限的人做。
+2. **设密码。** 在官网 Supabase 的 SQL Editor 执行一次，密码新生成一个足够长的随机串：
+
+   ```sql
+   alter role hub_site_admin with login password '<新密码>';
+   ```
+
+3. **连接串。** Supabase → Connect → Transaction pooler 复制连接串，把用户名换成 `hub_site_admin.<project ref>`、密码换成上一步的。
+4. **证书。** Supabase → Project Settings → Database → SSL Configuration → Download certificate。Hub 连非本机的数据库时一律走 TLS 并校验证书，Supabase 的证书由它自己的 CA 签发，所以要把这份根证书给 Hub。
+5. **环境变量（Hub 的生产环境）。**
+
+   | 变量                    | 值                                                          |
+   | ----------------------- | ----------------------------------------------------------- |
+   | `HUB_SITE_DATABASE_URL` | 第 3 步的连接串，设为 sensitive                             |
+   | `HUB_SITE_DATABASE_CA`  | 第 4 步证书文件的全部内容（多行，或者把换行写成 `\n` 也行） |
+
+6. **重新部署，再授权。** 部署后，所有者在 后台 → 账号 里给需要的人设「官网权限」。没设变量时，有官网权限的人会看到「还没有连接官网数据库」。
+7. **停用。** 在官网 Supabase 执行 `alter role hub_site_admin nologin;`，或删掉 Hub 的这两个环境变量。
+
+本地开发时把 `HUB_SITE_DATABASE_URL` 指向一个本机 Postgres 即可（本机地址不走 TLS），里面按官网的迁移建好表，测试用的最小表结构见 `packages/hub/src/testing/site-test-db.ts`。
 
 ## 开发约定
 

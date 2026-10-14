@@ -2,7 +2,9 @@ export type HubErrorCode =
   | "INVALID_INPUT"
   | "NOT_FOUND"
   | "CONFLICT"
-  | "FORBIDDEN";
+  | "FORBIDDEN"
+  /** Something the Hub depends on (such as the website's database) did not answer. */
+  | "UNAVAILABLE";
 
 /**
  * An expected failure of a Hub use case, safe to show to the person who caused

@@ -1,6 +1,6 @@
 {
-  "id": "9841d155-5ef2-49e2-8c33-4277580f9448",
-  "prevId": "15f4ae1f-7bd4-4e00-9e54-7eaff2a4d8be",
+  "id": "a62ce096-cc4c-4697-b6ef-38c49caccc6d",
+  "prevId": "293e4d57-710d-49d9-8202-d8768c51bd7a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -309,6 +309,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "siteAccess": {
+          "name": "siteAccess",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "varchar(16)",
@@ -379,6 +385,10 @@
         "hub_account_role_check": {
           "name": "hub_account_role_check",
           "value": "\"hub_account\".\"role\" IS NULL OR \"hub_account\".\"role\" IN ('owner', 'admin', 'viewer')"
+        },
+        "hub_account_site_access_check": {
+          "name": "hub_account_site_access_check",
+          "value": "\"hub_account\".\"siteAccess\" IS NULL OR \"hub_account\".\"siteAccess\" IN ('people', 'manage')"
         },
         "hub_account_status_check": {
           "name": "hub_account_status_check",
@@ -513,300 +523,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "publicId"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.hub_github_account": {
-      "name": "hub_github_account",
-      "schema": "",
-      "columns": {
-        "userId": {
-          "name": "userId",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "githubId": {
-          "name": "githubId",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "login": {
-          "name": "login",
-          "type": "varchar(39)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "avatarUrl": {
-          "name": "avatarUrl",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "accessToken": {
-          "name": "accessToken",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "accessTokenExpiresAt": {
-          "name": "accessTokenExpiresAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshToken": {
-          "name": "refreshToken",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshTokenExpiresAt": {
-          "name": "refreshTokenExpiresAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "connectedAt": {
-          "name": "connectedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "lastSyncedAt": {
-          "name": "lastSyncedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "hub_github_account_userId_user_id_fk": {
-          "name": "hub_github_account_userId_user_id_fk",
-          "tableFrom": "hub_github_account",
-          "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.hub_github_event": {
-      "name": "hub_github_event",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "bigserial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "repoFullName": {
-          "name": "repoFullName",
-          "type": "varchar(140)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ref": {
-          "name": "ref",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "occurredAt": {
-          "name": "occurredAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "hub_github_event_user_time_idx": {
-          "name": "hub_github_event_user_time_idx",
-          "columns": [
-            {
-              "expression": "userId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "occurredAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "hub_github_event_userId_user_id_fk": {
-          "name": "hub_github_event_userId_user_id_fk",
-          "tableFrom": "hub_github_event",
-          "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hub_github_event_unique": {
-          "name": "hub_github_event_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "userId",
-            "repoFullName",
-            "kind",
-            "ref"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "hub_github_event_kind_check": {
-          "name": "hub_github_event_kind_check",
-          "value": "\"hub_github_event\".\"kind\" IN ('commit', 'pr_opened', 'pr_merged', 'issue_opened')"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.hub_project_repo": {
-      "name": "hub_project_repo",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "bigserial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "publicId": {
-          "name": "publicId",
-          "type": "varchar(12)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspaceId": {
-          "name": "workspaceId",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fullName": {
-          "name": "fullName",
-          "type": "varchar(140)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "createdBy": {
-          "name": "createdBy",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "hub_project_repo_workspaceId_workspace_id_fk": {
-          "name": "hub_project_repo_workspaceId_workspace_id_fk",
-          "tableFrom": "hub_project_repo",
-          "tableTo": "workspace",
-          "columnsFrom": [
-            "workspaceId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "hub_project_repo_createdBy_user_id_fk": {
-          "name": "hub_project_repo_createdBy_user_id_fk",
-          "tableFrom": "hub_project_repo",
-          "tableTo": "user",
-          "columnsFrom": [
-            "createdBy"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "hub_project_repo_publicId_unique": {
-          "name": "hub_project_repo_publicId_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "publicId"
-          ]
-        },
-        "hub_project_repo_workspace_name_unique": {
-          "name": "hub_project_repo_workspace_name_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "workspaceId",
-            "fullName"
           ]
         }
       },

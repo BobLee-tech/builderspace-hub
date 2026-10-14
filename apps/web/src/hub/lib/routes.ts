@@ -1,5 +1,5 @@
-import type { TaskView } from "@kan/hub/public";
-import { HUB_JOIN_PATH } from "@kan/hub/public";
+import type { HubRole, TaskView } from "@kan/hub/public";
+import { can, HUB_JOIN_PATH } from "@kan/hub/public";
 
 /**
  * Every path the Hub's own pages link to, in one place.
@@ -15,6 +15,11 @@ export const hubRoutes = {
   signup: "/signup",
   join: HUB_JOIN_PATH,
 } as const;
+
+/** Where the back office starts for someone: the 官网 section if that is all they have. */
+export function adminHome(role: HubRole | null): string {
+  return can(role, "admin.view") ? "/admin" : "/admin/site";
+}
 
 /** The home page, scoped to one project or (no id) to 全部. */
 export function homeHref(projectPublicId?: string | null): string {

@@ -56,6 +56,10 @@
       "types": "./src/shared/index.ts",
       "default": "./src/shared/index.ts"
     },
+    "./site": {
+      "types": "./src/site/index.ts",
+      "default": "./src/site/index.ts"
+    },
     "./structure": {
       "types": "./src/structure/index.ts",
       "default": "./src/structure/index.ts"
@@ -91,6 +95,7 @@
     "@kan/shared": "workspace:*",
     "better-auth": "^1.4.6",
     "drizzle-orm": "^0.42.0",
+    "pg": "^8.11.3",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -98,6 +103,7 @@
     "@kan/prettier-config": "workspace:*",
     "@kan/tsconfig": "workspace:*",
     "@types/node": "^20.17.7",
+    "@types/pg": "^8.10.9",
     "@vitest/coverage-v8": "3.2.4",
     "dotenv-cli": "^7.4.4",
     "drizzle-kit": "^0.28.1",
