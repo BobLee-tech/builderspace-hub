@@ -20,6 +20,10 @@
       "types": "./src/db.ts",
       "default": "./src/db.ts"
     },
+    "./permissions": {
+      "types": "./src/permissions/index.ts",
+      "default": "./src/permissions/index.ts"
+    },
     "./public": {
       "types": "./src/public.ts",
       "default": "./src/public.ts"
@@ -31,6 +35,10 @@
     "./schema": {
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"
+    },
+    "./settings": {
+      "types": "./src/settings/index.ts",
+      "default": "./src/settings/index.ts"
     },
     "./shared": {
       "types": "./src/shared/index.ts",

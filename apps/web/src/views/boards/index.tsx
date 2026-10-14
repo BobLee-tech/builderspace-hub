@@ -19,7 +19,8 @@ import Modal from "~/components/modal";
 import { NewWorkspaceForm } from "~/components/NewWorkspaceForm";
 import { PageHead } from "~/components/PageHead";
 import { Tooltip } from "~/components/Tooltip";
-import { usePermissions } from "~/hooks/usePermissions";
+// hub-seam: no create buttons without permission; templates for project admins (docs/hub/UPSTREAM_SEAMS.md)
+import { useHubPermissions } from "~/hub/lib/use-hub-permissions";
 import { useKeyboardShortcut } from "~/providers/keyboard-shortcuts";
 import { useModal } from "~/providers/modal";
 import { useWorkspace } from "~/providers/workspace";
@@ -36,7 +37,9 @@ export default function BoardsPage({ isTemplate }: { isTemplate?: boolean }) {
   const { openModal, modalContentType, isOpen } = useModal();
   const { workspace } = useWorkspace();
   const [activeTab, setActiveTab] = useState<"boards" | "archived">("boards");
-  const { canCreateBoard } = usePermissions();
+  const { canCreateBoard } = useHubPermissions({
+    creating: isTemplate ? "template" : "board",
+  }); // hub-seam
 
   const createBoardShortcut = useMemo(
     () => ({
@@ -76,6 +79,7 @@ export default function BoardsPage({ isTemplate }: { isTemplate?: boolean }) {
                     if (canCreateBoard) openModal("IMPORT_BOARDS");
                   }}
                   disabled={!canCreateBoard}
+                  hidden={!canCreateBoard} // hub-seam
                   iconLeft={
                     <HiArrowDownTray aria-hidden="true" className="h-4 w-4" />
                   }
@@ -98,6 +102,7 @@ export default function BoardsPage({ isTemplate }: { isTemplate?: boolean }) {
                   if (canCreateBoard) openModal("NEW_BOARD");
                 }}
                 disabled={!canCreateBoard}
+                hidden={!canCreateBoard} // hub-seam
                 iconLeft={
                   <HiOutlinePlusSmall aria-hidden="true" className="h-4 w-4" />
                 }

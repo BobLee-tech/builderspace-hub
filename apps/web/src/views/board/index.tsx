@@ -933,6 +933,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                   if (boardId && canCreateList) openNewListForm(boardId);
                 }}
                 disabled={!boardData || !canCreateList}
+                hidden={!canCreateList} // hub-seam: no button without permission
               >
                 <span className="flex items-center gap-2">
                   <HiOutlinePlusSmall className="h-5 w-5" aria-hidden="true" />
@@ -1008,6 +1009,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                             openNewListForm(boardId);
                         }}
                         disabled={!canCreateList}
+                        hidden={!canCreateList} // hub-seam
                       >
                         {t`Create new list`}
                       </Button>

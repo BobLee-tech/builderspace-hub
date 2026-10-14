@@ -6,6 +6,7 @@ import { functionKeys, functionNames, stageNames } from "@kan/hub/public";
 import type { RouterOutputs } from "~/utils/api";
 import { copy } from "~/hub/copy/zh";
 import { homeHref, taskBoardHref } from "~/hub/lib/routes";
+import { useFunctionColors } from "~/hub/lib/use-function-colors";
 
 type MatrixRow = RouterOutputs["hub"]["tasks"]["home"]["matrix"][number];
 type StageCounts = MatrixRow["functions"][FunctionKey];
@@ -38,6 +39,7 @@ export function FunctionMatrix({
   rows: MatrixRow[];
   scopeId: string | null;
 }) {
+  const colors = useFunctionColors();
   return (
     <section>
       <div className="mb-2">
@@ -60,8 +62,13 @@ export function FunctionMatrix({
                 <th key={key} className="px-4 py-2.5 text-left">
                   <Link
                     href={taskBoardHref(key, scopeId)}
-                    className="text-xs font-semibold text-light-1000 hover:underline dark:text-dark-1000"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-light-1000 hover:underline dark:text-dark-1000"
                   >
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: colors[key] }}
+                    />
                     {functionNames[key]}
                   </Link>
                 </th>

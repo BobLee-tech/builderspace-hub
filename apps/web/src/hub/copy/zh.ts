@@ -120,8 +120,10 @@ export const zh = {
       mine: "指派给我的",
       "due-soon": "即将到期",
       overdue: "已逾期",
-      all: "全部任务",
+      all: "总版",
     },
+    overallHint:
+      "开发、运营、营销的所有任务都在这里。拖到另一列，或者改截止日期，对应的小看板会同步。",
     backHome: "回到首页",
     otherStage: "其他",
     doneLimited: (shown: number, total: number) =>
@@ -133,6 +135,31 @@ export const zh = {
       today: "今天到期",
     },
     assignedToMe: "我",
+    newTask: "新建任务",
+    newTaskIn: (stage: string) => `在「${stage}」新建任务`,
+    form: {
+      title: "任务",
+      titlePlaceholder: "要做什么",
+      board: "放到",
+      stage: "阶段",
+      due: "截止日期",
+      assignMe: "指派给我",
+      create: "新建",
+      cancel: "取消",
+      titleRequired: "请写上任务内容。",
+    },
+    move: {
+      noList: (board: string, stage: string) =>
+        `「${board}」看板没有「${stage}」列，没法移过去。`,
+      failed: "没有移动成功，已恢复原样。",
+    },
+    dueEdit: "改截止日期",
+    dueClear: "清除",
+    dueFailed: "截止日期没有保存成功。",
+    overallTile: {
+      title: "总版",
+      hint: "所有职能的任务，按颜色区分",
+    },
   },
 
   schedule: {
@@ -280,6 +307,7 @@ export const zh = {
       issue: "生成注册链接",
       email: "邮箱",
       hubRole: "后台角色",
+      changeRole: "注册后获得的后台角色",
       note: "备注（可选）",
       projects: "预设项目",
       submit: "生成",
@@ -293,6 +321,36 @@ export const zh = {
       },
       revoke: "撤销",
       empty: "还没有生成过注册链接",
+    },
+    colors: {
+      title: "职能颜色",
+      description:
+        "总版、首页和任务卡片用这三种颜色区分开发、运营和营销。挑柔和一点的颜色，看起来不刺眼。",
+      custom: "自定义",
+      preview: "预览",
+      save: "保存",
+      saved: "已保存。",
+      reset: "恢复默认",
+      readOnly: "只有所有者和管理员能修改颜色。",
+    },
+    permissions: {
+      title: "项目权限",
+      description:
+        "每个项目里，成员和访客分别能做什么。项目管理员总是拥有全部权限。改动立即生效，对方刷新页面后就能看到；没有权限的按钮和入口不会显示。",
+      allProjects: "所有项目",
+      allProjectsHint: "在这里改会同时改所有项目",
+      mixed: "各项目不一致",
+      permission: "权限",
+      fixedTitle: "固定规则",
+      fixedHint: "下面这些由 Hub 固定，不在这里改。",
+      fixed: [
+        "新建项目：只有后台管理员",
+        "新建模板：只有项目管理员",
+        "删除项目、管理计费：只有项目管理员",
+      ],
+      homeHint:
+        "关掉某个角色的「查看看板」或「查看任务」后，这个角色在首页的「全部」里就看不到这个项目。",
+      readOnly: "你是只读角色，只能查看。",
     },
     audit: {
       title: "操作日志",

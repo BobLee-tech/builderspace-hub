@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  changeGrantHubRoleById,
   countOpenGrants,
   issueGrant,
   listGrants,
@@ -21,6 +22,12 @@ import {
   suspendAccount,
 } from "@kan/hub/accounts";
 import { countAudit, listAudit } from "@kan/hub/audit";
+import {
+  editablePermissions,
+  editableProjectRoles,
+  getPermissionMatrix,
+  setProjectRolePermission,
+} from "@kan/hub/permissions";
 import { can } from "@kan/hub/public";
 import {
   blockInputs,
@@ -31,6 +38,7 @@ import {
   removeBlock,
 } from "@kan/hub/schedule";
 import { projectRoles } from "@kan/hub/schema";
+import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
 import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
@@ -177,6 +185,45 @@ const grantsRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       runHub(() => revokeGrant(ctx.db, ctx.actor, input.grantPublicId)),
     ),
+
+  /** Changes the back-office role an unused link will give; same link. */
+  setRole: hubAdminProcedure("admins.manage")
+    .input(
+      z.object({
+        grantPublicId: z.string().min(1).max(32),
+        hubRole: z.enum(hubRoles).nullable(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => changeGrantHubRoleById(ctx.db, ctx.actor, input)),
+    ),
+});
+
+const permissionsRouter = createTRPCRouter({
+  /** What members and guests may do, per project. */
+  get: hubAdminProcedure("admin.view").query(({ ctx }) =>
+    getPermissionMatrix(ctx.db),
+  ),
+
+  /** One permission on or off for a role, in one project or (null) all. */
+  set: hubAdminProcedure("permissions.manage")
+    .input(
+      z.object({
+        projectPublicId: z.string().min(1).max(32).nullable(),
+        role: z.enum(editableProjectRoles),
+        permission: z
+          .string()
+          .refine(
+            (value) =>
+              (editablePermissions as readonly string[]).includes(value),
+            "这项权限不能在这里修改",
+          ),
+        granted: z.boolean(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => setProjectRolePermission(ctx.db, ctx.actor, input)),
+    ),
 });
 
 /** 全部 when `project` is left out, otherwise one project the caller is in. */
@@ -248,6 +295,21 @@ const scheduleRouter = createTRPCRouter({
     ),
 });
 
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "颜色要写成 #RRGGBB 的形式");
+
+const settingsRouter = createTRPCRouter({
+  /** Every page paints 开发 / 运营 / 营销 in these, so every member reads them. */
+  functionColors: hubProcedure.query(({ ctx }) => getFunctionColors(ctx.db)),
+
+  setFunctionColors: hubAdminProcedure("settings.manage")
+    .input(z.object({ dev: hexColor, ops: hexColor, marketing: hexColor }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => setFunctionColors(ctx.db, ctx.actor, input)),
+    ),
+});
+
 const AUDIT_PAGE_SIZE = 50;
 
 const auditRouter = createTRPCRouter({
@@ -270,6 +332,8 @@ export const hubRouter = createTRPCRouter({
   accounts: accountsRouter,
   grants: grantsRouter,
   audit: auditRouter,
+  permissions: permissionsRouter,
+  settings: settingsRouter,
   tasks: tasksRouter,
   schedule: scheduleRouter,
 

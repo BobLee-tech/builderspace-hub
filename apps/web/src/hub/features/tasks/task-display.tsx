@@ -6,11 +6,13 @@ import { functionNames } from "@kan/hub/public";
 import type { RouterOutputs } from "~/utils/api";
 import { copy } from "~/hub/copy/zh";
 import { cardHref } from "~/hub/lib/routes";
+import { colorOf, useFunctionColors } from "~/hub/lib/use-function-colors";
 import { useOpenInProject } from "~/hub/lib/use-open-in-project";
 
 /**
- * How a task looks wherever the Hub lists one: the home page and the task
- * board. Clicking it opens Kan's card page in the task's own project.
+ * How a task looks in the Hub's lists (the home page; the overall board's
+ * cards are in BoardCard). Clicking it opens Kan's card page in the task's
+ * own project.
  */
 
 export type HubTask = RouterOutputs["hub"]["tasks"]["home"]["myTasks"][number];
@@ -59,7 +61,8 @@ export function taskWhere(task: HubTask): string {
   return `${task.project.name} · ${where}`;
 }
 
-function Labels({ task }: { task: HubTask }) {
+/** The task's labels, each with its own colour dot. */
+export function Labels({ task }: { task: HubTask }) {
   if (task.labels.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1">
@@ -93,12 +96,18 @@ export function useOpenTask(task: Pick<HubTask, "project" | "publicId">) {
 /** One row in a list (the home page). */
 export function TaskRow({ task }: { task: HubTask }) {
   const open = useOpenTask(task);
+  const colors = useFunctionColors();
   return (
     <button
       type="button"
       onClick={open}
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-light-200 dark:hover:bg-dark-200"
     >
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: colorOf(colors, task.functionKey) }}
+      />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-light-1000 dark:text-dark-1000">
           {task.title}
@@ -108,34 +117,6 @@ export function TaskRow({ task }: { task: HubTask }) {
         </span>
       </span>
       <DueBadge task={task} />
-    </button>
-  );
-}
-
-/** One card in a column (the task board). */
-export function TaskCard({ task }: { task: HubTask }) {
-  const open = useOpenTask(task);
-  return (
-    <button
-      type="button"
-      onClick={open}
-      className="block w-full rounded-lg border border-light-300 bg-light-50 p-3 text-left shadow-sm transition hover:border-light-600 dark:border-dark-300 dark:bg-dark-100 dark:hover:border-dark-600"
-    >
-      <span className="block text-xs text-light-900 dark:text-dark-900">
-        {taskWhere(task)}
-      </span>
-      <span className="mt-1 block text-sm font-medium leading-5 text-light-1000 dark:text-dark-1000">
-        {task.title}
-      </span>
-      <span className="mt-2 flex flex-wrap items-center gap-2">
-        <Labels task={task} />
-        <DueBadge task={task} />
-        {task.assignedToMe && (
-          <span className="ml-auto rounded-full bg-light-1000 px-1.5 text-[11px] leading-5 text-light-50 dark:bg-dark-1000 dark:text-dark-50">
-            {text.assignedToMe}
-          </span>
-        )}
-      </span>
     </button>
   );
 }

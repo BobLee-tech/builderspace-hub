@@ -1,6 +1,6 @@
 {
-  "id": "1edc31dd-419a-463c-8c0e-a873d5c96439",
-  "prevId": "badc2853-afc7-47e3-b151-15395e3bc3e9",
+  "id": "5b59a171-2534-46d9-9fcd-84a033c8e5ef",
+  "prevId": "486890a1-9741-48cf-b901-0e1458072728",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -663,6 +663,58 @@
           "value": "(\"hub_time_block\".\"kind\" = 'task') = (\"hub_time_block\".\"cardId\" IS NOT NULL)"
         }
       },
+      "isRLSEnabled": true
+    },
+    "public.hub_setting": {
+      "name": "hub_setting",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "varchar(64)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedBy": {
+          "name": "updatedBy",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "hub_setting_updatedBy_user_id_fk": {
+          "name": "hub_setting_updatedBy_user_id_fk",
+          "tableFrom": "hub_setting",
+          "tableTo": "user",
+          "columnsFrom": [
+            "updatedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": true
     }
   },

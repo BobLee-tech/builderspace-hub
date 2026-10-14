@@ -5,7 +5,9 @@ import { motion } from "framer-motion";
 import Button from "~/components/Button";
 import PatternedBackground from "~/components/PatternedBackground";
 import { Tooltip } from "~/components/Tooltip";
-import { usePermissions } from "~/hooks/usePermissions";
+// hub-seam: the 总版 tile; no create button without permission; templates for project admins (docs/hub/UPSTREAM_SEAMS.md)
+import { OverallBoardTile } from "~/hub/features/tasks/OverallBoardTile";
+import { useHubPermissions } from "~/hub/lib/use-hub-permissions";
 import { useModal } from "~/providers/modal";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
@@ -13,7 +15,7 @@ import { api } from "~/utils/api";
 export function BoardsList({ isTemplate, archived = false }: { isTemplate?: boolean; archived?: boolean }) {
   const { workspace } = useWorkspace();
   const { openModal } = useModal();
-  const { canCreateBoard } = usePermissions();
+  const { canCreateBoard } = useHubPermissions({ creating: isTemplate ? "template" : "board" }); // hub-seam
 
   const utils = api.useUtils();
   const updateBoard = api.board.update.useMutation({
@@ -76,6 +78,7 @@ export function BoardsList({ isTemplate, archived = false }: { isTemplate?: bool
               if (canCreateBoard) openModal("NEW_BOARD");
             }}
             disabled={!canCreateBoard}
+            hidden={!canCreateBoard} // hub-seam
           >
             {t`Create new ${isTemplate ? "template" : "board"}`}
           </Button>
@@ -88,6 +91,8 @@ export function BoardsList({ isTemplate, archived = false }: { isTemplate?: bool
       className="3xl:grid-cols-4 grid h-fit w-full grid-cols-1 gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3"
       layout
     >
+      {/* hub-seam: the project's 总版 */}
+      {!isTemplate && !archived && <OverallBoardTile />}
       {data?.map((board) => (
         <motion.div
           key={board.publicId}

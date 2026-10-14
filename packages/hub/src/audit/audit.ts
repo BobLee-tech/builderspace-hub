@@ -12,6 +12,7 @@ import { hubAuditLog } from "../schema";
 export type AuditAction =
   | "grant.issued"
   | "grant.revoked"
+  | "grant.role_changed"
   | "grant.consumed"
   | "project.created"
   | "board.created"
@@ -22,7 +23,9 @@ export type AuditAction =
   | "account.suspended"
   | "account.restored"
   | "account.project_role_changed"
-  | "account.project_removed";
+  | "account.project_removed"
+  | "project.permission_changed"
+  | "settings.function_colors_changed";
 
 export interface AuditActor {
   userId: string | null;

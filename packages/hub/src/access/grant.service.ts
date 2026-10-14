@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import type { AuditActor } from "../audit";
 import type { Db } from "../db";
+import type { HubRole } from "../schema";
 import type { GrantState } from "./grant.policy";
+import { roleLabels } from "../accounts/roles";
 import { recordAudit, withAudit } from "../audit";
 import { findProjectByPublicId } from "../kan/projects.gateway";
 import { findUserByEmail } from "../kan/users.gateway";
@@ -24,6 +26,7 @@ import {
   listGrantsPage,
   listProjectsOfGrants,
   markGrantRevoked,
+  setGrantHubRole,
 } from "./grant.repo";
 
 const issueGrantSchema = z.object({
@@ -179,6 +182,64 @@ export async function revokeGrant(
       entityType: "grant",
       entityId: grant.publicId,
       summary: `撤销 ${grant.email} 的注册许可`,
+    }),
+  );
+}
+
+/**
+ * Changes the back-office role someone's registration link will give them,
+ * keeping the link itself, so a link already sent does not have to be
+ * replaced. Returns false when the address has no usable link.
+ */
+export async function changeGrantHubRole(
+  db: Db,
+  actor: AuditActor,
+  input: { email: string; hubRole: HubRole | null },
+  now: Date = new Date(),
+): Promise<boolean> {
+  const email = normalizeEmail(input.email);
+  const grant = email ? await findOpenGrantByEmail(db, email) : null;
+  if (!grant || grant.expiresAt <= now) return false;
+
+  await applyGrantHubRole(db, actor, grant, input.hubRole);
+  return true;
+}
+
+/** The same change from the back office, which knows the link by its id. */
+export async function changeGrantHubRoleById(
+  db: Db,
+  actor: AuditActor,
+  input: { grantPublicId: string; hubRole: HubRole | null },
+  now: Date = new Date(),
+): Promise<void> {
+  const grant = await findGrantByPublicId(db, input.grantPublicId);
+  if (!grant) throw new HubError("NOT_FOUND", "找不到这条注册许可");
+  if (grantState(grant, now) !== "pending") {
+    throw new HubError("CONFLICT", "这条注册链接已经不能再用，改不了预设角色");
+  }
+  await applyGrantHubRole(db, actor, grant, input.hubRole);
+}
+
+async function applyGrantHubRole(
+  db: Db,
+  actor: AuditActor,
+  grant: { id: number; publicId: string; email: string },
+  hubRole: HubRole | null,
+): Promise<void> {
+  const label = hubRole ? roleLabels[hubRole] : "无";
+  await withAudit(
+    db,
+    async (tx) => {
+      if (!(await setGrantHubRole(tx, grant.id, hubRole))) {
+        throw new HubError("CONFLICT", "这条注册许可已经被使用或撤销");
+      }
+    },
+    () => ({
+      actor,
+      action: "grant.role_changed",
+      entityType: "grant",
+      entityId: grant.publicId,
+      summary: `把 ${grant.email} 的注册许可预设的后台角色改为 ${label}`,
     }),
   );
 }

@@ -40,3 +40,19 @@ export {
   stages,
   taskViews,
 } from "./tasks/task.policy";
+
+export type { EditableProjectRole } from "./permissions/permission.policy";
+export {
+  editableProjectRoles,
+  permissionGroupLabels,
+  permissionGroups,
+  permissionLabels,
+  projectRoleLabels,
+} from "./permissions/permission.policy";
+
+export type { FunctionColors } from "./settings/function-colors.policy";
+export {
+  DEFAULT_FUNCTION_COLORS,
+  functionColorPalette,
+  isHexColor,
+} from "./settings/function-colors.policy";

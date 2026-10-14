@@ -18,6 +18,10 @@ export const hubPermissions = [
   "audit.view",
   /** Create projects (Kan workspaces). */
   "projects.create",
+  /** Decide what members and guests may do in each project. */
+  "permissions.manage",
+  /** Change instance-wide settings such as the function colours. */
+  "settings.manage",
 ] as const;
 export type HubPermission = (typeof hubPermissions)[number];
 
@@ -29,6 +33,8 @@ const ROLE_PERMISSIONS: Record<HubRole, readonly HubPermission[]> = {
     "access.manage",
     "audit.view",
     "projects.create",
+    "permissions.manage",
+    "settings.manage",
   ],
   viewer: ["admin.view"],
 };

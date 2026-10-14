@@ -6,7 +6,12 @@ import { hubStructure } from "@kan/builderspace/structure";
 
 import type { Db } from "../db";
 import type { CliCommand } from "./args";
-import { GRANT_TTL_DAYS, issueGrant, provisionUser } from "../access";
+import {
+  changeGrantHubRole,
+  GRANT_TTL_DAYS,
+  issueGrant,
+  provisionUser,
+} from "../access";
 import { upsertAccount } from "../accounts/account.repo";
 import { roleLabels } from "../accounts/roles";
 import { CLI_ACTOR, withAudit } from "../audit";
@@ -118,11 +123,29 @@ export async function runCommand(
     case "set-role": {
       const email = normalizeEmail(command.email);
       const user = email ? await findUserByEmail(db, email) : null;
-      if (!email || !user) {
-        throw new HubError("NOT_FOUND", `${command.email} 还没有注册账号`);
-      }
       const role = command.role;
       const label = role ? roleLabels[role] : "无";
+
+      if (!email || !user) {
+        // Not registered yet: change what their pending link will give.
+        const changed =
+          email !== null &&
+          (await changeGrantHubRole(
+            db,
+            CLI_ACTOR,
+            { email, hubRole: role },
+            env.now,
+          ));
+        if (!changed) {
+          throw new HubError(
+            "NOT_FOUND",
+            `${command.email} 还没有注册账号，也没有待使用的注册链接`,
+          );
+        }
+        return [
+          `${email} 还没注册：已把注册链接预设的后台角色改为 ${label}，链接不变，注册后生效。`,
+        ];
+      }
 
       // The command line is the break-glass path, so it skips the back
       // office's role rules; it is still logged.
