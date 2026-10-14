@@ -19,6 +19,7 @@ import {
   resetPassword,
   restoreAccount,
   setProjectRole,
+  setSiteAccess,
   suspendAccount,
 } from "@kan/hub/accounts";
 import { getArchive } from "@kan/hub/archive";
@@ -41,11 +42,13 @@ import {
 import { projectRoles } from "@kan/hub/schema";
 import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
+import { siteAccessLevels } from "@kan/hub/site";
 import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
+import { siteRouter } from "./site";
 
 /**
  * The Hub's own API, mounted at `hub.*`: the back office, plus the home page
@@ -79,6 +82,7 @@ const meRouter = createTRPCRouter({
       email: ctx.actor.email,
       role: ctx.actor.role,
       permissions: permissionsOf(ctx.actor.role),
+      siteAccess: ctx.siteAccess,
     };
   }),
 });
@@ -121,6 +125,15 @@ const accountsRouter = createTRPCRouter({
     .input(userIdInput.extend({ role: z.enum(hubRoles).nullable() }))
     .mutation(({ ctx, input }) =>
       runHub(() => changeHubRole(ctx.db, ctx.actor, input.userId, input.role)),
+    ),
+
+  /** 官网权限: who may see the official website's data. Owners only. */
+  setSiteAccess: hubAdminProcedure("admins.manage")
+    .input(userIdInput.extend({ access: z.enum(siteAccessLevels).nullable() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        setSiteAccess(ctx.db, ctx.actor, input.userId, input.access),
+      ),
     ),
 
   suspend: hubAdminProcedure("accounts.manage")
@@ -352,6 +365,7 @@ export const hubRouter = createTRPCRouter({
   settings: settingsRouter,
   tasks: tasksRouter,
   schedule: scheduleRouter,
+  site: siteRouter,
   archive: archiveRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>

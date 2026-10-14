@@ -3,8 +3,8 @@ import { useRouter } from "next/router";
 import { format } from "date-fns";
 import { useState } from "react";
 
-import type { HubRole } from "@kan/hub/public";
-import { can, roleLabels } from "@kan/hub/public";
+import type { HubRole, SiteAccess } from "@kan/hub/public";
+import { can, roleLabels, siteAccessLabels } from "@kan/hub/public";
 
 import type { ProjectRole } from "./ProjectRolePicker";
 import { copy } from "~/hub/copy/zh";
@@ -38,6 +38,13 @@ function AccountDetail({ userId }: { userId: string }) {
 
   const rename = api.hub.accounts.rename.useMutation({ onSuccess: refresh });
   const setRole = api.hub.accounts.setRole.useMutation({ onSuccess: refresh });
+  const setSiteAccess = api.hub.accounts.setSiteAccess.useMutation({
+    onSuccess: async () => {
+      await refresh();
+      // Granting it to oneself opens the 官网 section right away.
+      await utils.hub.me.get.invalidate();
+    },
+  });
   const setProjectRole = api.hub.accounts.setProjectRole.useMutation({
     onSuccess: refresh,
   });
@@ -68,6 +75,7 @@ function AccountDetail({ userId }: { userId: string }) {
   const mutationError =
     rename.error ??
     setRole.error ??
+    setSiteAccess.error ??
     setProjectRole.error ??
     resetPassword.error ??
     suspend.error ??
@@ -162,6 +170,24 @@ function AccountDetail({ userId }: { userId: string }) {
             <option value="viewer">{roleLabels.viewer}</option>
             <option value="admin">{roleLabels.admin}</option>
             <option value="owner">{roleLabels.owner}</option>
+          </select>
+        </Card>
+
+        <Card title={text.siteHeading} hint={text.siteHint}>
+          <select
+            className={inputClass}
+            value={data.siteAccess ?? ""}
+            disabled={!can(myRole, "admins.manage") || setSiteAccess.isPending}
+            onChange={(event) =>
+              setSiteAccess.mutate({
+                userId,
+                access: (event.target.value || null) as SiteAccess | null,
+              })
+            }
+          >
+            <option value="">{text.siteNone}</option>
+            <option value="people">{siteAccessLabels.people}</option>
+            <option value="manage">{siteAccessLabels.manage}</option>
           </select>
         </Card>
 

@@ -2,28 +2,49 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { twMerge } from "tailwind-merge";
 
-import type { HubPermission } from "@kan/hub/public";
-import { can, roleLabels } from "@kan/hub/public";
+import type {
+  HubPermission,
+  HubRole,
+  SiteAccess,
+  SitePermission,
+} from "@kan/hub/public";
+import { can, canOnSite, roleLabels } from "@kan/hub/public";
 
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
-import { hubRoutes } from "~/hub/lib/routes";
+import { adminHome, hubRoutes } from "~/hub/lib/routes";
 import { Pill } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 
 const text = copy.admin;
 
+/** A back-office page needs a back-office permission or a website one. */
+type PageAccess = { permission: HubPermission } | { site: SitePermission };
+
 interface NavItem {
   href: string;
   label: string;
-  permission: HubPermission;
+  access: PageAccess;
 }
+
+const allows = (
+  access: PageAccess,
+  role: HubRole | null,
+  siteAccess: SiteAccess | null,
+) =>
+  "site" in access
+    ? canOnSite(siteAccess, access.site)
+    : can(role, access.permission);
 
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: text.groups.overview,
     items: [
-      { href: "/admin", label: text.overview.title, permission: "admin.view" },
+      {
+        href: "/admin",
+        label: text.overview.title,
+        access: { permission: "admin.view" },
+      },
     ],
   },
   {
@@ -32,12 +53,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/accounts",
         label: text.accounts.title,
-        permission: "admin.view",
+        access: { permission: "admin.view" },
       },
       {
         href: "/admin/grants",
         label: text.grants.title,
-        permission: "admin.view",
+        access: { permission: "admin.view" },
       },
     ],
   },
@@ -47,42 +68,77 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/permissions",
         label: text.permissions.title,
-        permission: "admin.view",
+        access: { permission: "admin.view" },
       },
       {
         href: "/admin/colors",
         label: text.colors.title,
-        permission: "admin.view",
+        access: { permission: "admin.view" },
       },
       {
         href: "/admin/audit",
         label: text.audit.title,
-        permission: "audit.view",
+        access: { permission: "audit.view" },
+      },
+    ],
+  },
+  {
+    label: text.groups.site,
+    items: [
+      {
+        href: "/admin/site",
+        label: text.site.overview.title,
+        access: { site: "site.people" },
+      },
+      {
+        href: "/admin/site/projects",
+        label: text.site.projects.title,
+        access: { site: "site.review" },
+      },
+      {
+        href: "/admin/site/volunteers",
+        label: text.site.volunteers.title,
+        access: { site: "site.people" },
+      },
+      {
+        href: "/admin/site/joins",
+        label: text.site.joins.title,
+        access: { site: "site.people" },
       },
     ],
   },
 ];
 
+/** Section start pages match exactly, so they are not lit on their sub-pages. */
+const EXACT = new Set(["/admin", "/admin/site"]);
+
 const isActive = (pathname: string, href: string) =>
-  href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+  EXACT.has(href) ? pathname === href : pathname.startsWith(href);
 
 /**
  * Frame of every back-office page: grouped sidebar, a top bar with the
  * current page and the signed-in person's role, and the page itself.
  *
- * The page is only rendered for back-office members. That is for clarity, not
- * security: every `hub.*` procedure checks permissions on the server.
+ * The page is only rendered for those it is meant for: back-office members,
+ * or on 官网 pages (`site`) those with website access. That is for clarity,
+ * not security: every `hub.*` procedure checks permissions on the server.
  */
 export function AdminLayout({
   title,
+  site,
   children,
 }: {
   title: string;
+  /** Makes this a 官网 page that needs this website permission. */
+  site?: SitePermission;
   children: React.ReactNode;
 }) {
   const { pathname } = useRouter();
   const me = api.hub.me.get.useQuery(undefined, { retry: false });
   const role = me.data?.role ?? null;
+  const siteAccess = me.data?.siteAccess ?? null;
+  const pageAccess: PageAccess = site ? { site } : { permission: "admin.view" };
+  const denied = site ? text.site.noAccess : text.denied;
 
   const currentLabel =
     NAV_GROUPS.flatMap((group) => group.items).find((item) =>
@@ -95,7 +151,7 @@ export function AdminLayout({
       <div className="flex min-h-screen bg-light-100 text-light-1000 dark:bg-dark-50 dark:text-dark-1000">
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-light-300 bg-light-100 px-3 py-4 dark:border-dark-300 dark:bg-dark-100 md:flex">
           <Link
-            href="/admin"
+            href={adminHome(role)}
             className="px-2 text-[15px] font-bold tracking-tight"
           >
             {copy.brand}
@@ -106,7 +162,7 @@ export function AdminLayout({
           <nav className="mt-6 flex-1 space-y-5">
             {NAV_GROUPS.map((group) => {
               const items = group.items.filter((item) =>
-                can(role, item.permission),
+                allows(item.access, role, siteAccess),
               );
               if (items.length === 0) return null;
               return (
@@ -160,13 +216,13 @@ export function AdminLayout({
               <p className="text-sm text-light-900 dark:text-dark-900">
                 {text.loading}
               </p>
-            ) : can(role, "admin.view") ? (
+            ) : allows(pageAccess, role, siteAccess) ? (
               children
             ) : (
               <div className="max-w-md">
-                <h1 className="text-xl font-bold">{text.denied.heading}</h1>
+                <h1 className="text-xl font-bold">{denied.heading}</h1>
                 <p className="mt-2 text-sm text-light-900 dark:text-dark-900">
-                  {text.denied.body}
+                  {denied.body}
                 </p>
                 <Link
                   href={hubRoutes.afterLogin}

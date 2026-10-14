@@ -24,8 +24,13 @@ export type AuditAction =
   | "account.restored"
   | "account.project_role_changed"
   | "account.project_removed"
+  | "account.site_access_changed"
   | "project.permission_changed"
-  | "settings.function_colors_changed";
+  | "settings.function_colors_changed"
+  | "site.project_reviewed"
+  | "site.update_reviewed"
+  | "site.volunteer_updated"
+  | "site.list_exported";
 
 export interface AuditActor {
   userId: string | null;

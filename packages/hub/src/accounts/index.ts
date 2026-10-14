@@ -15,6 +15,7 @@ export {
   resetPassword,
   restoreAccount,
   setProjectRole,
+  setSiteAccess,
   suspendAccount,
 } from "./account.service";
 export * from "./roles";
