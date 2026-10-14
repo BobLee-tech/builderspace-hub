@@ -90,6 +90,17 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
         <div className="space-y-3">
           <Facts
             rows={[
+              [
+                text.email,
+                volunteer.email && (
+                  <a
+                    href={`mailto:${volunteer.email}`}
+                    className="underline underline-offset-2"
+                  >
+                    {volunteer.email}
+                  </a>
+                ),
+              ],
               [text.contact, volunteer.contact],
               [text.school, volunteer.schoolDegree],
               [
@@ -100,7 +111,11 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
                   ))}
                 </span>,
               ],
-              [text.hours, labelOf("hours", volunteer.weeklyHours)],
+              [
+                text.hours,
+                volunteer.weeklyHours &&
+                  labelOf("hours", volunteer.weeklyHours),
+              ],
               [
                 text.portfolio,
                 volunteer.portfolioUrl && (
@@ -112,14 +127,16 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
               [text.channel, volunteer.channel],
             ]}
           />
-          <div>
-            <p className="text-xs text-light-900 dark:text-dark-900">
-              {text.about}
-            </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
-              {volunteer.about}
-            </p>
-          </div>
+          {volunteer.about && (
+            <div>
+              <p className="text-xs text-light-900 dark:text-dark-900">
+                {text.about}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
+                {volunteer.about}
+              </p>
+            </div>
+          )}
         </div>
 
         <form

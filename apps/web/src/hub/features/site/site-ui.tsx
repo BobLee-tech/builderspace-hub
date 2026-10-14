@@ -107,6 +107,7 @@ function toSheet(result: SiteExport): string {
     return toCsv(
       [
         "昵称",
+        t.email,
         t.contact,
         t.school,
         t.positions,
@@ -120,10 +121,11 @@ function toSheet(result: SiteExport): string {
       ],
       result.rows.map((row) => [
         row.nickname,
+        row.email,
         row.contact,
         row.schoolDegree,
         labelsOf("positions", row.positions),
-        labelOf("hours", row.weeklyHours),
+        row.weeklyHours && labelOf("hours", row.weeklyHours),
         row.about,
         row.portfolioUrl,
         row.channel,

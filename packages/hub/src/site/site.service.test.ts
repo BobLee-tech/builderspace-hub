@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Db } from "../db";
@@ -339,6 +339,51 @@ describe("following up on volunteers", () => {
         status: "accepted",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("volunteer email (the website's migration 20261015030000)", () => {
+  it("shows the email of new applications, which may leave everything else empty", async () => {
+    await seedSiteVolunteer(site, { nickname: "旧申请" });
+    await seedSiteVolunteer(site, {
+      nickname: "新申请",
+      email: "new@example.test",
+    });
+
+    const { items } = await listSiteVolunteers(site, lists, {
+      status: null,
+      page: 1,
+    });
+    expect(items.find((v) => v.nickname === "新申请")).toMatchObject({
+      email: "new@example.test",
+      contact: null,
+      schoolDegree: null,
+      weeklyHours: null,
+      about: null,
+    });
+    expect(items.find((v) => v.nickname === "旧申请")).toMatchObject({
+      email: null,
+      contact: expect.stringMatching(/^wechat-/) as unknown,
+    });
+    const exported = await exportSiteList(db, site, lists, {
+      kind: "volunteers",
+      status: null,
+    });
+    if (exported.kind !== "volunteers") throw new Error("expected volunteers");
+    expect(exported.rows.map((row) => row.email)).toContain("new@example.test");
+  });
+
+  it("still works on a website database from before that migration", async () => {
+    await seedSiteVolunteer(site, { nickname: "旧申请" });
+    await site.execute(
+      sql`alter table volunteer_applications drop column email cascade`,
+    );
+
+    const { items } = await listSiteVolunteers(site, lists, {
+      status: null,
+      page: 1,
+    });
+    expect(items).toMatchObject([{ nickname: "旧申请", email: null }]);
   });
 });
 

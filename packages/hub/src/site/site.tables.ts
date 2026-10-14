@@ -67,14 +67,20 @@ export const siteProjectUpdates = pgTable("project_updates", {
     .defaultNow(),
 });
 
+/**
+ * Since the website's migration 20261015030000_volunteer_email only the
+ * nickname and positions are required; older rows have `contact` and no
+ * `email`. `email` is read in `site.repo.ts`, not declared here, so the Hub
+ * works whether or not that migration has run.
+ */
 export const siteVolunteerApplications = pgTable("volunteer_applications", {
   id: uuid("id").primaryKey().defaultRandom(),
   nickname: text("nickname").notNull(),
-  contact: text("contact").notNull(),
-  schoolDegree: text("school_degree").notNull(),
+  contact: text("contact"),
+  schoolDegree: text("school_degree"),
   positions: text("positions").array().notNull(),
-  weeklyHours: text("weekly_hours").notNull(),
-  about: text("about").notNull(),
+  weeklyHours: text("weekly_hours"),
+  about: text("about"),
   portfolioUrl: text("portfolio_url"),
   channel: text("channel"),
   status: text("status").$type<VolunteerStatus>().notNull().default("new"),

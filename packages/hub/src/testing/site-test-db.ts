@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { SiteDb } from "../site/site.db";
@@ -53,17 +54,19 @@ const SITE_SCHEMA = /* sql */ `
   create table volunteer_applications (
     id uuid primary key default gen_random_uuid(),
     nickname text not null,
-    contact text not null,
-    school_degree text not null,
+    contact text,
+    school_degree text,
     positions text[] not null,
-    weekly_hours weekly_hours not null,
-    about text not null,
+    weekly_hours weekly_hours,
+    about text,
     portfolio_url text,
     channel text,
     data_consent boolean not null default true,
     created_at timestamptz not null default now(),
     status volunteer_status not null default 'new',
-    ops_notes text check (char_length(ops_notes) <= 1000)
+    ops_notes text check (char_length(ops_notes) <= 1000),
+    email text,
+    check (email is not null or contact is not null)
   );
 
   create table join_submissions (
@@ -145,24 +148,36 @@ export async function seedSiteUpdate(
   return row;
 }
 
+/**
+ * A volunteer application. By default it looks like one sent before the
+ * website asked for email; `email` makes it look like one sent after, with
+ * only the required fields filled in.
+ */
 export async function seedSiteVolunteer(
   site: SiteDb,
-  overrides: { nickname?: string; createdAt?: Date } = {},
+  overrides: { nickname?: string; createdAt?: Date; email?: string } = {},
 ): Promise<{ id: string }> {
   seq += 1;
+  const minimal = overrides.email !== undefined;
   const [row] = await site
     .insert(siteTables.siteVolunteerApplications)
     .values({
       nickname: overrides.nickname ?? `Volunteer ${seq}`,
+      // Swapped for the email below; the table needs one of the two.
       contact: `wechat-${seq}`,
-      schoolDegree: "UNSW · Bachelor",
+      schoolDegree: minimal ? null : "UNSW · Bachelor",
       positions: ["events", "web_tools"],
-      weeklyHours: "2to5",
-      about: "I like building things",
+      weeklyHours: minimal ? null : "2to5",
+      about: minimal ? null : "I like building things",
       createdAt: overrides.createdAt ?? new Date(),
     })
     .returning({ id: siteTables.siteVolunteerApplications.id });
   if (!row) throw new Error("seedSiteVolunteer: insert returned no row");
+  if (minimal) {
+    await site.execute(
+      sql`update volunteer_applications set email = ${overrides.email}, contact = null where id = ${row.id}`,
+    );
+  }
   return row;
 }
 

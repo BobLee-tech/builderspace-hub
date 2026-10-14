@@ -415,6 +415,7 @@ export const zh = {
         description:
           "想加入核心团队的人。状态和备注会直接写回官网的数据库；备注只有有官网权限的人能看到，不要写证件号这类信息。",
         all: "全部",
+        email: "邮箱",
         contact: "联系方式",
         school: "学校 / 学位",
         positions: "想做的职位",

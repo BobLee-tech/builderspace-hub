@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { asc, count, desc, eq, sql } from "drizzle-orm";
+import { asc, count, desc, eq, getTableColumns, sql } from "drizzle-orm";
 
 import type { SiteDb } from "./site.db";
 import type {
@@ -21,7 +21,19 @@ import {
  */
 
 export type SiteProjectRow = typeof siteProjects.$inferSelect;
-export type SiteVolunteerRow = typeof siteVolunteerApplications.$inferSelect;
+/**
+ * A volunteer application with its email. The website added the `email`
+ * column in a later migration; reading it out of the row as JSON gives null
+ * instead of an error while the column does not exist yet.
+ */
+const volunteerColumns = {
+  ...getTableColumns(siteVolunteerApplications),
+  email: sql<string | null>`to_jsonb(${siteVolunteerApplications}) ->> 'email'`,
+};
+
+export type SiteVolunteerRow = typeof siteVolunteerApplications.$inferSelect & {
+  email: string | null;
+};
 export type SiteJoinRow = typeof siteJoinSubmissions.$inferSelect;
 
 export interface SiteUpdateRow {
@@ -248,7 +260,7 @@ export async function listVolunteers(
     : undefined;
   const [items, [counted]] = await Promise.all([
     db
-      .select()
+      .select(volunteerColumns)
       .from(siteVolunteerApplications)
       .where(where)
       .orderBy(
