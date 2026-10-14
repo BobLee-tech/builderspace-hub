@@ -56,6 +56,7 @@ const violations = checkSeams(config, {
     const path = join(repoRoot, file);
     return existsSync(path) ? readFileSync(path, "utf8") : null;
   },
+  readUpstream: (file) => tryGit("show", `${base}:${file}`),
 });
 
 const warnings = checkShadowed(config, (file) =>

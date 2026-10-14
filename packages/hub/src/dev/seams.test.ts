@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SeamConfig } from "./seams";
-import { checkSeams, checkShadowed } from "./seams";
+import { checkSeams, checkShadowed, isDependencyBump } from "./seams";
 
 const config: SeamConfig = {
   upstreamRef: "upstream/main",
@@ -102,6 +102,79 @@ describe("checkShadowed", () => {
   it("warns when upstream removed it", () => {
     expect(checkShadowed(config, () => null)).toEqual([
       "上游已删除 apps/web/src/views/auth/login/index.tsx，替身 apps/web/src/hub/features/auth/LoginPage.tsx 可能不再需要对照它",
+    ]);
+  });
+});
+
+describe("dependency updates", () => {
+  const pkg = (
+    deps: Record<string, string>,
+    extra: Record<string, unknown> = {},
+  ) =>
+    JSON.stringify(
+      {
+        name: "@kan/mcp",
+        scripts: { build: "tsc" },
+        dependencies: deps,
+        ...extra,
+      },
+      null,
+      2,
+    );
+  const upstream = pkg({
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    zod: "^3.0.0",
+  });
+
+  it("recognises a version bump of existing dependencies", () => {
+    expect(
+      isDependencyBump(
+        upstream,
+        pkg({ "@modelcontextprotocol/sdk": "^1.31.0", zod: "^3.0.0" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not let a new or removed dependency, or any other change, through", () => {
+    expect(
+      isDependencyBump(
+        upstream,
+        pkg({
+          "@modelcontextprotocol/sdk": "^1.29.0",
+          zod: "^3.0.0",
+          lodash: "^4",
+        }),
+      ),
+    ).toBe(false);
+    expect(isDependencyBump(upstream, pkg({ zod: "^3.0.0" }))).toBe(false);
+    expect(
+      isDependencyBump(
+        upstream,
+        pkg(
+          { "@modelcontextprotocol/sdk": "^1.29.0", zod: "^3.0.0" },
+          { scripts: { build: "evil" } },
+        ),
+      ),
+    ).toBe(false);
+    expect(isDependencyBump(upstream, "not json")).toBe(false);
+  });
+
+  it("lets checkSeams accept an unregistered package.json that only bumps versions", () => {
+    const bumped = pkg({
+      "@modelcontextprotocol/sdk": "^1.31.0",
+      zod: "^3.0.0",
+    });
+    const repo = (current: string) => ({
+      changedFiles: ["packages/mcp/package.json"],
+      readFile: (file: string) =>
+        file === "packages/mcp/package.json" ? current : seamInPlace(file),
+      readUpstream: (file: string) =>
+        file === "packages/mcp/package.json" ? upstream : null,
+    });
+
+    expect(checkSeams(config, repo(bumped))).toEqual([]);
+    expect(checkSeams(config, repo(pkg({ zod: "^3.0.0" })))).toEqual([
+      "未登记的上游改动: packages/mcp/package.json",
     ]);
   });
 });
