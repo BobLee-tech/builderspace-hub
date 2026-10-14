@@ -17,18 +17,19 @@ export const hubStructure: HubStructure = {
     { key: "ops", name: "运营" },
     { key: "marketing", name: "营销" },
   ],
+  // Listed in the order the team wants them shown.
   projects: [
-    {
-      key: "community",
-      name: "社群",
-      slug: "bss-community",
-      description: "BuilderSpace Soc 社群：拉新、活动、官网、社团申请。",
-    },
     {
       key: "coursemate",
       name: "CourseMate",
       slug: "bss-coursemate",
       description: "团队第一款官方产品。",
+    },
+    {
+      key: "community",
+      name: "BuilderSpace 社团",
+      slug: "bss-community",
+      description: "BuilderSpace 社团：拉新、活动、官网、社团申请。",
     },
     {
       key: "echoagent",

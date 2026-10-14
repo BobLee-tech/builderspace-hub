@@ -9,7 +9,12 @@ import { hubAuditLog } from "../schema";
  * Every kind of change the log can hold. Add a member here when a feature gains
  * a new mutation; the name is `<entity>.<past-tense verb>`.
  */
-export type AuditAction = "grant.issued" | "grant.revoked" | "grant.consumed";
+export type AuditAction =
+  | "grant.issued"
+  | "grant.revoked"
+  | "grant.consumed"
+  | "project.created"
+  | "board.created";
 
 export interface AuditActor {
   userId: string | null;

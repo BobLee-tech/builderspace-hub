@@ -28,6 +28,10 @@
       "types": "./src/shared/index.ts",
       "default": "./src/shared/index.ts"
     },
+    "./structure": {
+      "types": "./src/structure/index.ts",
+      "default": "./src/structure/index.ts"
+    },
     "./testing": {
       "types": "./src/testing/test-db.ts",
       "default": "./src/testing/test-db.ts"
@@ -50,6 +54,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.7",
+    "@kan/builderspace": "workspace:*",
     "@kan/db": "workspace:*",
     "@kan/shared": "workspace:*",
     "drizzle-orm": "^0.42.0",

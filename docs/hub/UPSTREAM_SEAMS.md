@@ -12,14 +12,15 @@ pnpm --filter @kan/hub check-seams
 
 ## 接缝
 
-| 文件                                  | 改了什么                                              | 标记                 | 为什么                                              |
-| ------------------------------------- | ----------------------------------------------------- | -------------------- | --------------------------------------------------- |
-| `packages/auth/src/auth.ts`           | `plugins` 末尾加上 `hubAuthPlugin(db)`，多一行 import | `hub-seam`           | 注册闸门                                            |
-| `packages/auth/package.json`          | 依赖里加 `@kan/hub`                                   | `"@kan/hub"`         | 插件要调用 Hub 的准入规则                           |
-| `apps/web/package.json`               | 依赖里加 `@kan/hub`                                   | `"@kan/hub"`         | 页面和 API 路由要调用 Hub 的用例                    |
-| `apps/web/src/pages/login/index.tsx`  | 改为渲染 `hub/features/auth/LoginPage`                | `hub-seam`           | 我们自己的登录页；顺带校验 `?next=`，只接受站内路径 |
-| `apps/web/src/pages/signup/index.tsx` | 改为渲染 `hub/features/auth/InviteOnlyPage`           | `hub-seam`           | 注册只能通过邀请链接                                |
-| `pnpm-lock.yaml`                      | 由 pnpm 重新生成                                      | （生成文件，无标记） | 依赖变化                                            |
+| 文件                                         | 改了什么                                              | 标记                 | 为什么                                                                   |
+| -------------------------------------------- | ----------------------------------------------------- | -------------------- | ------------------------------------------------------------------------ |
+| `packages/auth/src/auth.ts`                  | `plugins` 末尾加上 `hubAuthPlugin(db)`，多一行 import | `hub-seam`           | 注册闸门                                                                 |
+| `packages/auth/package.json`                 | 依赖里加 `@kan/hub`                                   | `"@kan/hub"`         | 插件要调用 Hub 的准入规则                                                |
+| `apps/web/package.json`                      | 依赖里加 `@kan/hub`                                   | `"@kan/hub"`         | 页面和 API 路由要调用 Hub 的用例                                         |
+| `apps/web/src/pages/login/index.tsx`         | 改为渲染 `hub/features/auth/LoginPage`                | `hub-seam`           | 我们自己的登录页；顺带校验 `?next=`，只接受站内路径                      |
+| `apps/web/src/pages/signup/index.tsx`        | 改为渲染 `hub/features/auth/InviteOnlyPage`           | `hub-seam`           | 注册只能通过邀请链接                                                     |
+| `apps/web/src/components/SideNavigation.tsx` | 左上角的产品名改为 `copy.brand`，多一行 import        | `hub-seam`           | 去掉 Kan 的名字；第 5 期整个侧边栏换成我们自己的组件后，这处接缝随之撤销 |
+| `pnpm-lock.yaml`                             | 由 pnpm 重新生成                                      | （生成文件，无标记） | 依赖变化                                                                 |
 
 ## 替身
 

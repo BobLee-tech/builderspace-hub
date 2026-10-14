@@ -28,6 +28,8 @@ import ButtonComponent from "~/components/Button";
 import ReactiveButton from "~/components/ReactiveButton";
 import UserMenu from "~/components/UserMenu";
 import WorkspaceMenu from "~/components/WorkspaceMenu";
+// hub-seam: product name (docs/hub/UPSTREAM_SEAMS.md)
+import { copy } from "~/hub/copy/zh";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 
@@ -163,7 +165,7 @@ export default function SideNavigation({
             {!isCollapsed && (
               <Link href="/" className="block">
                 <h1 className="pl-2 text-[16px] font-bold tracking-tight text-neutral-900 dark:text-dark-1000">
-                  kan.bn
+                  {copy.brand}
                 </h1>
               </Link>
             )}
