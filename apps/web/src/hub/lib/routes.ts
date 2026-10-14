@@ -9,6 +9,7 @@ export const hubRoutes = {
   afterLogin: "/home",
   home: "/home",
   personal: "/me",
+  personalDone: "/me/done",
   login: "/login",
   signup: "/signup",
   join: HUB_JOIN_PATH,

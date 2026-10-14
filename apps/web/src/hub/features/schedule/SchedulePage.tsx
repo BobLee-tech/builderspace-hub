@@ -9,6 +9,7 @@ import { copy } from "~/hub/copy/zh";
 import { addDays, startOfWeek } from "~/hub/lib/schedule-layout";
 import { buttonClass, ErrorText, PageHeader } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
+import { PersonalTabs } from "../personal/PersonalTabs";
 import { BlockEditor } from "./BlockEditor";
 import { brushKinds, toDisplayBlock } from "./schedule-display";
 import { TaskPanel } from "./TaskPanel";
@@ -164,6 +165,7 @@ export function SchedulePage() {
   return (
     <div className="m-auto w-full max-w-[1280px] px-5 py-8 md:px-12 md:py-12">
       <PageHead title={`${text.title} · ${copy.brand}`} />
+      <PersonalTabs />
       <PageHeader title={text.heading} description={text.description} />
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

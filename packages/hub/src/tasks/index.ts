@@ -25,6 +25,7 @@ export type {
 export {
   getHome,
   getMyTasks,
+  getVisibleTasks,
   getTaskBoard,
   HOME_MY_TASKS_LIMIT,
 } from "./task.service";
