@@ -2,6 +2,8 @@
 
 BuilderSpace 的内部管理工具：看板、任务分发、按项目授权。
 
+**可以用 CLI 测试**：命令行工具 [`bshub`](https://github.com/EdwinjJ1/builderspace-hub-cli) 能对任意一个 Hub 跑端到端冒烟测试，见下文「用 CLI 测试」。
+
 它是开源项目 [Kan](https://github.com/kanbn/kan)（AGPL-3.0）的一个 fork。看板、成员、角色权限、评论、活动记录这些都来自上游；我们自己加的东西集中在 [`packages/builderspace`](packages/builderspace) 和本文件，尽量不改上游代码，方便以后同步上游更新。
 
 选型过程见 [BUILDERSPACE_PLAN.md](BUILDERSPACE_PLAN.md)，接下来做什么见 [docs/hub/ROADMAP.md](docs/hub/ROADMAP.md)，代码怎么组织见 [docs/hub/ARCHITECTURE.md](docs/hub/ARCHITECTURE.md)。
@@ -15,12 +17,12 @@ CourseMate      →   开发 / 运营 / 营销
 EchoAgent       →   开发 / 运营 / 营销
 ```
 
-| 我们的概念 | Hub 里对应 | 说明 |
-| --- | --- | --- |
-| 项目 | 工作区 Workspace | 权限按工作区授予：有哪几个项目的权限，就能看到、管理哪几个 |
-| 职能 | 看板 Board | 每个项目固定三块：开发、运营、营销 |
-| 任务 | 卡片 Card | 可指派成员、设截止日期、打标签、评论、拆清单 |
-| 优先级 | 标签 Label | `P0` `P1` `P2` `卡住` |
+| 我们的概念 | Hub 里对应       | 说明                                                       |
+| ---------- | ---------------- | ---------------------------------------------------------- |
+| 项目       | 工作区 Workspace | 权限按工作区授予：有哪几个项目的权限，就能看到、管理哪几个 |
+| 职能       | 看板 Board       | 每个项目固定三块：开发、运营、营销                         |
+| 任务       | 卡片 Card        | 可指派成员、设截止日期、打标签、评论、拆清单               |
+| 优先级     | 标签 Label       | `P0` `P1` `P2` `卡住`                                      |
 
 这套结构定义在 [`packages/builderspace/src/structure.ts`](packages/builderspace/src/structure.ts)，改它再跑一次初始化即可（见下）。
 
@@ -28,11 +30,11 @@ EchoAgent       →   开发 / 运营 / 营销
 
 每个项目（工作区）单独设置，Hub 的 设置 → 权限 里可以逐项调整：
 
-| 角色 | 默认能做什么 | 给谁 |
-| --- | --- | --- |
-| 管理员 admin | 全部，包括邀请成员、改权限、删工作区 | 核心团队 |
-| 成员 member | 建看板，增删改列、任务、评论 | 参与该项目的人 |
-| 访客 guest | 只读 | 志愿者（默认） |
+| 角色         | 默认能做什么                         | 给谁           |
+| ------------ | ------------------------------------ | -------------- |
+| 管理员 admin | 全部，包括邀请成员、改权限、删工作区 | 核心团队       |
+| 成员 member  | 建看板，增删改列、任务、评论         | 参与该项目的人 |
+| 访客 guest   | 只读                                 | 志愿者（默认） |
 
 目前核心团队三个人在三个项目里都是管理员。志愿者「可领取任务」的权限还没有做，见路线图。
 
@@ -97,6 +99,18 @@ pnpm --filter @kan/hub cli grant --email you@example.com --hub-role owner
 
 > **不要省略 `POSTGRES_URL`。** 不设置时应用会退回到内嵌数据库（PGlite），但登录接口和业务接口各开了一个实例，彼此看不到对方写入的数据，表现为「登录成功后马上被踢回登录页」。
 
+## 用 CLI 测试
+
+[`bshub`](https://github.com/EdwinjJ1/builderspace-hub-cli) 是 Hub 的命令行工具（给人用，也给 AI Agent 用），同时是 Hub 的端到端测试工具。本地跑起 Hub 后，在「设置 → API」建一个 key，再挑一块测试用的看板：
+
+```bash
+git clone https://github.com/EdwinjJ1/builderspace-hub-cli.git && cd builderspace-hub-cli
+pnpm install
+BSHUB_URL=http://localhost:3210 BSHUB_API_KEY=<key> BSHUB_SMOKE_BOARD=<看板 publicId> pnpm smoke
+```
+
+它会依次检查 Hub 可达和登录，读取项目和任务，然后新建一个任务、换列、改截止日期、评论、读回核对、删除；任何一步失败都返回非零退出码。改动了任务、看板或登录相关的代码，提 PR 前跑一遍。
+
 ## 初始化项目结构
 
 1. 登录 Hub，进入 设置 → API，创建一个 API key。
@@ -137,16 +151,18 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
    ```
 
    它会自动注入 `POSTGRES_URL`（连接池地址，应用直接用）和 `POSTGRES_URL_NON_POOLING`（直连地址，迁移用）。CLI 还会往仓库里放 `.agents/`、`.claude/skills/` 和 `skills-lock.json`，不要提交。
+
 4. **环境变量（生产环境）。**
 
-   | 变量 | 值 |
-   | --- | --- |
-   | `NEXT_PUBLIC_BASE_URL` | 线上地址，要和实际访问的域名完全一致 |
-   | `BETTER_AUTH_SECRET` | 新生成的随机串，设为 sensitive，**不要复用本地的** |
-   | `NEXT_PUBLIC_ALLOW_CREDENTIALS` | `true` |
-   | `NEXT_PUBLIC_DISABLE_EMAIL` | `true`（配好 SMTP 之前） |
+   | 变量                            | 值                                                 |
+   | ------------------------------- | -------------------------------------------------- |
+   | `NEXT_PUBLIC_BASE_URL`          | 线上地址，要和实际访问的域名完全一致               |
+   | `BETTER_AUTH_SECRET`            | 新生成的随机串，设为 sensitive，**不要复用本地的** |
+   | `NEXT_PUBLIC_ALLOW_CREDENTIALS` | `true`                                             |
+   | `NEXT_PUBLIC_DISABLE_EMAIL`     | `true`（配好 SMTP 之前）                           |
 
    `NEXT_PUBLIC_ALLOW_CREDENTIALS` 名字里带 credentials，CLI 会当成密钥拦一下。它只是「允许邮箱密码登录」的开关，加 `--type config` 即可。
+
 5. **迁移。** 用直连地址在本机跑两条：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`（Kan 的），再把末尾换成 `pnpm --filter @kan/hub migrate`（Hub 的）。之后用同样的变量跑 `pnpm --filter @kan/hub cli doctor` 确认 Hub 迁移已是最新。同步上游带来新迁移，或者 PR 里带了新的 Hub 迁移时，都要在合并前再跑一次。
 6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
 7. **注册并初始化。** 先给第一位所有者发注册许可（`--hub-role owner`，对线上操作时带上线上的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`）。他注册后执行 `pnpm --filter @kan/hub cli setup-projects --owner <他的邮箱>`，按标准结构建好三个项目和九块看板，他成为各项目管理员。之后再给其他人发许可，用 `--project <项目ID>:<角色>` 预设项目（项目 ID 用 `cli projects` 查）。

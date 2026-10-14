@@ -46,3 +46,7 @@ pnpm --filter @kan/hub test:coverage && pnpm --filter @kan/hub typecheck && pnpm
 ```
 
 改了页面的，在本地实际点一遍，PR 里说明验证了什么、没验证什么。合并到 `main` 会触发生产部署；如果 PR 带了新的 Hub 迁移，要先对生产库执行迁移再合并。
+
+## 用 CLI 做端到端检查
+
+改动了任务、看板、权限或登录相关的代码，提 PR 前用 [CLI 的冒烟测试](https://github.com/EdwinjJ1/builderspace-hub-cli#可以用-cli-测试-hub) 对本地 Hub 跑一遍，见 [BUILDERSPACE.md](../../BUILDERSPACE.md) 的「用 CLI 测试」。
