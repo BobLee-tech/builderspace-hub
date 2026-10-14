@@ -22,6 +22,14 @@ import {
 } from "@kan/hub/accounts";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import { can } from "@kan/hub/public";
+import {
+  blockInputs,
+  createBlock,
+  editBlock,
+  getSchedule,
+  planTask,
+  removeBlock,
+} from "@kan/hub/schedule";
 import { projectRoles } from "@kan/hub/schema";
 import { HubError } from "@kan/hub/shared";
 import { listProjects } from "@kan/hub/structure";
@@ -201,6 +209,45 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const scheduleRouter = createTRPCRouter({
+  /** My calendar for a window: my blocks plus my unfinished tasks. */
+  get: hubProcedure
+    .input(z.object({ from: z.date(), to: z.date() }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getSchedule(ctx.db, {
+          userId: ctx.actor.userId,
+          ...input,
+          now: new Date(),
+        }),
+      ),
+    ),
+
+  create: hubProcedure
+    .input(blockInputs.manual)
+    .mutation(({ ctx, input }) =>
+      runHub(() => createBlock(ctx.db, ctx.actor.userId, input)),
+    ),
+
+  planTask: hubProcedure
+    .input(blockInputs.task)
+    .mutation(({ ctx, input }) =>
+      runHub(() => planTask(ctx.db, ctx.actor.userId, input, new Date())),
+    ),
+
+  edit: hubProcedure
+    .input(blockInputs.edit)
+    .mutation(({ ctx, input }) =>
+      runHub(() => editBlock(ctx.db, ctx.actor.userId, input)),
+    ),
+
+  remove: hubProcedure
+    .input(z.object({ blockPublicId: z.string().min(1).max(32) }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => removeBlock(ctx.db, ctx.actor.userId, input.blockPublicId)),
+    ),
+});
+
 const AUDIT_PAGE_SIZE = 50;
 
 const auditRouter = createTRPCRouter({
@@ -224,6 +271,7 @@ export const hubRouter = createTRPCRouter({
   grants: grantsRouter,
   audit: auditRouter,
   tasks: tasksRouter,
+  schedule: scheduleRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),
