@@ -74,6 +74,25 @@ describe("rateLimitStorage (Better Auth)", () => {
     });
   });
 
+  it("reports failures to onError without throwing", async () => {
+    const errors: unknown[] = [];
+    const broken = {
+      select: () => {
+        throw new Error("connection lost");
+      },
+      insert: () => {
+        throw new Error("connection lost");
+      },
+    } as unknown as Db;
+    const storage = rateLimitStorage(broken, {
+      onError: (error) => errors.push(error),
+    });
+
+    expect(await storage.get("k")).toBeUndefined();
+    await storage.set("k", { key: "k", count: 1, lastRequest: t0 });
+    expect(errors).toHaveLength(2);
+  });
+
   it("prunes day-old counters now and then", async () => {
     await db
       .insert(hubRateLimits)

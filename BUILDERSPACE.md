@@ -2,7 +2,7 @@
 
 BuilderSpace 的内部管理工具：看板、任务分发、按项目授权。
 
-**可以用 CLI 测试**：命令行工具 [`bshub`](https://github.com/EdwinjJ1/builderspace-hub-cli) 能对任意一个 Hub 跑端到端冒烟测试，见下文「用 CLI 测试」。
+**可以用 CLI 测试**：命令行工具 [`bshub`](https://github.com/EdwinjJ1/builderspace-hub-cli) 能对本地或测试用的 Hub 跑端到端冒烟测试，见下文「用 CLI 测试」。
 
 它是开源项目 [Kan](https://github.com/kanbn/kan)（AGPL-3.0）的一个 fork。看板、成员、角色权限、评论、活动记录这些都来自上游；我们自己加的东西集中在 [`packages/builderspace`](packages/builderspace) 和本文件，尽量不改上游代码，方便以后同步上游更新。
 
@@ -108,10 +108,12 @@ pnpm --filter @kan/hub cli grant --email you@example.com --hub-role owner
 ```bash
 git clone https://github.com/EdwinjJ1/builderspace-hub-cli.git && cd builderspace-hub-cli
 pnpm install
-BSHUB_URL=http://localhost:3210 BSHUB_API_KEY=<key> BSHUB_SMOKE_BOARD=<看板 publicId> pnpm smoke
+BSHUB_URL=http://localhost:3000 BSHUB_API_KEY=<key> BSHUB_SMOKE_BOARD=<看板 publicId> pnpm smoke
 ```
 
-它会依次检查 Hub 可达和登录，读取项目和任务，然后新建一个任务、换列、改截止日期、评论、读回核对、删除；任何一步失败都返回非零退出码。改动了任务、看板或登录相关的代码，提 PR 前跑一遍。
+它会依次检查 Hub 可达和登录，读取项目和任务，然后新建一个任务、换列、改截止日期、评论、读回核对、删除；任何一步失败都返回非零退出码。改动了任务、看板、权限或登录相关的代码，提 PR 前跑一遍。
+
+> **只对本地或测试实例跑，不要指向线上。** 冒烟测试会真的新建、修改、删除任务；中途失败时，建好的测试任务会留在那块看板上。
 
 ## 初始化项目结构
 
@@ -182,7 +184,7 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 两点注意：
 
 - **访问保护。** 实测：项目的生产域名 `<项目名>.vercel.app` 可以公开访问；带哈希的单次部署地址和预览地址受团队的 Deployment Protection 保护，要登录 Vercel 才能看。把生产域名发给同事即可，不要发带哈希的地址。
-- **限流。** 没配 Redis 时限流按实例内存计数，在 Serverless 上约束力有限；对外开放注册前应配上 `REDIS_URL`。
+- **限流。** 登录、注册、重置密码和注册链接检查的限流计数在数据库里（`hub_rate_limit`），不依赖 Redis，见 [docs/hub/ARCHITECTURE.md](docs/hub/ARCHITECTURE.md) 的「限流」。Kan 其余接口的限流没配 Redis 时仍按实例内存计数。
 
 ## 连接官网（后台的「官网」分区）
 
