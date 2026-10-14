@@ -275,6 +275,17 @@ describe("doctor", () => {
     expect(lines[0]).toMatch(/^✗ Hub 迁移还没跑完（0 \/ \d+）/);
     expect(lines.join("\n")).toContain("pnpm --filter @kan/hub migrate");
   });
+
+  it("reports a broken connection as an error, not as missing migrations", async () => {
+    const unreachable = {
+      execute: () =>
+        Promise.reject(new Error("Connection terminated unexpectedly")),
+    } as unknown as Db;
+
+    await expect(
+      runCommand(unreachable, { name: "doctor" }, env),
+    ).rejects.toThrow("Connection terminated unexpectedly");
+  });
 });
 
 describe("help", () => {
