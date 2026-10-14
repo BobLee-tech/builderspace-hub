@@ -26,6 +26,8 @@ export type AuditAction =
   | "account.project_removed"
   | "account.site_access_changed"
   | "project.permission_changed"
+  | "project.repo_linked"
+  | "project.repo_unlinked"
   | "settings.function_colors_changed"
   | "site.project_reviewed"
   | "site.update_reviewed"

@@ -43,6 +43,13 @@
       "when": 1791983443525,
       "tag": "20261014131043_AddSiteAccess",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791989176044,
+      "tag": "20261014144616_AddProjectRepos",
+      "breakpoints": true
     }
   ]
 }

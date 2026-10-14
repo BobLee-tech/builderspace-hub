@@ -25,6 +25,11 @@ import {
 import { getArchive } from "@kan/hub/archive";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import {
+  addProjectRepo,
+  listProjectRepos,
+  removeProjectRepo,
+} from "@kan/hub/github";
+import {
   editablePermissions,
   editableProjectRoles,
   getPermissionMatrix,
@@ -270,6 +275,30 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const reposRouter = createTRPCRouter({
+  /** Every project with the GitHub repositories it is made of. */
+  list: hubAdminProcedure("admin.view").query(({ ctx }) =>
+    listProjectRepos(ctx.db),
+  ),
+
+  add: hubAdminProcedure("settings.manage")
+    .input(
+      z.object({
+        projectPublicId: z.string().min(1).max(32),
+        repo: z.string().min(1).max(300),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => addProjectRepo(ctx.db, ctx.actor, input)),
+    ),
+
+  remove: hubAdminProcedure("settings.manage")
+    .input(z.object({ repoPublicId: z.string().min(1).max(32) }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => removeProjectRepo(ctx.db, ctx.actor, input.repoPublicId)),
+    ),
+});
+
 const archiveRouter = createTRPCRouter({
   /** 我完成的: my finished tasks, counted by month in the viewer's time zone. */
   get: hubProcedure
@@ -365,6 +394,7 @@ export const hubRouter = createTRPCRouter({
   settings: settingsRouter,
   tasks: tasksRouter,
   schedule: scheduleRouter,
+  repos: reposRouter,
   site: siteRouter,
   archive: archiveRouter,
 
