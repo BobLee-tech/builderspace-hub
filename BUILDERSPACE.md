@@ -4,7 +4,7 @@ BuilderSpace 的内部管理工具：看板、任务分发、按项目授权。
 
 它是开源项目 [Kan](https://github.com/kanbn/kan)（AGPL-3.0）的一个 fork。看板、成员、角色权限、评论、活动记录这些都来自上游；我们自己加的东西集中在 [`packages/builderspace`](packages/builderspace) 和本文件，尽量不改上游代码，方便以后同步上游更新。
 
-实施计划和选型过程见 [BUILDERSPACE_PLAN.md](BUILDERSPACE_PLAN.md)。
+选型过程见 [BUILDERSPACE_PLAN.md](BUILDERSPACE_PLAN.md)，接下来做什么见 [docs/hub/ROADMAP.md](docs/hub/ROADMAP.md)，代码怎么组织见 [docs/hub/ARCHITECTURE.md](docs/hub/ARCHITECTURE.md)。
 
 ## 结构
 
@@ -34,7 +34,28 @@ EchoAgent       →   开发 / 运营 / 营销
 | 成员 member | 建看板，增删改列、任务、评论 | 参与该项目的人 |
 | 访客 guest | 只读 | 志愿者（默认） |
 
-目前核心团队三个人在三个项目里都是管理员。志愿者「可领取任务」的权限还没有做，见计划。
+目前核心团队三个人在三个项目里都是管理员。志愿者「可领取任务」的权限还没有做，见路线图。
+
+## 开通新成员
+
+Hub 不开放公开注册，`/signup` 只是一页说明。要让一个人注册，先给他的邮箱发一条注册许可，得到一条一次性链接，私下发给本人：
+
+```bash
+pnpm --filter @kan/hub cli projects
+```
+
+```bash
+pnpm --filter @kan/hub cli grant --email someone@example.com --project <项目ID>:member
+```
+
+- `--project` 可以写多次，角色是 `admin`、`member` 或 `guest`（只读），不写角色默认 `member`。
+- 链接只显示这一次，7 天内有效，只能用一次，只能用于这个邮箱。再发一条会让上一条失效。
+- 对方打开链接，填称呼和密码就完成注册，并自动加入预设的项目。
+- 命令读取根目录 `.env` 里的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`。对线上操作时把这两个变量写在命令前面（已有的环境变量优先于 `.env`）。
+- 每次发放和使用都会写进操作日志（`hub_audit_log` 表）。
+- 万一有人注册成功却没被加进项目（极少见，服务端日志里会有 `Provisioning after registration failed`），执行 `pnpm --filter @kan/hub cli provision --email <邮箱>` 补齐，可以重复执行。
+
+后台做好之后，这些都可以在网页上点。
 
 ## 本地运行
 
@@ -64,10 +85,15 @@ NEXT_PUBLIC_DISABLE_EMAIL=true
 
 ```bash
 pnpm db:migrate
+pnpm --filter @kan/hub migrate
 pnpm dev:next
 ```
 
-打开 http://localhost:3000/signup 注册一个账号。
+第一条跑 Kan 的迁移，第二条跑 Hub 自己的（两条流水分开记录，原因见架构文档）。然后给自己发一条注册许可，打开打印出来的链接完成注册：
+
+```bash
+pnpm --filter @kan/hub cli grant --email you@example.com --hub-role owner
+```
 
 > **不要省略 `POSTGRES_URL`。** 不设置时应用会退回到内嵌数据库（PGlite），但登录接口和业务接口各开了一个实例，彼此看不到对方写入的数据，表现为「登录成功后马上被踢回登录页」。
 
@@ -121,10 +147,10 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
    | `NEXT_PUBLIC_DISABLE_EMAIL` | `true`（配好 SMTP 之前） |
 
    `NEXT_PUBLIC_ALLOW_CREDENTIALS` 名字里带 credentials，CLI 会当成密钥拦一下。它只是「允许邮箱密码登录」的开关，加 `--type config` 即可。
-5. **迁移。** 用直连地址在本机跑：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`。以后每次同步上游带来新迁移时都要再跑一次。
+5. **迁移。** 用直连地址在本机跑两条：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`（Kan 的），再把末尾换成 `pnpm --filter @kan/hub migrate`（Hub 的）。之后用同样的变量跑 `pnpm --filter @kan/hub cli doctor` 确认 Hub 迁移已是最新。同步上游带来新迁移，或者 PR 里带了新的 Hub 迁移时，都要在合并前再跑一次。
 6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
-7. **注册并初始化。** 核心团队各自注册账号，按上一节初始化项目结构，再在每个项目的 成员 页用邀请链接互相拉进来。
-8. **关闭公开注册。** 把 `NEXT_PUBLIC_DISABLE_SIGN_UP` 设为 `true` 重新部署。之后只有「已被邮箱邀请」的人能注册，而邮箱邀请需要先配好 SMTP；没配 SMTP 时要加新人，就临时打开注册，等对方注册并通过邀请链接加入后再关上。
+7. **注册并初始化。** 用上面「开通新成员」的命令给核心团队发注册许可（对线上操作时带上线上的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`），各自注册后按「初始化项目结构」一节建好项目。
+8. **不要设置 `NEXT_PUBLIC_DISABLE_SIGN_UP`。** 那是 Kan 自己的开关，和 Hub 的注册闸门是「与」的关系：打开之后光有注册链接也会被拒。有闸门在，没有许可的人本来就注册不了。
 
 两点注意：
 
@@ -133,8 +159,9 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 ## 开发约定
 
-- 我们的代码放在 `packages/builderspace`；确实需要改上游文件时，改动尽量小并在 PR 里说明原因。
-- 先写测试再写实现，覆盖率不低于 80%：`pnpm --filter @kan/builderspace test:coverage`
+- 完整的约定和「加一个功能」的步骤见 [docs/hub/CONTRIBUTING.md](docs/hub/CONTRIBUTING.md)。
+- 我们的代码放在自己的目录里（`packages/hub`、`apps/web/src/hub` 等）；上游文件只在登记过的接缝处改，见 [docs/hub/UPSTREAM_SEAMS.md](docs/hub/UPSTREAM_SEAMS.md)，用 `pnpm --filter @kan/hub check-seams` 检查。
+- 先写测试再写实现，覆盖率不低于 80%：`pnpm --filter @kan/hub test:coverage`
 - 提交前：`pnpm lint`、`pnpm typecheck`、`pnpm format:fix`
 - 不提交任何密钥，也不提交内部数据（任务、成员名单、会议内容）。`.env`、`.env*.local` 和 `tasks.local.json` 已被忽略。
 - 上游的约定（命名、数据库迁移、i18n）见 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
@@ -142,11 +169,15 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 ### 同步上游
 
 ```bash
-git fetch upstream
+git fetch upstream main
 git merge upstream/main
 pnpm install
 pnpm db:migrate
+pnpm --filter @kan/hub migrate
+pnpm --filter @kan/hub check-seams
 ```
+
+冲突只应该出现在登记过的接缝文件里。
 
 `upstream` 的 push 地址已被禁用，不会误推到 Kan 官方仓库。
 

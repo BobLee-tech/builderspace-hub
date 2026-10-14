@@ -1,0 +1,73 @@
+{
+  "name": "@kan/hub",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./access": {
+      "types": "./src/access/index.ts",
+      "default": "./src/access/index.ts"
+    },
+    "./audit": {
+      "types": "./src/audit/index.ts",
+      "default": "./src/audit/index.ts"
+    },
+    "./db": {
+      "types": "./src/db.ts",
+      "default": "./src/db.ts"
+    },
+    "./public": {
+      "types": "./src/public.ts",
+      "default": "./src/public.ts"
+    },
+    "./schema": {
+      "types": "./src/schema/index.ts",
+      "default": "./src/schema/index.ts"
+    },
+    "./shared": {
+      "types": "./src/shared/index.ts",
+      "default": "./src/shared/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/test-db.ts",
+      "default": "./src/testing/test-db.ts"
+    }
+  },
+  "license": "AGPL-3.0",
+  "scripts": {
+    "check-seams": "tsx src/dev/check-seams.ts",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "cli": "pnpm with-env tsx src/cli/main.ts",
+    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "generate": "drizzle-kit generate",
+    "lint": "eslint",
+    "migrate": "pnpm with-env drizzle-kit migrate",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "with-env": "dotenv -e ../../.env --"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.7",
+    "@kan/db": "workspace:*",
+    "@kan/shared": "workspace:*",
+    "drizzle-orm": "^0.42.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@kan/eslint-config": "workspace:*",
+    "@kan/prettier-config": "workspace:*",
+    "@kan/tsconfig": "workspace:*",
+    "@types/node": "^20.17.7",
+    "@vitest/coverage-v8": "3.2.4",
+    "dotenv-cli": "^7.4.4",
+    "drizzle-kit": "^0.28.1",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:",
+    "vitest": "^3.0.0"
+  },
+  "prettier": "@kan/prettier-config"
+}

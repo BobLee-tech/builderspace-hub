@@ -39,6 +39,7 @@
   "prettier": "@kan/prettier-config",
   "dependencies": {
     "@better-auth/stripe": "^1.4.6",
+    "@kan/hub": "workspace:*",
     "@kan/logger": "workspace:^",
     "better-auth": "^1.4.6"
   }
