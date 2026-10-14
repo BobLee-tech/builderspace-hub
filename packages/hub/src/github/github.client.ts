@@ -120,7 +120,7 @@ export function createGitHubClient(config: Config): GitHubClient {
       return { ok: false, reason: rateLimited ? "failed" : "no_access" };
     }
     if (!response.ok) return { ok: false, reason: "failed" };
-    const body = (await response.json()) as unknown;
+    const body: unknown = await response.json();
     return Array.isArray(body)
       ? { ok: true, items: (body as Record<string, unknown>[]).map(map) }
       : { ok: false, reason: "failed" };

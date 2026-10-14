@@ -127,6 +127,12 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **项目仓库**（`hub_project_repo`）：后台给每个项目配它由哪些仓库组成，存成小写的 `owner/name`（GitHub 不区分大小写，统一写法才能正确判断重复）。粘贴的 GitHub 链接会被规范化（`repo.policy.ts`）。所有者和管理员能改（`settings.manage`），每次改动都写操作日志。
 - **一个人的活动只读他能看的项目的仓库**：`listReposForUser()` 用的是和首页同一个出口 `listViewableProjects()`。不在某个项目里的人，那个项目的仓库一个也不会被读取或统计。
 - 连接用 **GitHub App**，不用 OAuth App：GitHub App 的权限是只读的，而且只对安装了它的仓库有效；OAuth App 要读私有仓库就得要 `repo` 权限，等于对这个人所有私有仓库都有读写权（2026-10-14 定）。环境变量叫 `HUB_GITHUB_CLIENT_ID` / `HUB_GITHUB_CLIENT_SECRET`，故意不用 `GITHUB_CLIENT_ID`：那是 Kan 自己的变量名，设了就会打开「用 GitHub 登录」，绕过注册闸门。
+- **连接**（`/me/github` 的「连接 GitHub」）：`/api/hub/github/connect` 生成随机 `state`，放进只有 `/api/hub/github` 收得到的 HttpOnly cookie，再跳去 GitHub 授权；GitHub 跳回 `/api/hub/github/callback`，`state` 和 cookie 对上（常量时间比较）才去换令牌。这两个是普通 API 路由不是 tRPC，因为要做跳转；`code` 不进 tRPC 日志。
+- **令牌加密存**（`hub_github_account`）：AES-256-GCM，密钥用 HKDF 从现有的 `BETTER_AUTH_SECRET` 派生，所以不用多管一个密钥（`token-crypto.ts`）。换了 `BETTER_AUTH_SECRET` 之后旧令牌解不开，大家重新连接一次就行。GitHub App 的用户令牌 8 小时过期，快过期时用 refresh token 自动换新。
+- **同步**（「同步最近活动」）：只读 `listReposForUser()` 给的仓库，读最近 90 天的提交（按作者）、自己开的 PR、合并的 PR、自己开的 Issue，每个仓库一页 100 条，一次最多并行读 4 个仓库；结果存进 `hub_github_event`（按「人 + 仓库 + 类型 + 编号」去重）。一分钟最多同步一次。App 没装或没权限的仓库返回 404/403，标成「读不到」，不影响别的仓库；GitHub 不认令牌（401）就提示重新连接，已存的数据不动。
+- **展示时再按权限过滤一次**：统计和列表只算现在还能看的项目的仓库，离开项目后那些活动就不再显示（数据还在，重新加入项目会回来）。
+- **断开**：请 GitHub 撤销令牌，删掉连接和同步来的活动。连接和断开写操作日志（只有 GitHub 用户名，从不写令牌）；同步本身不写。
+- GitHub 的调用都在 `github.client.ts` 后面，用例测试换成假 GitHub，不走网络。
 
 ## 操作日志
 

@@ -14,7 +14,9 @@ const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000);
 const since = syncSince(now);
 
 describe("eventsFrom", () => {
-  const pull = (overrides: Partial<Parameters<typeof eventsFrom>[0]["pulls"][number]>) => ({
+  const pull = (
+    overrides: Partial<Parameters<typeof eventsFrom>[0]["pulls"][number]>,
+  ) => ({
     number: 1,
     title: "PR",
     url: "u",
@@ -30,7 +32,12 @@ describe("eventsFrom", () => {
       login: "me",
       since,
       commits: [
-        { sha: "abc1234", message: "Fix login\n\ndetails", url: "u1", authoredAt: daysAgo(3) },
+        {
+          sha: "abc1234",
+          message: "Fix login\n\ndetails",
+          url: "u1",
+          authoredAt: daysAgo(3),
+        },
         { sha: "old", message: "Too old", url: "u2", authoredAt: daysAgo(120) },
         { sha: "def5678", message: "", url: "u3", authoredAt: daysAgo(1) },
       ],
@@ -68,7 +75,12 @@ describe("eventsFrom", () => {
   });
 
   it("counts my issues but not pull requests posing as issues", () => {
-    const issue = { title: "Bug", url: "u", authorLogin: "me", createdAt: daysAgo(4) };
+    const issue = {
+      title: "Bug",
+      url: "u",
+      authorLogin: "me",
+      createdAt: daysAgo(4),
+    };
     const events = eventsFrom({
       repo: "c/a",
       login: "me",
@@ -107,8 +119,12 @@ describe("countWithin", () => {
 describe("timing", () => {
   it("allows one sync a minute", () => {
     expect(canSyncAgain(null, now)).toBe(true);
-    expect(canSyncAgain(new Date(now.getTime() - SYNC_COOLDOWN_MS + 1), now)).toBe(false);
-    expect(canSyncAgain(new Date(now.getTime() - SYNC_COOLDOWN_MS), now)).toBe(true);
+    expect(
+      canSyncAgain(new Date(now.getTime() - SYNC_COOLDOWN_MS + 1), now),
+    ).toBe(false);
+    expect(canSyncAgain(new Date(now.getTime() - SYNC_COOLDOWN_MS), now)).toBe(
+      true,
+    );
   });
 
   it("refreshes a token shortly before it expires, and never one without an expiry", () => {

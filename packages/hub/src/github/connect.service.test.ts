@@ -75,10 +75,14 @@ class FakeGitHub implements GitHubClient {
   me() {
     return Promise.resolve({ id: 42, login: "me-gh", avatarUrl: null });
   }
-  private answer<T>(repo: string, pick: (d: RepoData) => RepoRead<T> | undefined) {
+  private answer<T>(
+    repo: string,
+    pick: (d: RepoData) => RepoRead<T> | undefined,
+  ) {
     this.read.push(repo);
     if (this.unauthorised) return Promise.reject(new GitHubAuthError());
-    return Promise.resolve(pick(this.repos.get(repo) ?? {}) ?? { ok: true, items: [] });
+    const empty: RepoRead<T> = { ok: true, items: [] };
+    return Promise.resolve(pick(this.repos.get(repo) ?? {}) ?? empty);
   }
   commits(_: string, repo: string) {
     return this.answer(repo, (d) => d.commits);
@@ -101,7 +105,12 @@ let echo: { id: number; publicId: string; name: string };
 const deps = () => ({ client: github, secret });
 const actor = () => ({ userId: me.id, email: me.email });
 const connect = () =>
-  completeConnect(db, actor(), { code: "c", redirectUri: "https://hub/cb", now }, deps());
+  completeConnect(
+    db,
+    actor(),
+    { code: "c", redirectUri: "https://hub/cb", now },
+    deps(),
+  );
 const commit = (sha: string, days: number): RawCommit => ({
   sha,
   message: `Commit ${sha}`,
@@ -125,8 +134,14 @@ beforeEach(async () => {
     addedBy: owner.id,
   });
   const admin = { userId: owner.id, email: owner.email };
-  await addProjectRepo(db, admin, { projectPublicId: coursemate.publicId, repo: "club/coursemate" });
-  await addProjectRepo(db, admin, { projectPublicId: echo.publicId, repo: "club/echoagent" });
+  await addProjectRepo(db, admin, {
+    projectPublicId: coursemate.publicId,
+    repo: "club/coursemate",
+  });
+  await addProjectRepo(db, admin, {
+    projectPublicId: echo.publicId,
+    repo: "club/echoagent",
+  });
 });
 
 describe("completeConnect", () => {
@@ -139,7 +154,10 @@ describe("completeConnect", () => {
     expect(decryptToken(row?.accessToken ?? "", secret)).toBe("ghu_first");
     expect(decryptToken(row?.refreshToken ?? "", secret)).toBe("ghr_first");
     const [entry] = await listAudit(db, { limit: 1, offset: 0 });
-    expect(entry).toMatchObject({ action: "github.connected", summary: "连接了 GitHub 账号 me-gh" });
+    expect(entry).toMatchObject({
+      action: "github.connected",
+      summary: "连接了 GitHub 账号 me-gh",
+    });
     expect(JSON.stringify(entry)).not.toContain("ghu_");
   });
 
@@ -153,13 +171,20 @@ describe("completeConnect", () => {
 describe("syncGitHub", () => {
   it("reads only the repositories of projects they can see", async () => {
     await connect();
-    github.repos.set("club/coursemate", { commits: { ok: true, items: [commit("a1", 2)] } });
-    github.repos.set("club/echoagent", { commits: { ok: true, items: [commit("e1", 2)] } });
+    github.repos.set("club/coursemate", {
+      commits: { ok: true, items: [commit("a1", 2)] },
+    });
+    github.repos.set("club/echoagent", {
+      commits: { ok: true, items: [commit("e1", 2)] },
+    });
 
     const report = await syncGitHub(db, { userId: me.id, now }, deps());
 
     expect([...new Set(github.read)]).toEqual(["club/coursemate"]);
-    expect(report).toEqual({ events: 1, repos: [{ fullName: "club/coursemate", status: "ok" }] });
+    expect(report).toEqual({
+      events: 1,
+      repos: [{ fullName: "club/coursemate", status: "ok" }],
+    });
     expect((await storedEvents()).map((e) => e.ref)).toEqual(["a1"]);
   });
 
@@ -172,8 +197,12 @@ describe("syncGitHub", () => {
       addedBy: owner.id,
     });
     await connect();
-    github.repos.set("club/coursemate", { pulls: { ok: false, reason: "no_access" } });
-    github.repos.set("club/echoagent", { commits: { ok: true, items: [commit("e1", 1)] } });
+    github.repos.set("club/coursemate", {
+      pulls: { ok: false, reason: "no_access" },
+    });
+    github.repos.set("club/echoagent", {
+      commits: { ok: true, items: [commit("e1", 1)] },
+    });
 
     const report = await syncGitHub(db, { userId: me.id, now }, deps());
 
@@ -186,10 +215,14 @@ describe("syncGitHub", () => {
 
   it("allows one sync a minute and never stores an event twice", async () => {
     await connect();
-    github.repos.set("club/coursemate", { commits: { ok: true, items: [commit("a1", 2)] } });
+    github.repos.set("club/coursemate", {
+      commits: { ok: true, items: [commit("a1", 2)] },
+    });
 
     await syncGitHub(db, { userId: me.id, now }, deps());
-    await expect(syncGitHub(db, { userId: me.id, now: later(30_000) }, deps())).rejects.toMatchObject({
+    await expect(
+      syncGitHub(db, { userId: me.id, now: later(30_000) }, deps()),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     await syncGitHub(db, { userId: me.id, now: later(60_000) }, deps());
@@ -213,23 +246,33 @@ describe("syncGitHub", () => {
     github.tokens = { ...github.tokens, accessTokenExpiresAt: later(10_000) };
     await connect();
     github.failRefresh = true;
-    await expect(syncGitHub(db, { userId: me.id, now }, deps())).rejects.toMatchObject({
-      code: "CONFLICT",
-      message: expect.stringContaining("重新连接") as unknown,
-    });
+    const refused: unknown = await syncGitHub(
+      db,
+      { userId: me.id, now },
+      deps(),
+    ).catch((error: unknown) => error);
+    expect(refused).toMatchObject({ code: "CONFLICT" });
+    expect((refused as Error).message).toContain("重新连接");
 
     github.failRefresh = false;
-    github.tokens = { ...github.tokens, accessTokenExpiresAt: later(8 * 3_600_000) };
+    github.tokens = {
+      ...github.tokens,
+      accessTokenExpiresAt: later(8 * 3_600_000),
+    };
     await connect();
     github.unauthorised = true;
-    await expect(syncGitHub(db, { userId: me.id, now }, deps())).rejects.toMatchObject({
+    await expect(
+      syncGitHub(db, { userId: me.id, now }, deps()),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     expect(await storedEvents()).toEqual([]);
   });
 
   it("answers NOT_FOUND before anyone has connected", async () => {
-    await expect(syncGitHub(db, { userId: me.id, now }, deps())).rejects.toMatchObject({
+    await expect(
+      syncGitHub(db, { userId: me.id, now }, deps()),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -258,11 +301,23 @@ describe("getGitHubSummary", () => {
 
     const summary = await getGitHubSummary(db, { userId: me.id, now });
 
-    expect(summary.connection).toMatchObject({ login: "me-gh", lastSyncedAt: now });
+    expect(summary.connection).toMatchObject({
+      login: "me-gh",
+      lastSyncedAt: now,
+    });
     expect(summary.repos).toEqual([
-      { fullName: "club/coursemate", url: "https://github.com/club/coursemate", projects: ["CourseMate"] },
+      {
+        fullName: "club/coursemate",
+        url: "https://github.com/club/coursemate",
+        projects: ["CourseMate"],
+      },
     ]);
-    expect(summary.counts[30]).toEqual({ commit: 1, pr_opened: 1, pr_merged: 1, issue_opened: 0 });
+    expect(summary.counts[30]).toEqual({
+      commit: 1,
+      pr_opened: 1,
+      pr_merged: 1,
+      issue_opened: 0,
+    });
     expect(summary.counts[90].commit).toBe(2);
     expect(summary.byProject).toEqual([
       {
@@ -280,7 +335,9 @@ describe("getGitHubSummary", () => {
 
   it("stops showing a project's activity once they leave it", async () => {
     await connect();
-    github.repos.set("club/coursemate", { commits: { ok: true, items: [commit("a1", 2)] } });
+    github.repos.set("club/coursemate", {
+      commits: { ok: true, items: [commit("a1", 2)] },
+    });
     await syncGitHub(db, { userId: me.id, now }, deps());
 
     await db
@@ -304,7 +361,9 @@ describe("getGitHubSummary", () => {
 describe("disconnectGitHub", () => {
   it("revokes the token, forgets everything synced and logs it", async () => {
     await connect();
-    github.repos.set("club/coursemate", { commits: { ok: true, items: [commit("a1", 2)] } });
+    github.repos.set("club/coursemate", {
+      commits: { ok: true, items: [commit("a1", 2)] },
+    });
     await syncGitHub(db, { userId: me.id, now }, deps());
 
     await disconnectGitHub(db, actor(), deps());

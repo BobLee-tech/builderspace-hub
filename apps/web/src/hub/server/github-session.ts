@@ -3,6 +3,7 @@ import type { NextApiRequest } from "next";
 import { createNextApiContext } from "@kan/api/trpc-context";
 import { getAccessFacts } from "@kan/hub/accounts";
 
+import { env } from "~/env";
 import { getHubDb } from "./db";
 
 /**
@@ -23,7 +24,7 @@ export async function hubUserFromRequest(
 export function isSecureRequest(req: NextApiRequest): boolean {
   return (
     req.headers["x-forwarded-proto"] === "https" ||
-    (process.env.NEXT_PUBLIC_BASE_URL ?? "").startsWith("https://")
+    (env.NEXT_PUBLIC_BASE_URL ?? "").startsWith("https://")
   );
 }
 

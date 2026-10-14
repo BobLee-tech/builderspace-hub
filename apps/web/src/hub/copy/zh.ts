@@ -164,6 +164,59 @@ export const zh = {
     tabs: {
       schedule: "日程",
       done: "我完成的",
+      github: "GitHub",
+    },
+  },
+
+  github: {
+    title: "GitHub",
+    description:
+      "连接 GitHub 后，可以看到你在自己所在项目的仓库里最近做了什么。只读取管理员给项目配好的仓库，而且只算你在的项目；Hub 用的 GitHub App 只有只读权限。",
+    notConfigured: {
+      heading: "GitHub 连接还没开通",
+      body: "管理员需要先建好 Hub 的 GitHub App。开通之后这里会出现「连接 GitHub」按钮。",
+    },
+    connect: "连接 GitHub",
+    reconnect: "重新连接",
+    disconnect: "断开连接",
+    sync: "同步最近活动",
+    syncing: "正在同步…",
+    connectedAs: (login: string) => `已连接 ${login}`,
+    lastSynced: (when: string) => `上次同步：${when}`,
+    neverSynced: "还没同步过，点「同步最近活动」读取最近 90 天。",
+    outcomes: {
+      connected: "GitHub 已连接。点「同步最近活动」读取最近 90 天的活动。",
+      denied: "你在 GitHub 上取消了授权，没有连接。",
+      expired: "这次连接已经过期或不完整，请再点一次「连接 GitHub」。",
+      failed: "连接没有成功，请再试一次。如果一直不行，请联系管理员。",
+      not_configured: "GitHub 连接还没开通，请联系管理员。",
+    },
+    windows: {
+      30: "近 30 天",
+      90: "近 90 天",
+    },
+    kinds: {
+      commit: "提交",
+      pr_opened: "提 PR",
+      pr_merged: "PR 合并",
+      issue_opened: "提 Issue",
+    },
+    repos: {
+      title: "统计的仓库",
+      hint: "管理员在后台给你所在的项目配的仓库。",
+      none: "你所在的项目还没有配仓库，请联系管理员在后台「项目仓库」里添加。",
+    },
+    syncReport: {
+      noAccess: (repo: string) =>
+        `读不到 ${repo}：GitHub App 还没装到这个仓库，或者你在 GitHub 上没有它的访问权。`,
+      failed: (repo: string) =>
+        `读取 ${repo} 时 GitHub 出错了，稍后再同步一次。`,
+      done: (count: number) => `同步完成，读到 ${count} 条活动。`,
+    },
+    byProject: "按项目（近 90 天）",
+    recent: {
+      title: "最近活动",
+      empty: "近 90 天在这些仓库里还没有你的活动。",
     },
   },
 

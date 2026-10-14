@@ -10,6 +10,7 @@ export const hubRoutes = {
   home: "/home",
   personal: "/me",
   personalDone: "/me/done",
+  personalGitHub: "/me/github",
   login: "/login",
   signup: "/signup",
   join: HUB_JOIN_PATH,

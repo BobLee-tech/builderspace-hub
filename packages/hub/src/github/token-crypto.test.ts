@@ -21,7 +21,9 @@ describe("token encryption", () => {
     const [version, iv, body, tag] = sealed.split(".");
     const flipped = `${body?.startsWith("A") ? "B" : "A"}${body?.slice(1)}`;
 
-    expect(decryptToken([version, iv, flipped, tag].join("."), secret)).toBeNull();
+    expect(
+      decryptToken([version, iv, flipped, tag].join("."), secret),
+    ).toBeNull();
     expect(decryptToken(sealed, `${secret}-rotated`)).toBeNull();
     expect(decryptToken("not-a-sealed-value", secret)).toBeNull();
   });

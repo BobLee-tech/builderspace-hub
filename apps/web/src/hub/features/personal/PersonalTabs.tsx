@@ -8,6 +8,7 @@ import { hubRoutes } from "~/hub/lib/routes";
 const tabs = [
   { href: hubRoutes.personal, label: copy.personal.tabs.schedule },
   { href: hubRoutes.personalDone, label: copy.personal.tabs.done },
+  { href: hubRoutes.personalGitHub, label: copy.personal.tabs.github },
 ] as const;
 
 /** The sections of 个人, under the page heading. */

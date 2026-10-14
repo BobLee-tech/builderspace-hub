@@ -20,7 +20,9 @@ describe("gitHubAppConfig", () => {
   });
 
   it("is null until every setting is there, and ignores Kan's own GITHUB_ names", () => {
-    expect(gitHubAppConfig({ ...env, HUB_GITHUB_CLIENT_SECRET: undefined })).toBeNull();
+    expect(
+      gitHubAppConfig({ ...env, HUB_GITHUB_CLIENT_SECRET: undefined }),
+    ).toBeNull();
     expect(
       gitHubAppConfig({
         GITHUB_CLIENT_ID: "x",
@@ -38,7 +40,9 @@ describe("authorizeUrl", () => {
     if (!config) throw new Error("config");
     const url = new URL(authorizeUrl(config, "st4te"));
 
-    expect(url.origin + url.pathname).toBe("https://github.com/login/oauth/authorize");
+    expect(url.origin + url.pathname).toBe(
+      "https://github.com/login/oauth/authorize",
+    );
     expect(Object.fromEntries(url.searchParams)).toEqual({
       client_id: "Iv1.abc",
       redirect_uri: "https://hub.example/api/hub/github/callback",
