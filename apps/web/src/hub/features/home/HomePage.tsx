@@ -20,7 +20,7 @@ import {
   useProjectParam,
 } from "../tasks/ScopeSwitcher";
 import { TaskRow } from "../tasks/task-display";
-import { FunctionMatrix } from "./FunctionMatrix";
+import { ColumnsSkeleton, TaskBoardBody } from "../tasks/TaskBoardBody";
 
 type Home = RouterOutputs["hub"]["tasks"]["home"];
 
@@ -94,7 +94,7 @@ function HomeContent({ home }: { home: Home }) {
             }
           >
             <TbLayoutKanban className="mr-1.5 h-4 w-4" aria-hidden="true" />
-            {text.matrix.openBoards}
+            {text.openBoards}
           </button>
         )}
       </div>
@@ -159,8 +159,45 @@ function HomeContent({ home }: { home: Home }) {
         </Card>
       </section>
 
-      <FunctionMatrix rows={home.matrix} scopeId={scopeId} />
+      <OverallBoard scopeId={scopeId} />
     </div>
+  );
+}
+
+/**
+ * The 总版 of the chosen scope, right on the home page: every task of the
+ * 开发 / 运营 / 营销 boards (of one project, or of all of them), editable in
+ * place. Same component and same data as `/tasks/all`.
+ */
+function OverallBoard({ scopeId }: { scopeId: string | null }) {
+  const query = { view: "all" as const, project: scopeId ?? undefined };
+  const board = api.hub.tasks.board.useQuery(query, { retry: false });
+
+  return (
+    <section>
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-light-1000 dark:text-dark-1000">
+            {text.overall.title}
+          </h2>
+          <p className="mt-0.5 text-xs text-light-900 dark:text-dark-900">
+            {copy.tasks.overallHint}
+          </p>
+        </div>
+        <Link
+          href={taskBoardHref("all", scopeId)}
+          className="inline-flex shrink-0 items-center gap-1 text-xs text-light-900 hover:text-light-1000 dark:text-dark-900 dark:hover:text-dark-1000"
+        >
+          {text.overall.fullScreen}
+          <TbArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+      {board.data ? (
+        <TaskBoardBody board={board.data} query={query} />
+      ) : (
+        <ColumnsSkeleton />
+      )}
+    </section>
   );
 }
 
