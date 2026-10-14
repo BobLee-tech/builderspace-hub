@@ -25,3 +25,18 @@ export {
   permissionsOf,
   roleLabels,
 } from "./accounts/roles";
+
+export type {
+  DueState,
+  FunctionKey,
+  Stage,
+  TaskView,
+} from "./tasks/task.policy";
+export {
+  DUE_SOON_DAYS,
+  functionKeys,
+  functionNames,
+  stageNames,
+  stages,
+  taskViews,
+} from "./tasks/task.policy";

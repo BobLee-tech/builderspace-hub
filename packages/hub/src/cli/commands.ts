@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 
-import { hubStructure } from "@kan/builderspace";
+import { hubStructure } from "@kan/builderspace/structure";
 
 import type { Db } from "../db";
 import type { CliCommand } from "./args";

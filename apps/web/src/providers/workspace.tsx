@@ -8,7 +8,8 @@ interface WorkspaceContextProps {
   workspace: Workspace;
   isLoading: boolean;
   hasLoaded: boolean;
-  switchWorkspace: (_workspace: Workspace) => void;
+  // hub-seam: optional redirect; null stays on the page (docs/hub/UPSTREAM_SEAMS.md)
+  switchWorkspace: (_workspace: Workspace, redirectTo?: string | null) => void;
   availableWorkspaces: Workspace[];
 }
 
@@ -66,7 +67,10 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({
   );
   const utils = api.useUtils();
 
-  const switchWorkspace = (_workspace: Workspace) => {
+  const switchWorkspace = (
+    _workspace: Workspace,
+    redirectTo?: string | null,
+  ) => {
     localStorage.setItem("workspacePublicId", _workspace.publicId);
 
     setWorkspace(_workspace);
@@ -74,7 +78,7 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({
     // Refetch workspace data to ensure availableWorkspaces is up to date
     void utils.workspace.all.refetch();
 
-    router.push(`/boards`);
+    if (redirectTo !== null) router.push(redirectTo ?? `/boards`); // hub-seam
   };
 
   useEffect(() => {

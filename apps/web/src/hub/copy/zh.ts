@@ -63,6 +63,76 @@ export const zh = {
     },
   },
 
+  nav: {
+    home: "首页",
+    goHome: "回到首页",
+    switchProjectHint: "在首页切换项目",
+    search: "搜索",
+    openSearch: "打开搜索",
+  },
+
+  home: {
+    title: "首页",
+    greeting: {
+      morning: "早上好",
+      afternoon: "下午好",
+      evening: "晚上好",
+    },
+    scope: {
+      label: "查看范围",
+      all: "全部",
+      allHint: "你加入的所有项目",
+    },
+    projectCount: (count: number) => `你在 ${count} 个项目里`,
+    tiles: {
+      mine: "指派给我的",
+      dueSoon: "即将到期",
+      dueSoonHint: (days: number) => `${days} 天内`,
+      overdue: "已逾期",
+      open: "全部任务",
+      openHint: "未完成",
+    },
+    myTasks: {
+      title: "我负责的任务",
+      seeAll: "查看全部",
+      empty: "现在没有指派给你的任务。",
+    },
+    matrix: {
+      title: "按职能看",
+      hint: "数字是还没完成的任务。点格子进入对应的大看板。",
+      project: "项目",
+      otherBoards: (count: number) => `另有 ${count} 个任务在其他看板`,
+      openBoards: "打开这个项目的看板",
+    },
+    waiting: {
+      heading: "等待分配项目",
+      body: "你的账号已经开通，但还没有被加入任何项目。请联系管理员把你加进项目，之后这里就会出现你的任务。",
+      create: "新建项目",
+    },
+    scopeMissing: "没有这个项目，或者你不在这个项目里。",
+    scopeMissingBack: "回到全部",
+  },
+
+  tasks: {
+    views: {
+      mine: "指派给我的",
+      "due-soon": "即将到期",
+      overdue: "已逾期",
+      all: "全部任务",
+    },
+    backHome: "回到首页",
+    otherStage: "其他",
+    doneLimited: (shown: number, total: number) =>
+      `显示最近 ${shown} 个，共 ${total} 个`,
+    emptyColumn: "没有任务",
+    emptyBoard: "这里还没有任务。",
+    due: {
+      overdue: "已逾期",
+      today: "今天到期",
+    },
+    assignedToMe: "我",
+  },
+
   admin: {
     title: "后台",
     entry: "后台",

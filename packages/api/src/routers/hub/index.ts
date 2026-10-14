@@ -25,12 +25,14 @@ import { can } from "@kan/hub/public";
 import { projectRoles } from "@kan/hub/schema";
 import { HubError } from "@kan/hub/shared";
 import { listProjects } from "@kan/hub/structure";
+import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
 
 /**
- * The back office's API, mounted at `hub.*`. Thin by design: validate the
+ * The Hub's own API, mounted at `hub.*`: the back office, plus the home page
+ * and the task board every member uses. Thin by design: validate the
  * input, call a use case from `@kan/hub`, map its errors. Every procedure is
  * left out of the public REST API (no `openapi` meta).
  *
@@ -169,6 +171,36 @@ const grantsRouter = createTRPCRouter({
     ),
 });
 
+/** 全部 when `project` is left out, otherwise one project the caller is in. */
+const scopeInput = z.object({ project: z.string().min(1).max(32).optional() });
+
+const tasksRouter = createTRPCRouter({
+  /** The home page: tile counts, my open tasks, the project × function grid. */
+  home: hubProcedure.input(scopeInput).query(({ ctx, input }) =>
+    runHub(() =>
+      getHome(ctx.db, {
+        userId: ctx.actor.userId,
+        projectPublicId: input.project,
+        now: new Date(),
+      }),
+    ),
+  ),
+
+  /** The cross-project task board for one view, split into columns. */
+  board: hubProcedure
+    .input(scopeInput.extend({ view: z.enum(taskViews) }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getTaskBoard(ctx.db, {
+          userId: ctx.actor.userId,
+          projectPublicId: input.project,
+          view: input.view,
+          now: new Date(),
+        }),
+      ),
+    ),
+});
+
 const AUDIT_PAGE_SIZE = 50;
 
 const auditRouter = createTRPCRouter({
@@ -191,6 +223,7 @@ export const hubRouter = createTRPCRouter({
   accounts: accountsRouter,
   grants: grantsRouter,
   audit: auditRouter,
+  tasks: tasksRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

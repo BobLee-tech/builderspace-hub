@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./structure": {
+      "types": "./src/structure.ts",
+      "default": "./src/structure.ts"
     }
   },
   "license": "AGPL-3.0",

@@ -27,10 +27,10 @@ import templatesIconLight from "~/assets/templates-light.json";
 import ButtonComponent from "~/components/Button";
 import ReactiveButton from "~/components/ReactiveButton";
 import UserMenu from "~/components/UserMenu";
-import WorkspaceMenu from "~/components/WorkspaceMenu";
-// hub-seam: product name and back-office link (docs/hub/UPSTREAM_SEAMS.md)
+// hub-seam: product name, sidebar top and back-office link (docs/hub/UPSTREAM_SEAMS.md)
 import { copy } from "~/hub/copy/zh";
 import { HubAdminLink } from "~/hub/features/admin/HubAdminLink";
+import { HubSidebarTop } from "~/hub/layout/HubSidebarTop";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 
@@ -192,7 +192,10 @@ export default function SideNavigation({
           </div>
           <div className="mx-1 mb-4 hidden w-auto border-b border-light-300 dark:border-dark-400 md:block" />
 
-          <WorkspaceMenu isCollapsed={isCollapsed} />
+          <HubSidebarTop
+            isCollapsed={isCollapsed}
+            onCloseSideNav={onCloseSideNav}
+          />
           <ul role="list" className="space-y-1">
             {navigation.map((item) => (
               <li key={item.name}>
@@ -208,7 +211,10 @@ export default function SideNavigation({
               </li>
             ))}
           </ul>
-          <HubAdminLink isCollapsed={isCollapsed} onCloseSideNav={onCloseSideNav} />
+          <HubAdminLink
+            isCollapsed={isCollapsed}
+            onCloseSideNav={onCloseSideNav}
+          />
         </div>
 
         <div className="space-y-2">
