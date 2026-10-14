@@ -15,11 +15,9 @@ export {
 export type {
   BoardTarget,
   HomeSummary,
-  MatrixRow,
   ProjectAccess,
   ProjectChip,
   Scope,
-  StageCounts,
   Task,
   TaskBoard,
   TaskColumn,

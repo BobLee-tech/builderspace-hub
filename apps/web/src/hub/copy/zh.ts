@@ -99,12 +99,10 @@ export const zh = {
       seeAll: "查看全部",
       empty: "现在没有指派给你的任务。",
     },
-    matrix: {
-      title: "按职能看",
-      hint: "数字是还没完成的任务。点格子进入对应的大看板。",
-      project: "项目",
-      otherBoards: (count: number) => `另有 ${count} 个任务在其他看板`,
-      openBoards: "打开这个项目的看板",
+    openBoards: "打开这个项目的看板",
+    overall: {
+      title: "总版",
+      fullScreen: "全屏打开",
     },
     waiting: {
       heading: "等待分配项目",

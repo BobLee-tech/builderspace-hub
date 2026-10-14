@@ -187,10 +187,6 @@ describe("which projects someone sees", () => {
       "EchoAgent",
     ]);
     expect(home.scope.current).toBeNull();
-    expect(home.matrix.map((row) => row.project.name)).toEqual([
-      "CourseMate",
-      "EchoAgent",
-    ]);
   });
 
   it("never counts tasks from a project they are not in", async () => {
@@ -235,7 +231,6 @@ describe("which projects someone sees", () => {
 
     const home = await getHome(db, { userId: me.id, now });
     expect(home.scope.projects).toEqual([]);
-    expect(home.matrix).toEqual([]);
   });
 
   it("refuses a project they are not in with the same answer as a missing one", async () => {
@@ -301,29 +296,6 @@ describe("getHome", () => {
     expect(home.tiles.mine).toBe(HOME_MY_TASKS_LIMIT + 2);
   });
 
-  it("fills the matrix with open tasks per function and column", async () => {
-    const dev = await seedBoard(coursemate, "开发");
-    const roadmap = await seedBoard(coursemate, "Roadmap");
-    await seedCard(dev.todo, "a");
-    await seedCard(dev.todo, "b");
-    await seedCard(dev.ideas, "c");
-    await seedCard(dev.done, "d");
-    await seedCard(roadmap.todo, "e");
-
-    const home = await getHome(db, { userId: me.id, now });
-    const row = home.matrix.find((r) => r.project.name === "CourseMate");
-
-    expect(row?.functions.dev).toEqual({
-      todo: 2,
-      doing: 0,
-      review: 0,
-      done: 0,
-      other: 1,
-    });
-    expect(row?.functions.ops.todo).toBe(0);
-    expect(row?.otherBoards).toBe(1);
-  });
-
   it("narrows everything to one project", async () => {
     const dev = await seedBoard(coursemate, "开发");
     const echoDev = await seedBoard(echo, "开发");
@@ -342,7 +314,6 @@ describe("getHome", () => {
     });
     expect(home.scope.projects).toHaveLength(2);
     expect(home.tiles.open).toBe(1);
-    expect(home.matrix.map((r) => r.project.name)).toEqual(["EchoAgent"]);
   });
 
   it("leaves out templates, archived boards and deleted cards", async () => {

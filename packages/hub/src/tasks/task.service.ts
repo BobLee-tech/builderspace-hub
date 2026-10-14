@@ -25,7 +25,6 @@ import {
   inView,
   isOpen,
   stageOf,
-  stages,
 } from "./task.policy";
 
 /**
@@ -64,22 +63,11 @@ export interface Scope {
   current: ProjectChip | null;
 }
 
-export type StageCounts = Record<Stage, number>;
-
-export interface MatrixRow {
-  project: ProjectChip;
-  /** Open tasks per standard function, split by column. */
-  functions: Record<FunctionKey, StageCounts>;
-  /** Open tasks on boards that are not a standard function. */
-  otherBoards: number;
-}
-
 export interface HomeSummary {
   scope: Scope;
   tiles: TileCounts;
   /** Open tasks assigned to me, soonest due first. */
   myTasks: Task[];
-  matrix: MatrixRow[];
 }
 
 export interface TaskColumn {
@@ -148,7 +136,6 @@ export async function getHome(db: Db, input: ScopeInput): Promise<HomeSummary> {
       .sort(bySoonestDue)
       .slice(0, HOME_MY_TASKS_LIMIT)
       .map(publicTask),
-    matrix: buildMatrix(scope, open),
   };
 }
 
@@ -293,29 +280,6 @@ function toTask(
     assignedToMe: row.assignees.some((assignee) => assignee.userId === userId),
     sortDate: row.updatedAt ?? row.createdAt,
   };
-}
-
-function buildMatrix(scope: Scope, open: readonly LoadedTask[]): MatrixRow[] {
-  const projects = scope.current ? [scope.current] : scope.projects;
-  return projects.map((project) => {
-    const row: MatrixRow = {
-      project,
-      functions: Object.fromEntries(
-        functionKeys.map((key) => [key, emptyStageCounts()]),
-      ) as Record<FunctionKey, StageCounts>,
-      otherBoards: 0,
-    };
-    for (const task of open) {
-      if (task.project.publicId !== project.publicId) continue;
-      if (task.functionKey) row.functions[task.functionKey][task.stage] += 1;
-      else row.otherBoards += 1;
-    }
-    return row;
-  });
-}
-
-function emptyStageCounts(): StageCounts {
-  return Object.fromEntries(stages.map((stage) => [stage, 0])) as StageCounts;
 }
 
 /** The team's projects in the order of the shared structure, then the rest by name. */
