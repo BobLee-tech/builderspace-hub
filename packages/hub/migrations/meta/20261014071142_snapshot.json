@@ -1,5 +1,5 @@
 {
-  "id": "0960f886-0f99-4fdc-a102-5987717cf1a2",
+  "id": "5b59a171-2534-46d9-9fcd-84a033c8e5ef",
   "prevId": "486890a1-9741-48cf-b901-0e1458072728",
   "version": "7",
   "dialect": "postgresql",
@@ -520,6 +520,151 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
+    "public.hub_time_block": {
+      "name": "hub_time_block",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "publicId": {
+          "name": "publicId",
+          "type": "varchar(12)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "startsAt": {
+          "name": "startsAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endsAt": {
+          "name": "endsAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cardId": {
+          "name": "cardId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hub_time_block_user_starts_idx": {
+          "name": "hub_time_block_user_starts_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "startsAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hub_time_block_userId_user_id_fk": {
+          "name": "hub_time_block_userId_user_id_fk",
+          "tableFrom": "hub_time_block",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "hub_time_block_cardId_card_id_fk": {
+          "name": "hub_time_block_cardId_card_id_fk",
+          "tableFrom": "hub_time_block",
+          "tableTo": "card",
+          "columnsFrom": [
+            "cardId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hub_time_block_publicId_unique": {
+          "name": "hub_time_block_publicId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "publicId"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "hub_time_block_kind_check": {
+          "name": "hub_time_block_kind_check",
+          "value": "\"hub_time_block\".\"kind\" IN ('free', 'busy', 'meeting', 'task')"
+        },
+        "hub_time_block_range_check": {
+          "name": "hub_time_block_range_check",
+          "value": "\"hub_time_block\".\"endsAt\" > \"hub_time_block\".\"startsAt\""
+        },
+        "hub_time_block_card_check": {
+          "name": "hub_time_block_card_check",
+          "value": "(\"hub_time_block\".\"kind\" = 'task') = (\"hub_time_block\".\"cardId\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": true
+    },
     "public.hub_setting": {
       "name": "hub_setting",
       "schema": "",
@@ -566,37 +711,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.hub_rate_limit": {
-      "name": "hub_rate_limit",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "varchar(255)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "lastRequest": {
-          "name": "lastRequest",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

@@ -87,7 +87,8 @@ export function Labels({ task }: { task: HubTask }) {
   );
 }
 
-function useOpenTask(task: HubTask) {
+/** Opens the task's card page in the task's own project. */
+export function useOpenTask(task: Pick<HubTask, "project" | "publicId">) {
   const openInProject = useOpenInProject();
   return () => openInProject(task.project.publicId, cardHref(task.publicId));
 }

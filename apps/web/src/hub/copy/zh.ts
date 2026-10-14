@@ -69,6 +69,8 @@ export const zh = {
     switchProjectHint: "在首页切换项目",
     search: "搜索",
     openSearch: "打开搜索",
+    personal: "个人",
+    goPersonal: "打开个人日程",
   },
 
   home: {
@@ -158,6 +160,52 @@ export const zh = {
       title: "总版",
       hint: "所有职能的任务，按颜色区分",
     },
+  },
+
+  schedule: {
+    title: "个人",
+    heading: "我的时间",
+    description:
+      "标出哪些时间有空、哪些没空、在忙什么。分给你的任务会按截止日出现在对应的那天；把任务排进时间表，这段时间就被它占用了。这里只有你自己能看到。",
+    week: {
+      previous: "上一周",
+      next: "下一周",
+      current: "本周",
+    },
+    brush: {
+      label: "在时间表上拖动来画",
+      hint: "选一种，在时间表上拖一下；点一下是一小时。",
+    },
+    kinds: {
+      free: "有空",
+      busy: "没空",
+      meeting: "会议",
+      task: "任务",
+    },
+    dueRow: "到期",
+    allDay: "到期的任务",
+    now: "现在",
+    tasks: {
+      title: "我的任务",
+      hint: "点一个任务，再在时间表上拖出它要占用的时间。",
+      toPlan: "还没排时间",
+      planned: "已排时间",
+      empty: "现在没有指派给你的未完成任务。",
+      placing: (title: string) => `正在排「${title}」`,
+      stopPlacing: "不排了",
+    },
+    editor: {
+      titleLabel: "标题",
+      titlePlaceholder: "例如：上课、组会",
+      kindLabel: "类型",
+      done: "完成",
+      remove: "删除这段时间",
+      unplan: "取消这段排期",
+      openTask: "打开任务",
+      taskNote: "标题和状态跟着任务走，要改请到看板里改。",
+      finished: "任务已完成",
+    },
+    saving: "正在保存…",
   },
 
   admin: {
