@@ -149,7 +149,7 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
    `NEXT_PUBLIC_ALLOW_CREDENTIALS` 名字里带 credentials，CLI 会当成密钥拦一下。它只是「允许邮箱密码登录」的开关，加 `--type config` 即可。
 5. **迁移。** 用直连地址在本机跑两条：`POSTGRES_URL=<POSTGRES_URL_NON_POOLING 的值> NODE_ENV=production pnpm db:migrate`（Kan 的），再把末尾换成 `pnpm --filter @kan/hub migrate`（Hub 的）。之后用同样的变量跑 `pnpm --filter @kan/hub cli doctor` 确认 Hub 迁移已是最新。同步上游带来新迁移，或者 PR 里带了新的 Hub 迁移时，都要在合并前再跑一次。
 6. **部署。** 合并到 `main` 即触发生产部署。其它分支不构建（项目的 Ignored Build Step 里跳过了非生产环境），因为预览环境没有数据库。**例外：新项目的第一次部署不管从哪个分支推送，都会被 Vercel 直接当成生产部署。** 所以第一次推送前要先把数据库、环境变量和迁移都准备好。部署后访问 `/api/v1/health`，应返回 `"database":"ok"`。
-7. **注册并初始化。** 用上面「开通新成员」的命令给核心团队发注册许可（对线上操作时带上线上的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`），各自注册后按「初始化项目结构」一节建好项目。
+7. **注册并初始化。** 先给第一位所有者发注册许可（`--hub-role owner`，对线上操作时带上线上的 `POSTGRES_URL` 和 `NEXT_PUBLIC_BASE_URL`）。他注册后执行 `pnpm --filter @kan/hub cli setup-projects --owner <他的邮箱>`，按标准结构建好三个项目和九块看板，他成为各项目管理员。之后再给其他人发许可，用 `--project <项目ID>:<角色>` 预设项目（项目 ID 用 `cli projects` 查）。
 8. **不要设置 `NEXT_PUBLIC_DISABLE_SIGN_UP`。** 那是 Kan 自己的开关，和 Hub 的注册闸门是「与」的关系：打开之后光有注册链接也会被拒。有闸门在，没有许可的人本来就注册不了。
 
 两点注意：
