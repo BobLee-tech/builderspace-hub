@@ -28,6 +28,10 @@
       "types": "./src/public.ts",
       "default": "./src/public.ts"
     },
+    "./schedule": {
+      "types": "./src/schedule/index.ts",
+      "default": "./src/schedule/index.ts"
+    },
     "./schema": {
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"

@@ -3,4 +3,5 @@
 export * from "./access";
 export * from "./accounts";
 export * from "./audit";
+export * from "./schedule";
 export * from "./settings";

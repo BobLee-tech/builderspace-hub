@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { Button } from "@headlessui/react";
 import { useMemo, useState } from "react";
 import { HiMagnifyingGlass } from "react-icons/hi2";
-import { TbHome, TbSwitchHorizontal } from "react-icons/tb";
+import { TbCalendarTime, TbHome, TbSwitchHorizontal } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
 import CommandPallette from "~/components/CommandPallette";
@@ -59,7 +59,20 @@ export function HubSidebarTop({
   );
   useKeyboardShortcut(homeShortcut);
 
+  const personalShortcut = useMemo(
+    () => ({
+      type: "SEQUENCE" as const,
+      strokes: [{ key: "G" }, { key: "P" }],
+      action: () => void router.push(hubRoutes.personal),
+      group: "NAVIGATION" as const,
+      description: copy.nav.goPersonal,
+    }),
+    [router],
+  );
+  useKeyboardShortcut(personalShortcut);
+
   const onHome = router.pathname === hubRoutes.home;
+  const onPersonal = router.pathname === hubRoutes.personal;
 
   return (
     <>
@@ -145,6 +158,21 @@ export function HubSidebarTop({
         >
           <TbHome size={18} className="shrink-0" aria-hidden="true" />
           {!isCollapsed && copy.nav.home}
+        </Link>
+        <Link
+          href={hubRoutes.personal}
+          onClick={onCloseSideNav}
+          title={copy.nav.personal}
+          aria-current={onPersonal ? "page" : undefined}
+          className={twMerge(
+            "mt-1 flex items-center gap-3 rounded-md p-1.5 text-sm font-medium text-neutral-600 hover:bg-light-200 hover:text-light-1000 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000",
+            isCollapsed && "justify-center",
+            onPersonal &&
+              "bg-light-200 text-light-1000 dark:bg-dark-200 dark:text-dark-1000",
+          )}
+        >
+          <TbCalendarTime size={18} className="shrink-0" aria-hidden="true" />
+          {!isCollapsed && copy.nav.personal}
         </Link>
       </div>
     </>

@@ -152,6 +152,19 @@ export async function getHome(db: Db, input: ScopeInput): Promise<HomeSummary> {
   };
 }
 
+/**
+ * Every task assigned to this person in the projects they can see, finished
+ * ones included. The personal calendar plans against this list, so a task they
+ * were taken off or a project they left drops out of it.
+ */
+export async function getMyTasks(
+  db: Db,
+  input: { userId: string; now: Date },
+): Promise<Task[]> {
+  const { tasks } = await loadScope(db, input);
+  return tasks.filter((task) => task.assignedToMe).map(publicTask);
+}
+
 export async function getTaskBoard(
   db: Db,
   input: ScopeInput & { view: TaskView },

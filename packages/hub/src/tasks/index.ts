@@ -24,4 +24,9 @@ export type {
   TaskBoard,
   TaskColumn,
 } from "./task.service";
-export { getHome, getTaskBoard, HOME_MY_TASKS_LIMIT } from "./task.service";
+export {
+  getHome,
+  getMyTasks,
+  getTaskBoard,
+  HOME_MY_TASKS_LIMIT,
+} from "./task.service";

@@ -8,6 +8,7 @@ export const hubRoutes = {
   /** Where a signed-in person lands. */
   afterLogin: "/home",
   home: "/home",
+  personal: "/me",
   login: "/login",
   signup: "/signup",
   join: HUB_JOIN_PATH,

@@ -29,6 +29,14 @@ import {
   setProjectRolePermission,
 } from "@kan/hub/permissions";
 import { can } from "@kan/hub/public";
+import {
+  blockInputs,
+  createBlock,
+  editBlock,
+  getSchedule,
+  planTask,
+  removeBlock,
+} from "@kan/hub/schedule";
 import { projectRoles } from "@kan/hub/schema";
 import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
@@ -248,6 +256,45 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const scheduleRouter = createTRPCRouter({
+  /** My calendar for a window: my blocks plus my unfinished tasks. */
+  get: hubProcedure
+    .input(z.object({ from: z.date(), to: z.date() }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getSchedule(ctx.db, {
+          userId: ctx.actor.userId,
+          ...input,
+          now: new Date(),
+        }),
+      ),
+    ),
+
+  create: hubProcedure
+    .input(blockInputs.manual)
+    .mutation(({ ctx, input }) =>
+      runHub(() => createBlock(ctx.db, ctx.actor.userId, input)),
+    ),
+
+  planTask: hubProcedure
+    .input(blockInputs.task)
+    .mutation(({ ctx, input }) =>
+      runHub(() => planTask(ctx.db, ctx.actor.userId, input, new Date())),
+    ),
+
+  edit: hubProcedure
+    .input(blockInputs.edit)
+    .mutation(({ ctx, input }) =>
+      runHub(() => editBlock(ctx.db, ctx.actor.userId, input)),
+    ),
+
+  remove: hubProcedure
+    .input(z.object({ blockPublicId: z.string().min(1).max(32) }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => removeBlock(ctx.db, ctx.actor.userId, input.blockPublicId)),
+    ),
+});
+
 const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "颜色要写成 #RRGGBB 的形式");
@@ -288,6 +335,7 @@ export const hubRouter = createTRPCRouter({
   permissions: permissionsRouter,
   settings: settingsRouter,
   tasks: tasksRouter,
+  schedule: scheduleRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

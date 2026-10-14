@@ -11,6 +11,7 @@
     "apps/web/src/pages/api/hub/",
     "apps/web/src/pages/admin/",
     "apps/web/src/pages/home/",
+    "apps/web/src/pages/me/",
     "apps/web/src/pages/tasks/",
     "docs/hub/",
     ".github/workflows/hub-ci.yml",
