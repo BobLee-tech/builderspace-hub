@@ -30,6 +30,7 @@ import {
 } from "@kan/hub/permissions";
 import { can } from "@kan/hub/public";
 import { projectRoles } from "@kan/hub/schema";
+import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
 import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
@@ -247,6 +248,21 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "颜色要写成 #RRGGBB 的形式");
+
+const settingsRouter = createTRPCRouter({
+  /** Every page paints 开发 / 运营 / 营销 in these, so every member reads them. */
+  functionColors: hubProcedure.query(({ ctx }) => getFunctionColors(ctx.db)),
+
+  setFunctionColors: hubAdminProcedure("settings.manage")
+    .input(z.object({ dev: hexColor, ops: hexColor, marketing: hexColor }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => setFunctionColors(ctx.db, ctx.actor, input)),
+    ),
+});
+
 const AUDIT_PAGE_SIZE = 50;
 
 const auditRouter = createTRPCRouter({
@@ -270,6 +286,7 @@ export const hubRouter = createTRPCRouter({
   grants: grantsRouter,
   audit: auditRouter,
   permissions: permissionsRouter,
+  settings: settingsRouter,
   tasks: tasksRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>

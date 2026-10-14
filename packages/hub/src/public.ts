@@ -49,3 +49,10 @@ export {
   permissionLabels,
   projectRoleLabels,
 } from "./permissions/permission.policy";
+
+export type { FunctionColors } from "./settings/function-colors.policy";
+export {
+  DEFAULT_FUNCTION_COLORS,
+  functionColorPalette,
+  isHexColor,
+} from "./settings/function-colors.policy";

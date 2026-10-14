@@ -32,6 +32,10 @@
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"
     },
+    "./settings": {
+      "types": "./src/settings/index.ts",
+      "default": "./src/settings/index.ts"
+    },
     "./shared": {
       "types": "./src/shared/index.ts",
       "default": "./src/shared/index.ts"

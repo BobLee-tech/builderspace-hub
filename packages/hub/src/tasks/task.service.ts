@@ -9,7 +9,11 @@ import type {
   TaskView,
   TileCounts,
 } from "./task.policy";
-import { listTaskRows, listViewableProjects } from "../kan/tasks.gateway";
+import {
+  listBoardsWithLists,
+  listTaskRows,
+  listViewableProjects,
+} from "../kan/tasks.gateway";
 import { HubError } from "../shared/errors";
 import {
   columnsOf,
@@ -48,6 +52,8 @@ export interface Task {
   board: { publicId: string; name: string };
   listName: string;
   labels: { name: string; colourCode: string | null }[];
+  /** Display names of the people the task is assigned to. */
+  assignees: string[];
   assignedToMe: boolean;
 }
 
@@ -83,10 +89,34 @@ export interface TaskColumn {
   total: number;
 }
 
+/** What the person may do with tasks in one project of the scope. */
+export interface ProjectAccess {
+  canCreate: boolean;
+  canEdit: boolean;
+  /** Their membership, for assigning a new task to themselves. */
+  memberPublicId: string;
+}
+
+/**
+ * A board a task can be moved within or created on, with the list that stands
+ * for each standard column. A column the board has no list for is missing.
+ */
+export interface BoardTarget {
+  publicId: string;
+  name: string;
+  functionKey: FunctionKey | null;
+  project: ProjectChip;
+  listsByStage: Partial<Record<Exclude<Stage, "other">, string>>;
+}
+
 export interface TaskBoard {
   scope: Scope;
   view: TaskView;
   columns: TaskColumn[];
+  /** Keyed by project public id; only projects in scope. */
+  access: Record<string, ProjectAccess>;
+  /** Standard functions first, in the team's order, then other boards. */
+  boards: BoardTarget[];
 }
 
 /** A task plus the date it is ordered by; never leaves this module. */
@@ -126,7 +156,7 @@ export async function getTaskBoard(
   db: Db,
   input: ScopeInput & { view: TaskView },
 ): Promise<TaskBoard> {
-  const { scope, tasks } = await loadScope(db, input);
+  const { scope, tasks, inScope } = await loadScope(db, input);
   const inThisView = tasks.filter((task) => inView(task, input.view));
 
   const columns = columnsOf(input.view)
@@ -149,13 +179,57 @@ export async function getTaskBoard(
     })
     .filter((column) => column.stage !== "other" || column.total > 0);
 
-  return { scope, view: input.view, columns };
+  const chips = new Map(inScope.map((p) => [p.id, toChip(p)]));
+  const boards = (
+    await listBoardsWithLists(
+      db,
+      inScope.map((project) => project.id),
+    )
+  ).flatMap((board) => {
+    const project = chips.get(board.projectId);
+    if (!project) return [];
+    const listsByStage: BoardTarget["listsByStage"] = {};
+    for (const list of board.lists) {
+      const stage = stageOf(list.name);
+      if (stage !== "other") listsByStage[stage] ??= list.publicId;
+    }
+    return [
+      {
+        publicId: board.publicId,
+        name: board.name,
+        functionKey: functionKeyOf(board.name),
+        project,
+        listsByStage,
+      },
+    ];
+  });
+
+  return {
+    scope,
+    view: input.view,
+    columns,
+    access: Object.fromEntries(
+      inScope.map((project) => [
+        project.publicId,
+        {
+          canCreate: project.canCreateTasks,
+          canEdit: project.canEditTasks,
+          memberPublicId: project.memberPublicId,
+        },
+      ]),
+    ),
+    boards: boards.sort(byTeamOrder(inScope)),
+  };
 }
 
 async function loadScope(
   db: Db,
   input: ScopeInput,
-): Promise<{ scope: Scope; tasks: LoadedTask[] }> {
+): Promise<{
+  scope: Scope;
+  tasks: LoadedTask[];
+  inScope: ViewableProject[];
+}> {
   const viewable = orderProjects(await listViewableProjects(db, input.userId));
   const current = input.projectPublicId
     ? viewable.find((p) => p.publicId === input.projectPublicId)
@@ -173,6 +247,7 @@ async function loadScope(
   const chips = new Map(inScope.map((p) => [p.id, toChip(p)]));
 
   return {
+    inScope,
     scope: {
       projects: viewable.map(toChip),
       current: current ? toChip(current) : null,
@@ -201,7 +276,8 @@ function toTask(
     board: { publicId: row.boardPublicId, name: row.boardName },
     listName: row.listName,
     labels: row.labels,
-    assignedToMe: row.assigneeUserIds.includes(userId),
+    assignees: row.assignees.map((assignee) => assignee.name),
+    assignedToMe: row.assignees.some((assignee) => assignee.userId === userId),
     sortDate: row.updatedAt ?? row.createdAt,
   };
 }
@@ -240,6 +316,18 @@ function orderProjects(projects: ViewableProject[]): ViewableProject[] {
   return [...projects].sort(
     (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "zh-CN"),
   );
+}
+
+/** Boards in project order, then 开发 / 运营 / 营销, then the rest by name. */
+function byTeamOrder(projects: readonly ViewableProject[]) {
+  const projectRank = new Map(projects.map((p, index) => [p.publicId, index]));
+  const functionRank = (key: FunctionKey | null) =>
+    key === null ? functionKeys.length : functionKeys.indexOf(key);
+  return (a: BoardTarget, b: BoardTarget) =>
+    (projectRank.get(a.project.publicId) ?? 0) -
+      (projectRank.get(b.project.publicId) ?? 0) ||
+    functionRank(a.functionKey) - functionRank(b.functionKey) ||
+    a.name.localeCompare(b.name, "zh-CN");
 }
 
 function toChip(project: ViewableProject): ProjectChip {

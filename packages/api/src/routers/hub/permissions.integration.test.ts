@@ -100,3 +100,25 @@ describe("hub.grants.setRole", () => {
     expect(after.items[0]?.hubRole).toBe("owner");
   });
 });
+
+describe("hub.settings", () => {
+  it("lets every member read the colours but only admins change them", async () => {
+    const member = await seedUser(db, { email: "member@example.test" });
+    const colors = { dev: "#9A86D1", ops: "#4FA3A5", marketing: "#C77F95" };
+
+    await expect(
+      createHubCaller(db, viewer).settings.setFunctionColors(colors),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      createHubCaller(db, admin).settings.setFunctionColors({
+        ...colors,
+        dev: "javascript:alert(1)",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await createHubCaller(db, admin).settings.setFunctionColors(colors);
+
+    await expect(
+      createHubCaller(db, member).settings.functionColors(),
+    ).resolves.toEqual(colors);
+  });
+});

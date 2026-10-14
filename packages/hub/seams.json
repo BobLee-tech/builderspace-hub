@@ -91,7 +91,7 @@
     {
       "file": "apps/web/src/views/boards/components/BoardsList.tsx",
       "marker": "hub-seam",
-      "why": "The empty list's create button follows the same rule as the page's."
+      "why": "Shows the project's 总版 tile first; the empty list's create button follows the same permission rule as the page's."
     },
     {
       "file": "apps/web/src/views/board/components/BoardDropdown.tsx",
