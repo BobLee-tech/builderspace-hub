@@ -13,6 +13,8 @@ import {
 import { authClient } from "@kan/auth/client";
 
 import { useClickOutside } from "~/hooks/useClickOutside";
+// hub-seam: no project yet goes to the home page (docs/hub/UPSTREAM_SEAMS.md)
+import { hubRoutes } from "~/hub/lib/routes";
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
 import { useWorkspace, WorkspaceProvider } from "~/providers/workspace";
@@ -145,7 +147,7 @@ export default function Dashboard({
           `/onboarding/select-plan?returnUrl=${encodeURIComponent(window.location.pathname)}`,
         );
       } else {
-        openModal("NEW_WORKSPACE", undefined, undefined, false);
+        router.push(hubRoutes.home); // hub-seam: the home page explains the wait
       }
     }
   }, [hasLoaded, availableWorkspaces.length, openModal, router]);

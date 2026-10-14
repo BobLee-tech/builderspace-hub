@@ -1,0 +1,438 @@
+import { and, eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import * as kanSchema from "@kan/db/schema";
+
+import type { Db } from "../db";
+import type { ProjectRole } from "../schema";
+import { ensureProjectMember } from "../kan/members.gateway";
+import { HubError } from "../shared/errors";
+import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
+import { DONE_COLUMN_LIMIT } from "./task.policy";
+import { getHome, getTaskBoard, HOME_MY_TASKS_LIMIT } from "./task.service";
+
+const DAY = 24 * 60 * 60 * 1000;
+const now = new Date("2026-10-14T00:00:00Z");
+
+interface User {
+  id: string;
+  email: string;
+}
+interface Project {
+  id: number;
+  publicId: string;
+  name: string;
+}
+
+let db: Db;
+let owner: User;
+let me: User;
+let uid = 0;
+const nextId = () => `t${(uid += 1).toString().padStart(11, "0")}`;
+
+/** The list ids of a seeded board, one per column. */
+interface BoardLists {
+  todo: number;
+  doing: number;
+  review: number;
+  done: number;
+  /** A list someone renamed: its cards belong in "other". */
+  ideas: number;
+}
+
+const LIST_NAMES: Record<keyof BoardLists, string> = {
+  todo: "待办",
+  doing: "进行中",
+  review: "待验收",
+  done: "已完成",
+  ideas: "灵感池",
+};
+
+/** A board with the standard columns plus one renamed list. */
+async function seedBoard(
+  project: Project,
+  name: string,
+  options: { type?: "regular" | "template"; isArchived?: boolean } = {},
+): Promise<BoardLists> {
+  const [board] = await db
+    .insert(kanSchema.boards)
+    .values({
+      publicId: nextId(),
+      name,
+      slug: nextId(),
+      workspaceId: project.id,
+      createdBy: owner.id,
+      type: options.type ?? "regular",
+      isArchived: options.isArchived ?? false,
+    })
+    .returning({ id: kanSchema.boards.id });
+  if (!board) throw new Error("no board");
+
+  const ids: Partial<BoardLists> = {};
+  for (const [index, key] of (
+    Object.keys(LIST_NAMES) as (keyof BoardLists)[]
+  ).entries()) {
+    const [list] = await db
+      .insert(kanSchema.lists)
+      .values({
+        publicId: nextId(),
+        name: LIST_NAMES[key],
+        index,
+        boardId: board.id,
+      })
+      .returning({ id: kanSchema.lists.id });
+    if (!list) throw new Error("no list");
+    ids[key] = list.id;
+  }
+  return ids as BoardLists;
+}
+
+async function seedCard(
+  listId: number,
+  title: string,
+  options: {
+    dueInDays?: number;
+    assignees?: { user: User; project: Project }[];
+    updatedDaysAgo?: number;
+    deleted?: boolean;
+  } = {},
+): Promise<string> {
+  const publicId = nextId();
+  const [card] = await db
+    .insert(kanSchema.cards)
+    .values({
+      publicId,
+      title,
+      index: 0,
+      listId,
+      dueDate:
+        options.dueInDays === undefined
+          ? null
+          : new Date(now.getTime() + options.dueInDays * DAY),
+      updatedAt:
+        options.updatedDaysAgo === undefined
+          ? null
+          : new Date(now.getTime() - options.updatedDaysAgo * DAY),
+      deletedAt: options.deleted ? now : null,
+    })
+    .returning({ id: kanSchema.cards.id });
+  if (!card) throw new Error("no card");
+
+  for (const { user, project } of options.assignees ?? []) {
+    const member = await memberOf(user, project);
+    await db
+      .insert(kanSchema.cardToWorkspaceMembers)
+      .values({ cardId: card.id, workspaceMemberId: member });
+  }
+  return publicId;
+}
+
+async function memberOf(user: User, project: Project): Promise<number> {
+  const [member] = await db
+    .select({ id: kanSchema.workspaceMembers.id })
+    .from(kanSchema.workspaceMembers)
+    .where(
+      and(
+        eq(kanSchema.workspaceMembers.userId, user.id),
+        eq(kanSchema.workspaceMembers.workspaceId, project.id),
+      ),
+    );
+  if (!member) throw new Error("not a member");
+  return member.id;
+}
+
+const join = (user: User, project: Project, role: ProjectRole = "member") =>
+  ensureProjectMember(db, {
+    userId: user.id,
+    email: user.email,
+    workspaceId: project.id,
+    role,
+    addedBy: owner.id,
+  });
+
+const titles = (tasks: { title: string }[]) => tasks.map((t) => t.title);
+
+let coursemate: Project;
+let community: Project;
+let echo: Project;
+
+beforeEach(async () => {
+  db = await createHubTestDb();
+  owner = await seedUser(db, { email: "owner@example.test" });
+  me = await seedUser(db, { email: "me@example.test" });
+  // Created out of order on purpose: the team's order comes from the structure.
+  echo = await seedProject(db, owner, {
+    name: "EchoAgent",
+    slug: "bss-echoagent",
+  });
+  community = await seedProject(db, owner, {
+    name: "BuilderSpace 社团",
+    slug: "bss-community",
+  });
+  coursemate = await seedProject(db, owner, {
+    name: "CourseMate",
+    slug: "bss-coursemate",
+  });
+});
+
+describe("which projects someone sees", () => {
+  it("shows only the projects they are in, in the team's order", async () => {
+    await join(me, echo);
+    await join(me, coursemate, "guest");
+
+    const home = await getHome(db, { userId: me.id, now });
+
+    expect(home.scope.projects.map((p) => p.name)).toEqual([
+      "CourseMate",
+      "EchoAgent",
+    ]);
+    expect(home.scope.current).toBeNull();
+    expect(home.matrix.map((row) => row.project.name)).toEqual([
+      "CourseMate",
+      "EchoAgent",
+    ]);
+  });
+
+  it("never counts tasks from a project they are not in", async () => {
+    await join(me, coursemate);
+    const theirs = await seedBoard(community, "开发");
+    await seedCard(theirs.todo, "社团的任务", { dueInDays: -1 });
+    const mine = await seedBoard(coursemate, "开发");
+    await seedCard(mine.todo, "CourseMate 的任务");
+
+    const home = await getHome(db, { userId: me.id, now });
+    const board = await getTaskBoard(db, { userId: me.id, view: "all", now });
+
+    expect(home.tiles).toEqual({ mine: 0, dueSoon: 0, overdue: 0, open: 1 });
+    expect(board.columns.flatMap((c) => titles(c.tasks))).toEqual([
+      "CourseMate 的任务",
+    ]);
+  });
+
+  it("drops a project whose card permission was taken away from them", async () => {
+    await join(me, coursemate);
+    await db.insert(kanSchema.workspaceMemberPermissions).values({
+      workspaceMemberId: await memberOf(me, coursemate),
+      permission: "card:view",
+      granted: false,
+    });
+
+    const home = await getHome(db, { userId: me.id, now });
+    expect(home.scope.projects).toEqual([]);
+  });
+
+  it("ignores pending invitations and removed memberships", async () => {
+    await join(me, coursemate);
+    await join(me, community);
+    await db
+      .update(kanSchema.workspaceMembers)
+      .set({ status: "invited" })
+      .where(eq(kanSchema.workspaceMembers.id, await memberOf(me, coursemate)));
+    await db
+      .update(kanSchema.workspaceMembers)
+      .set({ deletedAt: now })
+      .where(eq(kanSchema.workspaceMembers.id, await memberOf(me, community)));
+
+    const home = await getHome(db, { userId: me.id, now });
+    expect(home.scope.projects).toEqual([]);
+    expect(home.matrix).toEqual([]);
+  });
+
+  it("refuses a project they are not in with the same answer as a missing one", async () => {
+    await join(me, coursemate);
+    const attempt = (projectPublicId: string) =>
+      getHome(db, { userId: me.id, projectPublicId, now });
+
+    await expect(attempt(community.publicId)).rejects.toEqual(
+      new HubError("NOT_FOUND", "没有这个项目，或者你不在这个项目里。"),
+    );
+    await expect(attempt("doesnotexist")).rejects.toEqual(
+      new HubError("NOT_FOUND", "没有这个项目，或者你不在这个项目里。"),
+    );
+  });
+});
+
+describe("getHome", () => {
+  beforeEach(async () => {
+    await join(me, coursemate);
+    await join(me, echo);
+  });
+
+  it("counts open tasks per tile and lists mine soonest first", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const ops = await seedBoard(echo, "运营");
+    const mine = [{ user: me, project: coursemate }];
+    await seedCard(dev.todo, "下周到期", { dueInDays: 6, assignees: mine });
+    await seedCard(dev.doing, "已经逾期", {
+      dueInDays: -2,
+      assignees: mine,
+    });
+    await seedCard(dev.todo, "没有期限", { assignees: mine });
+    await seedCard(dev.done, "做完了", {
+      dueInDays: -5,
+      assignees: mine,
+    });
+    await seedCard(ops.review, "别人的", { dueInDays: 30 });
+
+    const home = await getHome(db, { userId: me.id, now });
+
+    expect(home.tiles).toEqual({ mine: 3, dueSoon: 1, overdue: 1, open: 4 });
+    expect(titles(home.myTasks)).toEqual(["已经逾期", "下周到期", "没有期限"]);
+    expect(home.myTasks[0]).toMatchObject({
+      dueState: "overdue",
+      stage: "doing",
+      functionKey: "dev",
+      project: { publicId: coursemate.publicId, name: "CourseMate" },
+      assignedToMe: true,
+    });
+    expect(home.myTasks[0]).not.toHaveProperty("sortDate");
+  });
+
+  it("caps the list of my tasks", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    for (let i = 0; i < HOME_MY_TASKS_LIMIT + 2; i += 1) {
+      await seedCard(dev.todo, `任务 ${i}`, {
+        assignees: [{ user: me, project: coursemate }],
+      });
+    }
+
+    const home = await getHome(db, { userId: me.id, now });
+    expect(home.myTasks).toHaveLength(HOME_MY_TASKS_LIMIT);
+    expect(home.tiles.mine).toBe(HOME_MY_TASKS_LIMIT + 2);
+  });
+
+  it("fills the matrix with open tasks per function and column", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const roadmap = await seedBoard(coursemate, "Roadmap");
+    await seedCard(dev.todo, "a");
+    await seedCard(dev.todo, "b");
+    await seedCard(dev.ideas, "c");
+    await seedCard(dev.done, "d");
+    await seedCard(roadmap.todo, "e");
+
+    const home = await getHome(db, { userId: me.id, now });
+    const row = home.matrix.find((r) => r.project.name === "CourseMate");
+
+    expect(row?.functions.dev).toEqual({
+      todo: 2,
+      doing: 0,
+      review: 0,
+      done: 0,
+      other: 1,
+    });
+    expect(row?.functions.ops.todo).toBe(0);
+    expect(row?.otherBoards).toBe(1);
+  });
+
+  it("narrows everything to one project", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const echoDev = await seedBoard(echo, "开发");
+    await seedCard(dev.todo, "CourseMate 的");
+    await seedCard(echoDev.todo, "EchoAgent 的");
+
+    const home = await getHome(db, {
+      userId: me.id,
+      projectPublicId: echo.publicId,
+      now,
+    });
+
+    expect(home.scope.current).toEqual({
+      publicId: echo.publicId,
+      name: "EchoAgent",
+    });
+    expect(home.scope.projects).toHaveLength(2);
+    expect(home.tiles.open).toBe(1);
+    expect(home.matrix.map((r) => r.project.name)).toEqual(["EchoAgent"]);
+  });
+
+  it("leaves out templates, archived boards and deleted cards", async () => {
+    const template = await seedBoard(coursemate, "开发", { type: "template" });
+    const archived = await seedBoard(coursemate, "运营", { isArchived: true });
+    const live = await seedBoard(coursemate, "营销");
+    await seedCard(template.todo, "模板里的");
+    await seedCard(archived.todo, "归档的");
+    await seedCard(live.todo, "删掉的", { deleted: true });
+
+    const home = await getHome(db, { userId: me.id, now });
+    expect(home.tiles.open).toBe(0);
+  });
+});
+
+describe("getTaskBoard", () => {
+  beforeEach(async () => {
+    await join(me, coursemate);
+    await join(me, echo);
+  });
+
+  it("splits a view into columns, soonest due first", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const echoDev = await seedBoard(echo, "开发");
+    await seedCard(dev.todo, "晚", { dueInDays: 9 });
+    await seedCard(echoDev.todo, "早", { dueInDays: 1 });
+    await seedCard(dev.review, "验收中");
+    await seedCard(dev.ideas, "改过名的列");
+
+    const board = await getTaskBoard(db, { userId: me.id, view: "dev", now });
+
+    expect(board.columns.map((c) => [c.stage, titles(c.tasks)])).toEqual([
+      ["todo", ["早", "晚"]],
+      ["doing", []],
+      ["review", ["验收中"]],
+      ["done", []],
+      ["other", ["改过名的列"]],
+    ]);
+  });
+
+  it("hides an empty other column and the done column of due views", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    await seedCard(dev.todo, "逾期", { dueInDays: -1 });
+
+    const board = await getTaskBoard(db, {
+      userId: me.id,
+      view: "overdue",
+      now,
+    });
+
+    expect(board.columns.map((c) => c.stage)).toEqual([
+      "todo",
+      "doing",
+      "review",
+    ]);
+    expect(titles(board.columns[0]?.tasks ?? [])).toEqual(["逾期"]);
+  });
+
+  it("shows only the most recent finished tasks but reports the total", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    for (let i = 0; i < DONE_COLUMN_LIMIT + 1; i += 1) {
+      await seedCard(dev.done, `完成 ${i}`, { updatedDaysAgo: i });
+    }
+
+    const board = await getTaskBoard(db, { userId: me.id, view: "all", now });
+    const done = board.columns.find((c) => c.stage === "done");
+
+    expect(done?.total).toBe(DONE_COLUMN_LIMIT + 1);
+    expect(done?.tasks).toHaveLength(DONE_COLUMN_LIMIT);
+    expect(done?.tasks[0]?.title).toBe("完成 0");
+  });
+
+  it("shows my tasks across projects, including finished ones", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const echoOps = await seedBoard(echo, "运营");
+    await seedCard(dev.doing, "我的 CourseMate", {
+      assignees: [{ user: me, project: coursemate }],
+    });
+    await seedCard(echoOps.done, "我的 EchoAgent", {
+      assignees: [{ user: me, project: echo }],
+    });
+    await seedCard(dev.todo, "不是我的", {
+      assignees: [{ user: owner, project: coursemate }],
+    });
+
+    const board = await getTaskBoard(db, { userId: me.id, view: "mine", now });
+
+    expect(board.columns.flatMap((c) => titles(c.tasks))).toEqual([
+      "我的 CourseMate",
+      "我的 EchoAgent",
+    ]);
+  });
+});

@@ -8,7 +8,7 @@ import {
   seedUser,
 } from "@kan/hub/testing";
 
-import { hubRouter } from "./index";
+import { createHubCaller } from "./test-helpers";
 
 // Each test boots an in-memory Postgres and applies every migration.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -25,24 +25,7 @@ let project: { publicId: string };
 const callerFor = (
   user: { id: string; email: string } | null,
   headers: Record<string, string> = {},
-) =>
-  hubRouter.createCaller({
-    user: user
-      ? {
-          id: user.id,
-          email: user.email,
-          name: "Test",
-          emailVerified: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
-      : null,
-    db,
-    auth: {} as never,
-    headers: new Headers(headers),
-    transport: "trpc",
-    requestId: crypto.randomUUID(),
-  });
+) => createHubCaller(db, user, headers);
 
 const withRole = async (
   email: string,

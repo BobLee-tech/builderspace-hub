@@ -36,6 +36,10 @@
       "types": "./src/structure/index.ts",
       "default": "./src/structure/index.ts"
     },
+    "./tasks": {
+      "types": "./src/tasks/index.ts",
+      "default": "./src/tasks/index.ts"
+    },
     "./testing": {
       "types": "./src/testing/test-db.ts",
       "default": "./src/testing/test-db.ts"
