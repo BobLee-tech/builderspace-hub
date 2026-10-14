@@ -78,7 +78,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/repos",
         label: text.repos.title,
-        permission: "admin.view",
+        access: { permission: "admin.view" },
       },
       {
         href: "/admin/audit",
