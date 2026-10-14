@@ -232,6 +232,7 @@ export const zh = {
       issue: "生成注册链接",
       email: "邮箱",
       hubRole: "后台角色",
+      changeRole: "注册后获得的后台角色",
       note: "备注（可选）",
       projects: "预设项目",
       submit: "生成",
@@ -245,6 +246,25 @@ export const zh = {
       },
       revoke: "撤销",
       empty: "还没有生成过注册链接",
+    },
+    permissions: {
+      title: "项目权限",
+      description:
+        "每个项目里，成员和访客分别能做什么。项目管理员总是拥有全部权限。改动立即生效，对方刷新页面后就能看到；没有权限的按钮和入口不会显示。",
+      allProjects: "所有项目",
+      allProjectsHint: "在这里改会同时改所有项目",
+      mixed: "各项目不一致",
+      permission: "权限",
+      fixedTitle: "固定规则",
+      fixedHint: "下面这些由 Hub 固定，不在这里改。",
+      fixed: [
+        "新建项目：只有后台管理员",
+        "新建模板：只有项目管理员",
+        "删除项目、管理计费：只有项目管理员",
+      ],
+      homeHint:
+        "关掉某个角色的「查看看板」或「查看任务」后，这个角色在首页的「全部」里就看不到这个项目。",
+      readOnly: "你是只读角色，只能查看。",
     },
     audit: {
       title: "操作日志",

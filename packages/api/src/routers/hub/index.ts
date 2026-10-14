@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  changeGrantHubRoleById,
   countOpenGrants,
   issueGrant,
   listGrants,
@@ -21,6 +22,12 @@ import {
   suspendAccount,
 } from "@kan/hub/accounts";
 import { countAudit, listAudit } from "@kan/hub/audit";
+import {
+  editablePermissions,
+  editableProjectRoles,
+  getPermissionMatrix,
+  setProjectRolePermission,
+} from "@kan/hub/permissions";
 import { can } from "@kan/hub/public";
 import { projectRoles } from "@kan/hub/schema";
 import { HubError } from "@kan/hub/shared";
@@ -169,6 +176,45 @@ const grantsRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       runHub(() => revokeGrant(ctx.db, ctx.actor, input.grantPublicId)),
     ),
+
+  /** Changes the back-office role an unused link will give; same link. */
+  setRole: hubAdminProcedure("admins.manage")
+    .input(
+      z.object({
+        grantPublicId: z.string().min(1).max(32),
+        hubRole: z.enum(hubRoles).nullable(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => changeGrantHubRoleById(ctx.db, ctx.actor, input)),
+    ),
+});
+
+const permissionsRouter = createTRPCRouter({
+  /** What members and guests may do, per project. */
+  get: hubAdminProcedure("admin.view").query(({ ctx }) =>
+    getPermissionMatrix(ctx.db),
+  ),
+
+  /** One permission on or off for a role, in one project or (null) all. */
+  set: hubAdminProcedure("permissions.manage")
+    .input(
+      z.object({
+        projectPublicId: z.string().min(1).max(32).nullable(),
+        role: z.enum(editableProjectRoles),
+        permission: z
+          .string()
+          .refine(
+            (value) =>
+              (editablePermissions as readonly string[]).includes(value),
+            "这项权限不能在这里修改",
+          ),
+        granted: z.boolean(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => setProjectRolePermission(ctx.db, ctx.actor, input)),
+    ),
 });
 
 /** 全部 when `project` is left out, otherwise one project the caller is in. */
@@ -223,6 +269,7 @@ export const hubRouter = createTRPCRouter({
   accounts: accountsRouter,
   grants: grantsRouter,
   audit: auditRouter,
+  permissions: permissionsRouter,
   tasks: tasksRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>

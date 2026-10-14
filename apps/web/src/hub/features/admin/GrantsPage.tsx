@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { useState } from "react";
 
 import type { HubRole } from "@kan/hub/public";
-import { buildJoinLink, can, roleLabels } from "@kan/hub/public";
+import { buildJoinLink, can, hubRoles, roleLabels } from "@kan/hub/public";
 
 import type { ProjectRole } from "./ProjectRolePicker";
 import { copy } from "~/hub/copy/zh";
@@ -150,7 +150,11 @@ function GrantsContent() {
   const revoke = api.hub.grants.revoke.useMutation({
     onSuccess: () => utils.hub.grants.list.invalidate(),
   });
+  const setRole = api.hub.grants.setRole.useMutation({
+    onSuccess: () => utils.hub.grants.list.invalidate(),
+  });
   const canIssue = can(me.data?.role ?? null, "access.manage");
+  const canAppoint = can(me.data?.role ?? null, "admins.manage");
 
   return (
     <>
@@ -172,7 +176,7 @@ function GrantsContent() {
         </div>
       )}
 
-      <ErrorText message={revoke.error?.message} />
+      <ErrorText message={revoke.error?.message ?? setRole.error?.message} />
       <div className={tableClass.wrap}>
         <table className={tableClass.table}>
           <thead>
@@ -190,10 +194,36 @@ function GrantsContent() {
               <tr key={grant.publicId}>
                 <td className={tableClass.td}>
                   {grant.email}
-                  <div className={tableClass.sub}>
-                    {grant.hubRole ? `${roleLabels[grant.hubRole]} · ` : ""}
-                    {grant.note ?? ""}
-                  </div>
+                  {canAppoint && grant.state === "pending" ? (
+                    // The role is fixed into the link only when it is used,
+                    // so an owner can still change it on an unused link.
+                    <select
+                      aria-label={text.changeRole}
+                      title={text.changeRole}
+                      className={`${inputClass} mt-1 w-32 py-0.5 text-xs`}
+                      value={grant.hubRole ?? ""}
+                      disabled={setRole.isPending}
+                      onChange={(event) =>
+                        setRole.mutate({
+                          grantPublicId: grant.publicId,
+                          hubRole: (event.target.value ||
+                            null) as HubRole | null,
+                        })
+                      }
+                    >
+                      <option value="">{copy.admin.roles.none}</option>
+                      {hubRoles.map((role) => (
+                        <option key={role} value={role}>
+                          {roleLabels[role]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className={tableClass.sub}>
+                      {grant.hubRole ? `${roleLabels[grant.hubRole]} · ` : ""}
+                      {grant.note ?? ""}
+                    </div>
+                  )}
                 </td>
                 <td className={tableClass.td}>
                   <div className="flex flex-wrap gap-1">

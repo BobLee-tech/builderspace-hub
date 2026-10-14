@@ -46,7 +46,7 @@
     {
       "file": "apps/web/src/components/SideNavigation.tsx",
       "marker": "hub-seam",
-      "why": "Shows the Hub's product name, swaps Kan's project menu for HubSidebarTop (project switching lives on the home page) and adds the back-office link."
+      "why": "Shows the Hub's product name, swaps Kan's project menu for HubSidebarTop, hides links the person has no permission for, and adds the back-office link."
     },
     {
       "file": "packages/api/package.json",
@@ -77,6 +77,36 @@
       "file": "apps/web/src/providers/workspace.tsx",
       "marker": "hub-seam",
       "why": "switchWorkspace takes an optional redirect, so the home page can switch projects without being sent to /boards."
+    },
+    {
+      "file": "apps/web/src/styles/globals.css",
+      "marker": "hub-seam",
+      "why": "Makes the hidden attribute win over display utilities, which is how the Hub hides actions people have no permission for."
+    },
+    {
+      "file": "apps/web/src/views/boards/index.tsx",
+      "marker": "hub-seam",
+      "why": "Create and import buttons only for people allowed to create; on the templates page only for project admins."
+    },
+    {
+      "file": "apps/web/src/views/boards/components/BoardsList.tsx",
+      "marker": "hub-seam",
+      "why": "The empty list's create button follows the same rule as the page's."
+    },
+    {
+      "file": "apps/web/src/views/board/components/BoardDropdown.tsx",
+      "marker": "hub-seam",
+      "why": "\"Make template\" only for project admins."
+    },
+    {
+      "file": "apps/web/src/views/board/components/List.tsx",
+      "marker": "hub-seam",
+      "why": "Hides an action the person has no permission for instead of showing it disabled."
+    },
+    {
+      "file": "apps/web/src/views/board/index.tsx",
+      "marker": "hub-seam",
+      "why": "Hides an action the person has no permission for instead of showing it disabled."
     },
     {
       "file": "pnpm-lock.yaml",

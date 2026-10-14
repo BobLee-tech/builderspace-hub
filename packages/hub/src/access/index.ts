@@ -9,6 +9,7 @@ export type {
 } from "./grant.service";
 export {
   changeGrantHubRole,
+  changeGrantHubRoleById,
   describeGrantForJoin,
   GRANTS_PAGE_SIZE,
   issueGrant,

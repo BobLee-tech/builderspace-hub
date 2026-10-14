@@ -23,7 +23,8 @@ export type AuditAction =
   | "account.suspended"
   | "account.restored"
   | "account.project_role_changed"
-  | "account.project_removed";
+  | "account.project_removed"
+  | "project.permission_changed";
 
 export interface AuditActor {
   userId: string | null;

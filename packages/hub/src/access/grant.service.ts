@@ -201,11 +201,36 @@ export async function changeGrantHubRole(
   const grant = email ? await findOpenGrantByEmail(db, email) : null;
   if (!grant || grant.expiresAt <= now) return false;
 
-  const label = input.hubRole ? roleLabels[input.hubRole] : "无";
+  await applyGrantHubRole(db, actor, grant, input.hubRole);
+  return true;
+}
+
+/** The same change from the back office, which knows the link by its id. */
+export async function changeGrantHubRoleById(
+  db: Db,
+  actor: AuditActor,
+  input: { grantPublicId: string; hubRole: HubRole | null },
+  now: Date = new Date(),
+): Promise<void> {
+  const grant = await findGrantByPublicId(db, input.grantPublicId);
+  if (!grant) throw new HubError("NOT_FOUND", "找不到这条注册许可");
+  if (grantState(grant, now) !== "pending") {
+    throw new HubError("CONFLICT", "这条注册链接已经不能再用，改不了预设角色");
+  }
+  await applyGrantHubRole(db, actor, grant, input.hubRole);
+}
+
+async function applyGrantHubRole(
+  db: Db,
+  actor: AuditActor,
+  grant: { id: number; publicId: string; email: string },
+  hubRole: HubRole | null,
+): Promise<void> {
+  const label = hubRole ? roleLabels[hubRole] : "无";
   await withAudit(
     db,
     async (tx) => {
-      if (!(await setGrantHubRole(tx, grant.id, input.hubRole))) {
+      if (!(await setGrantHubRole(tx, grant.id, hubRole))) {
         throw new HubError("CONFLICT", "这条注册许可已经被使用或撤销");
       }
     },
@@ -217,7 +242,6 @@ export async function changeGrantHubRole(
       summary: `把 ${grant.email} 的注册许可预设的后台角色改为 ${label}`,
     }),
   );
-  return true;
 }
 
 export type JoinLinkStatus =
