@@ -2,11 +2,15 @@ import { TRPCError } from "@trpc/server";
 
 import type { dbClient } from "@kan/db/client";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
-import { can, getAccessFacts } from "@kan/hub/accounts";
 
 /**
  * Hub rules enforced inside Kan's own procedures. Each is called from one
  * registered seam (docs/hub/UPSTREAM_SEAMS.md).
+ *
+ * `@kan/hub` is imported inside the function, not at the top: Kan's own
+ * router unit tests mock `@kan/shared/utils` wholesale, and loading the Hub
+ * (and with it the database schema) when the router module loads would break
+ * them. Importing on first use keeps Kan's module graph exactly as upstream.
  */
 
 /** Projects (Kan workspaces) are created by back-office admins only. */
@@ -14,6 +18,7 @@ export async function assertCanCreateProject(
   db: dbClient,
   userId: string,
 ): Promise<void> {
+  const { can, getAccessFacts } = await import("@kan/hub/accounts");
   const facts = await getAccessFacts(db, userId);
   if (!can(facts.role, "projects.create")) {
     throw new TRPCError({
