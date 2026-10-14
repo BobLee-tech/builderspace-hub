@@ -21,6 +21,7 @@ import {
   setProjectRole,
   suspendAccount,
 } from "@kan/hub/accounts";
+import { getArchive } from "@kan/hub/archive";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import {
   addProjectRepo,
@@ -294,7 +295,10 @@ const reposRouter = createTRPCRouter({
 function requireGitHubApp() {
   const config = gitHubAppConfig();
   if (!config) {
-    throw new HubError("CONFLICT", "管理员还没有配置 GitHub App，暂时不能连接。");
+    throw new HubError(
+      "CONFLICT",
+      "管理员还没有配置 GitHub App，暂时不能连接。",
+    );
   }
   return config;
 }
@@ -324,6 +328,21 @@ const githubRouter = createTRPCRouter({
       disconnectGitHub(ctx.db, ctx.actor, gitHubDeps(requireGitHubApp())),
     ),
   ),
+});
+
+const archiveRouter = createTRPCRouter({
+  /** 我完成的: my finished tasks, counted by month in the viewer's time zone. */
+  get: hubProcedure
+    .input(z.object({ timeZone: z.string().min(1).max(64) }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getArchive(ctx.db, {
+          userId: ctx.actor.userId,
+          timeZone: input.timeZone,
+          now: new Date(),
+        }),
+      ),
+    ),
 });
 
 const scheduleRouter = createTRPCRouter({
@@ -408,6 +427,7 @@ export const hubRouter = createTRPCRouter({
   schedule: scheduleRouter,
   repos: reposRouter,
   github: githubRouter,
+  archive: archiveRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),
