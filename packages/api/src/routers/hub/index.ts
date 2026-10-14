@@ -22,6 +22,7 @@ import {
   setSiteAccess,
   suspendAccount,
 } from "@kan/hub/accounts";
+import { getArchive } from "@kan/hub/archive";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import {
   editablePermissions,
@@ -269,6 +270,21 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const archiveRouter = createTRPCRouter({
+  /** 我完成的: my finished tasks, counted by month in the viewer's time zone. */
+  get: hubProcedure
+    .input(z.object({ timeZone: z.string().min(1).max(64) }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getArchive(ctx.db, {
+          userId: ctx.actor.userId,
+          timeZone: input.timeZone,
+          now: new Date(),
+        }),
+      ),
+    ),
+});
+
 const scheduleRouter = createTRPCRouter({
   /** My calendar for a window: my blocks plus my unfinished tasks. */
   get: hubProcedure
@@ -350,6 +366,7 @@ export const hubRouter = createTRPCRouter({
   tasks: tasksRouter,
   schedule: scheduleRouter,
   site: siteRouter,
+  archive: archiveRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

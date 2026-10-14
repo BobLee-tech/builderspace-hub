@@ -12,6 +12,10 @@
       "types": "./src/accounts/index.ts",
       "default": "./src/accounts/index.ts"
     },
+    "./archive": {
+      "types": "./src/archive/index.ts",
+      "default": "./src/archive/index.ts"
+    },
     "./audit": {
       "types": "./src/audit/index.ts",
       "default": "./src/audit/index.ts"
