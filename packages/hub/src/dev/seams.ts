@@ -32,6 +32,52 @@ export interface SeamConfig {
   shadowed: ShadowedFile[];
 }
 
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+/**
+ * True when a package.json differs from upstream only in the versions of
+ * dependencies it already had: what Dependabot does. Any other change (a new
+ * or removed dependency, a script, a field) is a real change to Kan's code
+ * and still has to be registered.
+ */
+export function isDependencyBump(upstream: string, current: string): boolean {
+  let before: Record<string, unknown>;
+  let after: Record<string, unknown>;
+  try {
+    before = JSON.parse(upstream) as Record<string, unknown>;
+    after = JSON.parse(current) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  const keysOf = (value: unknown) =>
+    Object.keys((value ?? {}) as Record<string, unknown>).sort();
+
+  for (const field of DEPENDENCY_FIELDS) {
+    if (
+      JSON.stringify(keysOf(before[field])) !==
+      JSON.stringify(keysOf(after[field]))
+    ) {
+      return false;
+    }
+  }
+  const withoutDependencies = (pkg: Record<string, unknown>) =>
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(pkg)
+          .filter(
+            ([key]) => !(DEPENDENCY_FIELDS as readonly string[]).includes(key),
+          )
+          .sort(([a], [b]) => a.localeCompare(b)),
+      ),
+    );
+  return withoutDependencies(before) === withoutDependencies(after);
+}
+
 const isOwnPath = (file: string, ownPaths: string[]): boolean =>
   ownPaths.some((own) =>
     own.endsWith("/") ? file.startsWith(own) : file === own,
@@ -45,13 +91,28 @@ export function checkSeams(
     changedFiles: string[];
     /** Current content of a file, or null when it does not exist. */
     readFile: (file: string) => string | null;
+    /** The file as upstream has it, or null when upstream has no such file. */
+    readUpstream?: (file: string) => string | null;
   },
 ): string[] {
   const seamFiles = new Set(config.seams.map((seam) => seam.file));
 
+  const isDependencyUpdate = (file: string) => {
+    if (!file.endsWith("package.json") || !repo.readUpstream) return false;
+    const upstream = repo.readUpstream(file);
+    const current = repo.readFile(file);
+    return (
+      upstream !== null &&
+      current !== null &&
+      isDependencyBump(upstream, current)
+    );
+  };
+
   const unregistered = repo.changedFiles
     .filter((file) => !isOwnPath(file, config.ownPaths))
     .filter((file) => !seamFiles.has(file))
+    // Version bumps of existing dependencies (Dependabot) need no seam.
+    .filter((file) => !isDependencyUpdate(file))
     .map((file) => `未登记的上游改动: ${file}`);
 
   const broken = config.seams.flatMap((seam) => {
