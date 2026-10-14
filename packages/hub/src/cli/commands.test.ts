@@ -75,7 +75,9 @@ describe("setup-projects", () => {
       { name: "setup-projects", ownerEmail: "owner@example.test" },
       env,
     );
-    expect(first[0]).toBe("新建项目 3 个：社群、CourseMate、EchoAgent");
+    expect(first[0]).toBe(
+      "新建项目 3 个：CourseMate、BuilderSpace 社团、EchoAgent",
+    );
     expect(first[1]).toBe("新建看板 9 块");
 
     const second = await runCommand(

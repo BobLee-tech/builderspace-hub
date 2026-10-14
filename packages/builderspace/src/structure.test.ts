@@ -31,8 +31,8 @@ describe("hubStructure (the real BuilderSpace config)", () => {
 
   it("has the three projects, each split into the three functions", () => {
     expect(hubStructure.projects.map((p) => p.name)).toEqual([
-      "社群",
       "CourseMate",
+      "BuilderSpace 社团",
       "EchoAgent",
     ]);
     expect(hubStructure.functions.map((f) => f.name)).toEqual([
