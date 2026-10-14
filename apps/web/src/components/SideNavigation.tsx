@@ -31,6 +31,7 @@ import UserMenu from "~/components/UserMenu";
 import { copy } from "~/hub/copy/zh";
 import { HubAdminLink } from "~/hub/features/admin/HubAdminLink";
 import { HubSidebarTop } from "~/hub/layout/HubSidebarTop";
+import { useHubNavFilter } from "~/hub/lib/use-hub-permissions";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 
@@ -89,6 +90,7 @@ export default function SideNavigation({
   const isCloudEnv = env("NEXT_PUBLIC_KAN_ENV") === "cloud";
 
   const isDarkMode = resolvedTheme === "dark";
+  const showNavItem = useHubNavFilter(); // hub-seam: hide links without permission
 
   const navigation: {
     name: string;
@@ -148,6 +150,7 @@ export default function SideNavigation({
     ],
     [isDarkMode],
   );
+  const shownNavigation = navigation.filter((item) => showNavItem(item.href)); // hub-seam
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -197,7 +200,7 @@ export default function SideNavigation({
             onCloseSideNav={onCloseSideNav}
           />
           <ul role="list" className="space-y-1">
-            {navigation.map((item) => (
+            {shownNavigation.map((item) => (
               <li key={item.name}>
                 <ReactiveButton
                   href={item.href}

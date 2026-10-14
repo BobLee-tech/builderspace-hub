@@ -10,6 +10,7 @@ import { hubAccessGrantProjects, hubAccessGrants } from "../schema";
 import { hashGrantToken } from "../shared/token";
 import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
 import {
+  changeGrantHubRoleById,
   describeGrantForJoin,
   issueGrant,
   listGrants,
@@ -321,5 +322,61 @@ describe("describeGrantForJoin", () => {
     expect(await describeGrantForJoin(db, issued.token, now)).toEqual({
       state: "consumed",
     });
+  });
+});
+
+describe("changeGrantHubRoleById", () => {
+  it("changes the role of a pending link and logs it", async () => {
+    const issued = await issueGrant(db, actor, {
+      email: "partner@example.test",
+      source: "direct",
+      hubRole: "admin",
+      projects: [],
+      now,
+    });
+    const [listed] = (await listGrants(db, { page: 1, now })).items;
+    if (!listed) throw new Error("no grant listed");
+
+    await changeGrantHubRoleById(
+      db,
+      actor,
+      { grantPublicId: listed.publicId, hubRole: "owner" },
+      now,
+    );
+
+    const [after] = (await listGrants(db, { page: 1, now })).items;
+    expect(after?.hubRole).toBe("owner");
+    expect(await describeGrantForJoin(db, issued.token, now)).toMatchObject({
+      state: "valid",
+    });
+  });
+
+  it("refuses a link that was revoked or never existed", async () => {
+    await issueGrant(db, actor, {
+      email: "gone@example.test",
+      source: "direct",
+      projects: [],
+      now,
+    });
+    const [listed] = (await listGrants(db, { page: 1, now })).items;
+    if (!listed) throw new Error("no grant listed");
+    await revokeGrant(db, actor, listed.publicId, now);
+
+    await expect(
+      changeGrantHubRoleById(
+        db,
+        actor,
+        { grantPublicId: listed.publicId, hubRole: "owner" },
+        now,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      changeGrantHubRoleById(
+        db,
+        actor,
+        { grantPublicId: "nope", hubRole: "owner" },
+        now,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

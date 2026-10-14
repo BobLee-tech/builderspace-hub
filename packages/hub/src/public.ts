@@ -40,3 +40,12 @@ export {
   stages,
   taskViews,
 } from "./tasks/task.policy";
+
+export type { EditableProjectRole } from "./permissions/permission.policy";
+export {
+  editableProjectRoles,
+  permissionGroupLabels,
+  permissionGroups,
+  permissionLabels,
+  projectRoleLabels,
+} from "./permissions/permission.policy";

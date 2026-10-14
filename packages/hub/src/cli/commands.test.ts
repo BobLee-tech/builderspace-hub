@@ -95,14 +95,84 @@ describe("set-role", () => {
     });
   });
 
-  it("reports an address without an account", async () => {
+  it("changes what a pending registration link gives, keeping the link", async () => {
+    const lines = await runCommand(
+      db,
+      {
+        name: "grant",
+        email: "partner@example.test",
+        hubRole: "admin",
+        note: null,
+        projects: [],
+      },
+      env,
+    );
+    const token = lines
+      .find((line) => line.startsWith("https://"))
+      ?.split("#")[1];
+
+    expect(
+      await runCommand(
+        db,
+        { name: "set-role", email: "partner@example.test", role: "owner" },
+        env,
+      ),
+    ).toEqual([
+      "partner@example.test 还没注册：已把注册链接预设的后台角色改为 所有者，链接不变，注册后生效。",
+    ]);
+
+    // The link still works, and registering through it now makes an owner.
+    expect(await describeGrantForJoin(db, token, now)).toMatchObject({
+      state: "valid",
+    });
+    const partner = await seedUser(db, { email: "partner@example.test" });
+    await runCommand(
+      db,
+      { name: "provision", email: "partner@example.test" },
+      env,
+    );
+    expect((await getAccessFacts(db, partner.id)).role).toBe("owner");
+
+    const entries = await listAudit(db, { limit: 10, offset: 0 });
+    expect(entries.map((entry) => entry.action)).toContain(
+      "grant.role_changed",
+    );
+  });
+
+  it("does not touch a link that has expired", async () => {
+    await runCommand(
+      db,
+      {
+        name: "grant",
+        email: "late@example.test",
+        hubRole: "admin",
+        note: null,
+        projects: [],
+      },
+      env,
+    );
+    const later = { ...env, now: new Date("2026-11-30T00:00:00Z") };
+
+    await expect(
+      runCommand(
+        db,
+        { name: "set-role", email: "late@example.test", role: "owner" },
+        later,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("reports an address with neither an account nor a link", async () => {
     await expect(
       runCommand(
         db,
         { name: "set-role", email: "ghost@example.test", role: "owner" },
         env,
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "ghost@example.test 还没有注册账号，也没有待使用的注册链接",
+    });
   });
 });
 

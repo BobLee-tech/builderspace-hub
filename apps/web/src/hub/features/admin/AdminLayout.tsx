@@ -45,6 +45,11 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: text.groups.system,
     items: [
       {
+        href: "/admin/permissions",
+        label: text.permissions.title,
+        permission: "admin.view",
+      },
+      {
         href: "/admin/audit",
         label: text.audit.title,
         permission: "audit.view",

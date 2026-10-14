@@ -12,7 +12,8 @@ import {
 import { IoArchiveOutline } from "react-icons/io5";
 
 import Dropdown from "~/components/Dropdown";
-import { usePermissions } from "~/hooks/usePermissions";
+// hub-seam: "Make template" for project admins only (docs/hub/UPSTREAM_SEAMS.md)
+import { useHubPermissions } from "~/hub/lib/use-hub-permissions";
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
 import { api } from "~/utils/api";
@@ -36,7 +37,7 @@ export default function BoardDropdown({
   const { openModal } = useModal();
   const { showPopup } = usePopup();
   const { canEditBoard, canDeleteBoard, canCreateBoard, canArchiveBoard } =
-    usePermissions();
+    useHubPermissions({ creating: "template" }); // hub-seam
   const utils = api.useUtils();
 
   const updateBoard = api.board.update.useMutation({
