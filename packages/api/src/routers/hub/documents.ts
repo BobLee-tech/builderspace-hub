@@ -123,7 +123,7 @@ export const documentsRouter = createTRPCRouter({
       z.object({
         title: z.string().max(300),
         filename: z.string().min(1).max(300),
-        content: z.string().max(1_100_000),
+        content: z.string().max(410_000),
         description: z.string().max(2000).nullish(),
         folderPublicId: id.nullish(),
         readable: z.boolean().optional(),
@@ -150,7 +150,7 @@ export const documentsRouter = createTRPCRouter({
     ),
 
   replaceText: hubProcedure
-    .input(documentInput.extend({ content: z.string().max(1_100_000) }))
+    .input(documentInput.extend({ content: z.string().max(410_000) }))
     .mutation(({ ctx, input }) =>
       runHub(() =>
         replaceTextContent(ctx.db, getDocumentStorage(), ctx.actor, input),

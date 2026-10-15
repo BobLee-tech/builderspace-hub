@@ -105,7 +105,7 @@ describe("hub.documents", () => {
     await expect(
       createHubCaller(db, admin).documents.replaceText({
         documentPublicId: "x",
-        content: "x".repeat(1_100_001),
+        content: "x".repeat(410_001),
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(

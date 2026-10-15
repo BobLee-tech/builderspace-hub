@@ -177,6 +177,18 @@ describe("replaceTextContent", () => {
     expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("# 讲稿\n\n大家好");
   });
 
+  it("does not offer the editor for a text file that is over the limit", async () => {
+    const prepared = await prepareUpload(db, storage, owner, { filename: "big.csv", size: MAX_TEXT_BYTES + 1 });
+    const key = new URL(prepared.target.url).pathname.replace(/^\//, "");
+    storage.uploadFromBrowser(key, Buffer.alloc(MAX_TEXT_BYTES + 1, "a"));
+    const big = await completeUpload(db, storage, owner, { uploadId: prepared.uploadId });
+    const small = await make(owner);
+
+    expect((await getDocumentDetail(db, storage, owner, big.publicId)).canEditText).toBe(false);
+    expect((await getDocumentDetail(db, storage, owner, small.publicId)).canEditText).toBe(true);
+    expect((await getDocumentDetail(db, storage, member, small.publicId)).canEditText).toBe(false);
+  });
+
   it("keeps working after the document is hidden and unhidden", async () => {
     const created = await make(owner);
     await updateDocument(db, owner, { documentPublicId: created.publicId, readable: false });

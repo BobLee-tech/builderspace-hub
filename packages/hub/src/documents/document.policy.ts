@@ -115,8 +115,13 @@ const FILE_TYPES: Record<string, FileType> = {
  */
 const TEXT_EXTENSIONS = new Set(["md", "txt", "csv", "json", "html", "htm"]);
 
-/** Largest text document the server reads or writes itself. */
-export const MAX_TEXT_BYTES = 1024 * 1024;
+/**
+ * Largest text document the server reads or writes itself. Text written in the
+ * page travels as JSON through Kan's tRPC route, whose request body is capped
+ * at 1 MB; quotes and line breaks double in size when escaped, so the limit
+ * leaves that margin.
+ */
+export const MAX_TEXT_BYTES = 400 * 1024;
 
 export function isTextExtension(ext: string): boolean {
   return TEXT_EXTENSIONS.has(ext.toLowerCase());

@@ -113,6 +113,9 @@ describe("changing", () => {
     });
     const folder = await call(owner, "POST", "/folders", { name: "合同" });
     expect(folder.status).toBe(201);
+    // The name comes back as stored, not as typed.
+    const spaced = await call(owner, "POST", "/folders", { name: "  A   B  " });
+    expect((spaced.body as { name: string }).name).toBe("A B");
     const moved = await call(owner, "PATCH", `/${doc.publicId}`, {
       folderPublicId: (folder.body as { publicId: string }).publicId,
     });

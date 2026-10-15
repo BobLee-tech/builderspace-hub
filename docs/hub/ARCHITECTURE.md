@@ -123,7 +123,7 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **读文件只有一个出口** `GET /api/hub/documents/<id>/file`：先按登录状态和权限检查，再重定向到几十秒有效的签名链接（磁盘存储时由服务器直接输出）。不缓存，因为读的权利可以被收回。不接受 API key。
 - **HTML 是唯一能带代码的格式，只在沙箱里显示。** 页面里的 `<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」：能跑脚本，但读不到本站的 cookie、存储和接口。磁盘存储下文件由我们自己的域名输出，响应头再加一道 `Content-Security-Policy: sandbox`。PDF 用不带沙箱的 iframe（浏览器的 PDF 阅读器在沙箱里不能用）。
 - **每个改数据的用例都有操作日志。** `prepareUpload` 是例外：它没有改任何持久的东西，文档在 `completeUpload` 里才出现并记日志。
-- **文本文档可以在网页里写、也可以用命令行写。** md、txt、csv、json、html（`isTextExtension`）不必上传文件：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`，都走 `text.service.ts`，服务端自己把内容存进 bucket（`DocumentStorage.read` / `put`），规则、格式白名单和操作日志与上传的文档完全一样。上限 1 MB。
+- **文本文档可以在网页里写、也可以用命令行写。** md、txt、csv、json、html（`isTextExtension`）不必上传文件：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`，都走 `text.service.ts`，服务端自己把内容存进 bucket（`DocumentStorage.read` / `put`），规则、格式白名单和操作日志与上传的文档完全一样。上限 400 KB（页面里写的文本要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
 - **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文件或转让编辑权，这些只在网页里做。可读性规则不变：读不到的文档回 404，和不存在一样。
 - **导入命令** `cli import-documents`（`cli/import-documents.ts`）直接读本地目录、写存储和数据库，不走网页；不做权限检查，因为它只能由有数据库访问权的人在命令行运行。HTML 文件会把相对路径引用的样式、字体、图片内联进去（`cli/inline-html.ts`，只读源目录之内的文件）。
 - **已知的局限**：没有版本历史（替换文件会删掉旧文件）；Word、PPT、Excel 没有预览（只能下载）；没完成的上传留下的孤儿文件还没有定期清理；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。

@@ -182,7 +182,7 @@ export async function handleDocumentsRest(
     return ok(
       {
         publicId: created.publicId,
-        name: input.name.trim(),
+        name: created.name,
         parentPublicId: input.parentPublicId ?? null,
       },
       201,

@@ -20,6 +20,7 @@ import {
   fileLabel,
   FOLDER_MAX_DEPTH,
   isTextExtension,
+  MAX_TEXT_BYTES,
   FOLDER_NAME_MAX_LENGTH,
   normaliseName,
   previewKindOf,
@@ -307,7 +308,10 @@ export async function getDocumentDetail(
     }),
     canReplace: access.canEdit && storage !== null,
     canEditText:
-      access.canEdit && storage !== null && isTextExtension(row.ext),
+      access.canEdit &&
+      storage !== null &&
+      isTextExtension(row.ext) &&
+      row.size <= MAX_TEXT_BYTES,
     myRequest:
       latest && !access.canEdit
         ? {
@@ -406,7 +410,7 @@ export async function createFolder(
   db: Db,
   actor: AdminActor,
   rawInput: z.input<typeof createFolderSchema>,
-): Promise<{ publicId: string }> {
+): Promise<{ publicId: string; name: string }> {
   requireCreate(actor);
   const input = parse(createFolderSchema, rawInput);
 
@@ -432,7 +436,7 @@ export async function createFolder(
         parentId: parent?.id ?? null,
         createdBy: actor.userId,
       });
-      return { publicId: created.publicId };
+      return { publicId: created.publicId, name: created.name };
     },
     (result) => ({
       actor,
