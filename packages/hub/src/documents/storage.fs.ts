@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
@@ -76,6 +76,10 @@ export class FsDocumentStorage implements DocumentStorage {
     const target = this.pathOf(input.key);
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, input.body);
+  }
+
+  read(key: string): Promise<Buffer> {
+    return readFile(this.pathOf(key));
   }
 
   async open(input: { key: string }): Promise<DocumentSource> {

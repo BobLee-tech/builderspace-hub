@@ -19,6 +19,8 @@ import {
   canRequestEdit,
   fileLabel,
   FOLDER_MAX_DEPTH,
+  isTextExtension,
+  MAX_TEXT_BYTES,
   FOLDER_NAME_MAX_LENGTH,
   normaliseName,
   previewKindOf,
@@ -248,6 +250,8 @@ export interface DocumentDetail extends DocumentSummary {
   canRequestEdit: boolean;
   /** May replace the file (needs storage as well as the right to edit). */
   canReplace: boolean;
+  /** May rewrite the text in the page's editor: a text format, and storage. */
+  canEditText: boolean;
   /** The viewer's latest request for this document, if any. */
   myRequest: {
     status: "pending" | "approved" | "denied";
@@ -303,6 +307,11 @@ export async function getDocumentDetail(
       hasPendingRequest: hasPending,
     }),
     canReplace: access.canEdit && storage !== null,
+    canEditText:
+      access.canEdit &&
+      storage !== null &&
+      isTextExtension(row.ext) &&
+      row.size <= MAX_TEXT_BYTES,
     myRequest:
       latest && !access.canEdit
         ? {
@@ -401,7 +410,7 @@ export async function createFolder(
   db: Db,
   actor: AdminActor,
   rawInput: z.input<typeof createFolderSchema>,
-): Promise<{ publicId: string }> {
+): Promise<{ publicId: string; name: string }> {
   requireCreate(actor);
   const input = parse(createFolderSchema, rawInput);
 
@@ -427,7 +436,7 @@ export async function createFolder(
         parentId: parent?.id ?? null,
         createdBy: actor.userId,
       });
-      return { publicId: created.publicId };
+      return { publicId: created.publicId, name: created.name };
     },
     (result) => ({
       actor,

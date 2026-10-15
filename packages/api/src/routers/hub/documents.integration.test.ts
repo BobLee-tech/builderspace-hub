@@ -73,6 +73,50 @@ describe("hub.documents", () => {
     ).toBe(false);
   });
 
+  it("keeps the text-document procedures behind the same doors", async () => {
+    const input = { title: "讲稿", filename: "讲稿.md", content: "# 讲稿" };
+    await expect(
+      createHubCaller(db, null).documents.createText(input),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(
+      createHubCaller(db, admin, { "x-api-key": "k" }).documents.createText(input),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      createHubCaller(db, admin, { "x-api-key": "k" }).documents.content({
+        documentPublicId: "nope",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("says plainly that text documents also need file storage", async () => {
+    await expect(
+      createHubCaller(db, admin).documents.createText({
+        title: "讲稿",
+        filename: "讲稿.md",
+        content: "# 讲稿",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("文件存储还没有配置") as string,
+    });
+  });
+
+  it("rejects an oversized or malformed text body before it reaches a use case", async () => {
+    await expect(
+      createHubCaller(db, admin).documents.replaceText({
+        documentPublicId: "x",
+        content: "x".repeat(410_001),
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      createHubCaller(db, admin).documents.createText({
+        title: "t",
+        filename: "",
+        content: "x",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("answers an unknown document with not-found, for members and admins alike", async () => {
     for (const who of [member, admin]) {
       await expect(

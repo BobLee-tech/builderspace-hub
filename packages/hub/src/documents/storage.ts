@@ -20,6 +20,13 @@ export interface DocumentStorage {
   /** Stores bytes the server already has (the import command). */
   put(input: { key: string; body: Buffer; contentType: string }): Promise<void>;
 
+  /**
+   * The whole object, for the few places the server itself reads a file (text
+   * documents opened from the command line or edited in the page). Callers
+   * check the size first; this is not for large files.
+   */
+  read(key: string): Promise<Buffer>;
+
   /** How to hand a stored file to a signed-in reader. */
   open(input: {
     key: string;

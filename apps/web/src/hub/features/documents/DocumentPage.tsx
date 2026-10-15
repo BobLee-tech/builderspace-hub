@@ -22,6 +22,7 @@ import {
   formatDate,
 } from "./document-display";
 import { DocumentViewer } from "./DocumentViewer";
+import { TextEditor } from "./TextEditor";
 import { UploadDialog } from "./UploadDialog";
 
 const text = copy.documents;
@@ -41,6 +42,7 @@ export function DocumentPage() {
 
   const [editing, setEditing] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [writing, setWriting] = useState(false);
   const remove = api.hub.documents.delete.useMutation({
     onSuccess: () => {
       void utils.hub.documents.library.invalidate();
@@ -141,6 +143,15 @@ export function DocumentPage() {
                 >
                   {text.actions.edit}
                 </button>
+                {doc.canEditText && (
+                  <button
+                    type="button"
+                    className={buttonClass.ghost}
+                    onClick={() => setWriting((value) => !value)}
+                  >
+                    {text.actions.editText}
+                  </button>
+                )}
                 {doc.canReplace && (
                   <button
                     type="button"
@@ -167,6 +178,17 @@ export function DocumentPage() {
                 doc={doc}
                 onDone={() => {
                   setEditing(false);
+                  void utils.hub.documents.get.invalidate();
+                  void utils.hub.documents.library.invalidate();
+                }}
+              />
+            )}
+
+            {writing && doc.canEditText && (
+              <TextEditor
+                documentPublicId={doc.publicId}
+                onClose={() => setWriting(false)}
+                onSaved={() => {
                   void utils.hub.documents.get.invalidate();
                   void utils.hub.documents.library.invalidate();
                 }}

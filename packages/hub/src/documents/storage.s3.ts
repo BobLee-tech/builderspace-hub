@@ -106,6 +106,14 @@ export class S3DocumentStorage implements DocumentStorage {
     );
   }
 
+  async read(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) throw new Error("Empty object body");
+    return Buffer.from(await response.Body.transformToByteArray());
+  }
+
   async open(input: {
     key: string;
     contentType: string;

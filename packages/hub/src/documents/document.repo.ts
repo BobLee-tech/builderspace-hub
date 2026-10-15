@@ -164,30 +164,54 @@ export async function insertDocument(
   return created;
 }
 
+export type DocumentPatch = Partial<
+  Pick<
+    DocumentRow,
+    | "title"
+    | "description"
+    | "folderId"
+    | "readable"
+    | "filename"
+    | "ext"
+    | "contentType"
+    | "size"
+    | "sha256"
+    | "storageKey"
+  >
+>;
+
 export async function updateDocument(
   db: DbOrTx,
   id: number,
-  patch: Partial<
-    Pick<
-      DocumentRow,
-      | "title"
-      | "description"
-      | "folderId"
-      | "readable"
-      | "filename"
-      | "ext"
-      | "contentType"
-      | "size"
-      | "sha256"
-      | "storageKey"
-    >
-  >,
+  patch: DocumentPatch,
   now: Date,
 ): Promise<void> {
   await db
     .update(hubDocuments)
     .set({ ...patch, updatedAt: now })
     .where(eq(hubDocuments.id, id));
+}
+
+/**
+ * Like `updateDocument`, but only if nobody changed the document since
+ * `ifUpdatedAt`. The check is part of the write, so two people saving at the
+ * same moment cannot both win. Returns whether the document was changed.
+ */
+export async function updateDocumentIfUnchanged(
+  db: DbOrTx,
+  id: number,
+  patch: DocumentPatch,
+  now: Date,
+  ifUpdatedAt: Date,
+): Promise<boolean> {
+  const rows = await db
+    .update(hubDocuments)
+    .set({ ...patch, updatedAt: now })
+    .where(
+      and(eq(hubDocuments.id, id), eq(hubDocuments.updatedAt, ifUpdatedAt)),
+    )
+    .returning({ id: hubDocuments.id });
+  return rows.length > 0;
 }
 
 export async function deleteDocument(db: DbOrTx, id: number): Promise<void> {
@@ -439,6 +463,11 @@ export async function listPendingRequests(
     .orderBy(asc(hubDocumentEditRequests.createdAt));
 }
 
+/**
+ * Records a decision on a pending request. Returns false when the request was
+ * no longer pending, i.e. someone else decided it first, so two managers
+ * deciding at once cannot both succeed.
+ */
 export async function decideRequest(
   db: DbOrTx,
   id: number,
@@ -447,15 +476,22 @@ export async function decideRequest(
     by: string | null;
     at: Date;
   },
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const rows = await db
     .update(hubDocumentEditRequests)
     .set({
       status: decision.status,
       decidedBy: decision.by,
       decidedAt: decision.at,
     })
-    .where(eq(hubDocumentEditRequests.id, id));
+    .where(
+      and(
+        eq(hubDocumentEditRequests.id, id),
+        eq(hubDocumentEditRequests.status, "pending"),
+      ),
+    )
+    .returning({ id: hubDocumentEditRequests.id });
+  return rows.length > 0;
 }
 
 /** Closes the person's pending request for the document as approved. */

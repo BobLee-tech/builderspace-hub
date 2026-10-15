@@ -109,6 +109,24 @@ const FILE_TYPES: Record<string, FileType> = {
   zip: { contentType: "application/zip", preview: null, label: "ZIP" },
 };
 
+/**
+ * Formats that are plain UTF-8 text. Only these can be created or changed
+ * without a file upload: from the command line, or in the page's editor.
+ */
+const TEXT_EXTENSIONS = new Set(["md", "txt", "csv", "json", "html", "htm"]);
+
+/**
+ * Largest text document the server reads or writes itself. Text written in the
+ * page travels as JSON through Kan's tRPC route, whose request body is capped
+ * at 1 MB; quotes and line breaks double in size when escaped, so the limit
+ * leaves that margin.
+ */
+export const MAX_TEXT_BYTES = 400 * 1024;
+
+export function isTextExtension(ext: string): boolean {
+  return TEXT_EXTENSIONS.has(ext.toLowerCase());
+}
+
 export type FileCheck =
   | {
       ok: true;

@@ -18,6 +18,7 @@ import {
   prepareUpload,
   updateDocument,
 } from "./document.service";
+import { decideRequest, findPendingRequest } from "./document.repo";
 import { getDocumentDetail, getLibrary } from "./library.service";
 
 let db: Db;
@@ -29,6 +30,13 @@ let member: AdminActor;
 let memberId: string;
 let adminId: string;
 let documentId: string;
+
+const getRow = async (publicId: string) => {
+  const { findDocument } = await import("./document.repo");
+  const row = await findDocument(db, publicId);
+  if (!row) throw new Error("document missing");
+  return row;
+};
 
 const actorOf = (
   user: { id: string; email: string },
@@ -167,6 +175,18 @@ describe("asking for the right to edit", () => {
         approve: false,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("lets only one of two simultaneous decisions win", async () => {
+    await requestEdit(db, member, { documentPublicId: documentId });
+    const row = await findPendingRequest(db, (await getRow(documentId)).id, memberId);
+    if (!row) throw new Error("the request should be pending");
+
+    // Both managers read "pending"; the write itself must settle who was first.
+    const first = await decideRequest(db, row.id, { status: "approved", by: null, at: new Date() });
+    const second = await decideRequest(db, row.id, { status: "denied", by: null, at: new Date() });
+    expect(first).toBe(true);
+    expect(second).toBe(false);
   });
 
   it("is decided only by owners and by admins who edit that document", async () => {

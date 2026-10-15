@@ -46,6 +46,11 @@ export class MemoryDocumentStorage implements DocumentStorage {
     return Promise.resolve();
   }
 
+  read(key: string): Promise<Buffer> {
+    const file = this.files.get(key);
+    return file ? Promise.resolve(file.body) : Promise.reject(new Error("No such object"));
+  }
+
   open(input: {
     key: string;
     contentType: string;
