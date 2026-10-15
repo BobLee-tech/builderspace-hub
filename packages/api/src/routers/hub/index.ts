@@ -57,6 +57,7 @@ import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
+import { documentsRouter } from "./documents";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
 import { siteRouter } from "./site";
 
@@ -438,6 +439,7 @@ export const hubRouter = createTRPCRouter({
   settings: settingsRouter,
   tasks: tasksRouter,
   schedule: scheduleRouter,
+  documents: documentsRouter,
   repos: reposRouter,
   github: githubRouter,
   site: siteRouter,

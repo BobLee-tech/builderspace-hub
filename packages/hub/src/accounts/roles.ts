@@ -22,6 +22,11 @@ export const hubPermissions = [
   "permissions.manage",
   /** Change instance-wide settings such as the function colours. */
   "settings.manage",
+  /**
+   * Create documents and folders. Changing a document is separate: it goes to
+   * the owner and to the people each document was assigned to.
+   */
+  "documents.manage",
 ] as const;
 export type HubPermission = (typeof hubPermissions)[number];
 
@@ -35,6 +40,7 @@ const ROLE_PERMISSIONS: Record<HubRole, readonly HubPermission[]> = {
     "projects.create",
     "permissions.manage",
     "settings.manage",
+    "documents.manage",
   ],
   viewer: ["admin.view"],
 };

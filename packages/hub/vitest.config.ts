@@ -18,6 +18,8 @@ export default defineConfig({
         "src/dev/check-seams.ts",
         "src/dev/check-web-types.ts",
         "src/db.ts",
+        // Interfaces only: nothing at runtime to cover.
+        "src/documents/storage.ts",
       ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },

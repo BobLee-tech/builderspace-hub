@@ -34,7 +34,20 @@ export type AuditAction =
   | "site.project_reviewed"
   | "site.update_reviewed"
   | "site.volunteer_updated"
-  | "site.list_exported";
+  | "site.list_exported"
+  | "document.created"
+  | "document.updated"
+  | "document.file_replaced"
+  | "document.readable_changed"
+  | "document.deleted"
+  | "document.editor_granted"
+  | "document.editor_revoked"
+  | "document.edit_requested"
+  | "document.edit_request_approved"
+  | "document.edit_request_denied"
+  | "document_folder.created"
+  | "document_folder.renamed"
+  | "document_folder.deleted";
 
 export interface AuditActor {
   userId: string | null;

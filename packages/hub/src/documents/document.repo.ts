@@ -1,0 +1,550 @@
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
+
+import { users } from "@kan/db/schema";
+
+import type { DbOrTx } from "../db";
+import type { EditRequestStatus, HubRole } from "../schema";
+import {
+  hubAccounts,
+  hubDocumentEditors,
+  hubDocumentEditRequests,
+  hubDocumentFolders,
+  hubDocuments,
+  hubDocumentUploads,
+} from "../schema";
+
+/** A person's name for display; their e-mail when they never set one. */
+const userName = sql<string>`coalesce(${users.name}, ${users.email})`;
+
+export type FolderRow = typeof hubDocumentFolders.$inferSelect;
+export type DocumentRow = typeof hubDocuments.$inferSelect;
+export type UploadRow = typeof hubDocumentUploads.$inferSelect;
+
+/* ── folders ─────────────────────────────────────────────────────────── */
+
+export async function listFolders(db: DbOrTx): Promise<FolderRow[]> {
+  return db
+    .select()
+    .from(hubDocumentFolders)
+    .orderBy(asc(hubDocumentFolders.name));
+}
+
+export async function findFolder(
+  db: DbOrTx,
+  publicId: string,
+): Promise<FolderRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocumentFolders)
+    .where(eq(hubDocumentFolders.publicId, publicId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function insertFolder(
+  db: DbOrTx,
+  row: {
+    publicId: string;
+    name: string;
+    parentId: number | null;
+    createdBy: string | null;
+  },
+): Promise<FolderRow> {
+  const [created] = await db.insert(hubDocumentFolders).values(row).returning();
+  if (!created) throw new Error("insertFolder: no row returned");
+  return created;
+}
+
+export async function renameFolder(
+  db: DbOrTx,
+  id: number,
+  name: string,
+): Promise<void> {
+  await db
+    .update(hubDocumentFolders)
+    .set({ name })
+    .where(eq(hubDocumentFolders.id, id));
+}
+
+export async function deleteFolder(db: DbOrTx, id: number): Promise<void> {
+  await db.delete(hubDocumentFolders).where(eq(hubDocumentFolders.id, id));
+}
+
+export async function countFolderChildren(
+  db: DbOrTx,
+  folderId: number,
+): Promise<{ folders: number; documents: number }> {
+  const [folders] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(hubDocumentFolders)
+    .where(eq(hubDocumentFolders.parentId, folderId));
+  const [documents] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(hubDocuments)
+    .where(eq(hubDocuments.folderId, folderId));
+  return { folders: folders?.n ?? 0, documents: documents?.n ?? 0 };
+}
+
+/* ── documents ───────────────────────────────────────────────────────── */
+
+export async function listDocuments(db: DbOrTx): Promise<DocumentRow[]> {
+  return db
+    .select()
+    .from(hubDocuments)
+    .orderBy(desc(hubDocuments.updatedAt), desc(hubDocuments.id));
+}
+
+export async function findDocument(
+  db: DbOrTx,
+  publicId: string,
+): Promise<DocumentRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocuments)
+    .where(eq(hubDocuments.publicId, publicId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function findDocumentById(
+  db: DbOrTx,
+  id: number,
+): Promise<DocumentRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocuments)
+    .where(eq(hubDocuments.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
+/** A document already in `folderId` with this file name (the import's identity). */
+export async function findDocumentByFilename(
+  db: DbOrTx,
+  folderId: number | null,
+  filename: string,
+): Promise<DocumentRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocuments)
+    .where(
+      and(
+        folderId === null
+          ? isNull(hubDocuments.folderId)
+          : eq(hubDocuments.folderId, folderId),
+        eq(hubDocuments.filename, filename),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export type NewDocument = Omit<DocumentRow, "id" | "createdAt" | "updatedAt">;
+
+export async function insertDocument(
+  db: DbOrTx,
+  row: NewDocument & { now: Date },
+): Promise<DocumentRow> {
+  const { now, ...values } = row;
+  const [created] = await db
+    .insert(hubDocuments)
+    .values({ ...values, createdAt: now, updatedAt: now })
+    .returning();
+  if (!created) throw new Error("insertDocument: no row returned");
+  return created;
+}
+
+export async function updateDocument(
+  db: DbOrTx,
+  id: number,
+  patch: Partial<
+    Pick<
+      DocumentRow,
+      | "title"
+      | "description"
+      | "folderId"
+      | "readable"
+      | "filename"
+      | "ext"
+      | "contentType"
+      | "size"
+      | "sha256"
+      | "storageKey"
+    >
+  >,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(hubDocuments)
+    .set({ ...patch, updatedAt: now })
+    .where(eq(hubDocuments.id, id));
+}
+
+export async function deleteDocument(db: DbOrTx, id: number): Promise<void> {
+  await db.delete(hubDocuments).where(eq(hubDocuments.id, id));
+}
+
+/* ── editors ─────────────────────────────────────────────────────────── */
+
+/** Ids of the documents `userId` was assigned to. */
+export async function listEditedDocumentIds(
+  db: DbOrTx,
+  userId: string,
+): Promise<Set<number>> {
+  const rows = await db
+    .select({ documentId: hubDocumentEditors.documentId })
+    .from(hubDocumentEditors)
+    .where(eq(hubDocumentEditors.userId, userId));
+  return new Set(rows.map((row) => row.documentId));
+}
+
+export async function isEditor(
+  db: DbOrTx,
+  documentId: number,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: hubDocumentEditors.userId })
+    .from(hubDocumentEditors)
+    .where(
+      and(
+        eq(hubDocumentEditors.documentId, documentId),
+        eq(hubDocumentEditors.userId, userId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+export interface EditorRow {
+  userId: string;
+  name: string;
+  email: string;
+  hubRole: HubRole | null;
+  grantedAt: Date;
+}
+
+export async function listEditors(
+  db: DbOrTx,
+  documentId: number,
+): Promise<EditorRow[]> {
+  return db
+    .select({
+      userId: users.id,
+      name: userName,
+      email: users.email,
+      hubRole: hubAccounts.role,
+      grantedAt: hubDocumentEditors.grantedAt,
+    })
+    .from(hubDocumentEditors)
+    .innerJoin(users, eq(users.id, hubDocumentEditors.userId))
+    .leftJoin(hubAccounts, eq(hubAccounts.userId, users.id))
+    .where(eq(hubDocumentEditors.documentId, documentId))
+    .orderBy(asc(hubDocumentEditors.grantedAt));
+}
+
+/** Returns false when the person already was an editor. */
+export async function addEditor(
+  db: DbOrTx,
+  input: { documentId: number; userId: string; grantedBy: string | null },
+): Promise<boolean> {
+  const inserted = await db
+    .insert(hubDocumentEditors)
+    .values(input)
+    .onConflictDoNothing()
+    .returning({ userId: hubDocumentEditors.userId });
+  return inserted.length > 0;
+}
+
+/** Returns false when the person was not an editor. */
+export async function removeEditor(
+  db: DbOrTx,
+  documentId: number,
+  userId: string,
+): Promise<boolean> {
+  const removed = await db
+    .delete(hubDocumentEditors)
+    .where(
+      and(
+        eq(hubDocumentEditors.documentId, documentId),
+        eq(hubDocumentEditors.userId, userId),
+      ),
+    )
+    .returning({ userId: hubDocumentEditors.userId });
+  return removed.length > 0;
+}
+
+export interface CandidateRow {
+  userId: string;
+  name: string;
+  email: string;
+  hubRole: HubRole | null;
+}
+
+/** Active accounts matching `search` that are not yet editors of the document. */
+export async function searchEditorCandidates(
+  db: DbOrTx,
+  input: { documentId: number; search: string; limit: number },
+): Promise<CandidateRow[]> {
+  const pattern = `%${input.search.replace(/[\\%_]/g, "\\$&")}%`;
+  return db
+    .select({
+      userId: users.id,
+      name: userName,
+      email: users.email,
+      hubRole: hubAccounts.role,
+    })
+    .from(users)
+    .leftJoin(hubAccounts, eq(hubAccounts.userId, users.id))
+    .where(
+      and(
+        or(isNull(hubAccounts.status), eq(hubAccounts.status, "active")),
+        or(ilike(users.name, pattern), ilike(users.email, pattern)),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${hubDocumentEditors}
+          WHERE ${hubDocumentEditors.documentId} = ${input.documentId}
+            AND ${hubDocumentEditors.userId} = ${users.id}
+        )`,
+      ),
+    )
+    .orderBy(asc(users.name))
+    .limit(input.limit);
+}
+
+/* ── edit requests ───────────────────────────────────────────────────── */
+
+export type RequestRow = typeof hubDocumentEditRequests.$inferSelect;
+
+export async function insertRequest(
+  db: DbOrTx,
+  row: {
+    publicId: string;
+    documentId: number;
+    requesterId: string;
+    note: string | null;
+  },
+): Promise<RequestRow> {
+  const [created] = await db
+    .insert(hubDocumentEditRequests)
+    .values(row)
+    .returning();
+  if (!created) throw new Error("insertRequest: no row returned");
+  return created;
+}
+
+export async function findPendingRequest(
+  db: DbOrTx,
+  documentId: number,
+  requesterId: string,
+): Promise<RequestRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocumentEditRequests)
+    .where(
+      and(
+        eq(hubDocumentEditRequests.documentId, documentId),
+        eq(hubDocumentEditRequests.requesterId, requesterId),
+        eq(hubDocumentEditRequests.status, "pending"),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** The person's most recent request for the document, whatever its status. */
+export async function findLatestRequest(
+  db: DbOrTx,
+  documentId: number,
+  requesterId: string,
+): Promise<RequestRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocumentEditRequests)
+    .where(
+      and(
+        eq(hubDocumentEditRequests.documentId, documentId),
+        eq(hubDocumentEditRequests.requesterId, requesterId),
+      ),
+    )
+    .orderBy(desc(hubDocumentEditRequests.id))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function findRequest(
+  db: DbOrTx,
+  publicId: string,
+): Promise<RequestRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocumentEditRequests)
+    .where(eq(hubDocumentEditRequests.publicId, publicId))
+    .limit(1);
+  return row ?? null;
+}
+
+export interface PendingRequestRow {
+  publicId: string;
+  note: string | null;
+  createdAt: Date;
+  documentId: number;
+  documentPublicId: string;
+  documentTitle: string;
+  requesterId: string;
+  requesterName: string;
+  requesterEmail: string;
+}
+
+export async function listPendingRequests(
+  db: DbOrTx,
+  documentIds?: number[],
+): Promise<PendingRequestRow[]> {
+  if (documentIds && documentIds.length === 0) return [];
+  return db
+    .select({
+      publicId: hubDocumentEditRequests.publicId,
+      note: hubDocumentEditRequests.note,
+      createdAt: hubDocumentEditRequests.createdAt,
+      documentId: hubDocuments.id,
+      documentPublicId: hubDocuments.publicId,
+      documentTitle: hubDocuments.title,
+      requesterId: users.id,
+      requesterName: userName,
+      requesterEmail: users.email,
+    })
+    .from(hubDocumentEditRequests)
+    .innerJoin(
+      hubDocuments,
+      eq(hubDocuments.id, hubDocumentEditRequests.documentId),
+    )
+    .innerJoin(users, eq(users.id, hubDocumentEditRequests.requesterId))
+    .where(
+      and(
+        eq(hubDocumentEditRequests.status, "pending"),
+        documentIds
+          ? inArray(hubDocumentEditRequests.documentId, documentIds)
+          : undefined,
+      ),
+    )
+    .orderBy(asc(hubDocumentEditRequests.createdAt));
+}
+
+export async function decideRequest(
+  db: DbOrTx,
+  id: number,
+  decision: {
+    status: Exclude<EditRequestStatus, "pending">;
+    by: string | null;
+    at: Date;
+  },
+): Promise<void> {
+  await db
+    .update(hubDocumentEditRequests)
+    .set({
+      status: decision.status,
+      decidedBy: decision.by,
+      decidedAt: decision.at,
+    })
+    .where(eq(hubDocumentEditRequests.id, id));
+}
+
+/** Closes the person's pending request for the document as approved. */
+export async function approvePendingRequest(
+  db: DbOrTx,
+  documentId: number,
+  requesterId: string,
+  by: string | null,
+  at: Date,
+): Promise<void> {
+  await db
+    .update(hubDocumentEditRequests)
+    .set({ status: "approved", decidedBy: by, decidedAt: at })
+    .where(
+      and(
+        eq(hubDocumentEditRequests.documentId, documentId),
+        eq(hubDocumentEditRequests.requesterId, requesterId),
+        eq(hubDocumentEditRequests.status, "pending"),
+      ),
+    );
+}
+
+/* ── uploads ─────────────────────────────────────────────────────────── */
+
+export async function insertUpload(
+  db: DbOrTx,
+  row: Omit<UploadRow, "id" | "consumedAt" | "createdAt">,
+): Promise<UploadRow> {
+  const [created] = await db.insert(hubDocumentUploads).values(row).returning();
+  if (!created) throw new Error("insertUpload: no row returned");
+  return created;
+}
+
+export async function findUpload(
+  db: DbOrTx,
+  publicId: string,
+): Promise<UploadRow | null> {
+  const [row] = await db
+    .select()
+    .from(hubDocumentUploads)
+    .where(eq(hubDocumentUploads.publicId, publicId))
+    .limit(1);
+  return row ?? null;
+}
+
+/** True when this call was the one that consumed it. */
+export async function consumeUpload(
+  db: DbOrTx,
+  id: number,
+  at: Date,
+): Promise<boolean> {
+  const updated = await db
+    .update(hubDocumentUploads)
+    .set({ consumedAt: at })
+    .where(
+      and(eq(hubDocumentUploads.id, id), isNull(hubDocumentUploads.consumedAt)),
+    )
+    .returning({ id: hubDocumentUploads.id });
+  return updated.length > 0;
+}
+
+/* ── users ───────────────────────────────────────────────────────────── */
+
+export async function findActiveUser(
+  db: DbOrTx,
+  userId: string,
+): Promise<{ id: string; name: string; email: string } | null> {
+  const [row] = await db
+    .select({ id: users.id, name: userName, email: users.email })
+    .from(users)
+    .leftJoin(hubAccounts, eq(hubAccounts.userId, users.id))
+    .where(
+      and(
+        eq(users.id, userId),
+        or(isNull(hubAccounts.status), eq(hubAccounts.status, "active")),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export async function namesOf(
+  db: DbOrTx,
+  userIds: string[],
+): Promise<Map<string, string>> {
+  if (userIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, name: userName })
+    .from(users)
+    .where(inArray(users.id, userIds));
+  return new Map(rows.map((row) => [row.id, row.name]));
+}

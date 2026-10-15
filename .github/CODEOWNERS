@@ -5,6 +5,7 @@
 /packages/hub/src/access/                    @EdwinjJ1
 /packages/hub/src/accounts/                  @EdwinjJ1
 /packages/hub/src/permissions/               @EdwinjJ1
+/packages/hub/src/documents/                 @EdwinjJ1
 /packages/hub/src/rate-limit/                @EdwinjJ1
 /packages/hub/src/kan/                       @EdwinjJ1
 /packages/hub/migrations/                    @EdwinjJ1
