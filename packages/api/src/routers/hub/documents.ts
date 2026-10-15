@@ -150,7 +150,12 @@ export const documentsRouter = createTRPCRouter({
     ),
 
   replaceText: hubProcedure
-    .input(documentInput.extend({ content: z.string().max(410_000) }))
+    .input(
+      documentInput.extend({
+        content: z.string().max(410_000),
+        expectedUpdatedAt: z.string().max(40).optional(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       runHub(() =>
         replaceTextContent(ctx.db, getDocumentStorage(), ctx.actor, input),

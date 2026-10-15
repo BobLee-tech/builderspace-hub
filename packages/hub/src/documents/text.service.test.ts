@@ -189,6 +189,56 @@ describe("replaceTextContent", () => {
     expect((await getDocumentDetail(db, storage, member, small.publicId)).canEditText).toBe(false);
   });
 
+  it("refuses to show a text file that is not UTF-8, so the editor cannot write replacement characters back", async () => {
+    const prepared = await prepareUpload(db, storage, owner, { filename: "旧.txt", size: 4 });
+    const key = new URL(prepared.target.url).pathname.replace(/^\//, "");
+    // GBK bytes for 你好
+    storage.uploadFromBrowser(key, Buffer.from([0xc4, 0xe3, 0xba, 0xc3]));
+    const gbk = await completeUpload(db, storage, owner, { uploadId: prepared.uploadId });
+    await expect(readTextContent(db, storage, owner, gbk.publicId)).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("UTF-8") as string,
+    });
+  });
+
+  it("refuses a save made on a stale copy, and leaves the newer text and storage alone", async () => {
+    const created = await make(owner);
+    const opened = await readTextContent(db, storage, owner, created.publicId);
+
+    // Someone else saves first.
+    await replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "别人的改动" });
+    const objects = storage.files.size;
+
+    await expect(
+      replaceTextContent(db, storage, owner, {
+        documentPublicId: created.publicId,
+        content: "我的改动",
+        expectedUpdatedAt: opened.updatedAt.toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("别人的改动");
+    expect(storage.files.size).toBe(objects);
+  });
+
+  it("accepts a save made on the current copy, and a save that names no copy", async () => {
+    const created = await make(owner);
+    const opened = await readTextContent(db, storage, owner, created.publicId);
+    await replaceTextContent(db, storage, owner, {
+      documentPublicId: created.publicId,
+      content: "第一次",
+      expectedUpdatedAt: opened.updatedAt.toISOString(),
+    });
+    await replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "第二次" });
+    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("第二次");
+  });
+
+  it("rejects a malformed time", async () => {
+    const created = await make(owner);
+    await expect(
+      replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "x", expectedUpdatedAt: "昨天" }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
   it("keeps working after the document is hidden and unhidden", async () => {
     const created = await make(owner);
     await updateDocument(db, owner, { documentPublicId: created.publicId, readable: false });

@@ -60,7 +60,11 @@ export function TextEditor({
               className={buttonClass.primary}
               disabled={save.isPending || unchanged || value.length === 0}
               onClick={() =>
-                save.mutate({ documentPublicId, content: value })
+                save.mutate({
+                  documentPublicId,
+                  content: value,
+                  expectedUpdatedAt: new Date(current.data.updatedAt).toISOString(),
+                })
               }
             >
               {text.save}

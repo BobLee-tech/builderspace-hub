@@ -60,7 +60,8 @@ export async function authenticateDocumentRequest(
  * session is deliberately not accepted here: cookies ride along on requests
  * any page can make, and nothing on this API needs them. The cookie header is
  * dropped before the key is looked up, so a request that has both is judged by
- * its key alone.
+ * its key alone. The same goes for an Authorization header, which the auth
+ * library would otherwise prefer over `x-api-key`.
  */
 export async function authenticateDocumentApiRequest(
   req: NextApiRequest,
@@ -75,7 +76,7 @@ export async function authenticateDocumentApiRequest(
   try {
     context = await createNextApiContext({
       ...req,
-      headers: { ...req.headers, cookie: undefined },
+      headers: { ...req.headers, cookie: undefined, authorization: undefined },
     } as NextApiRequest);
   } catch (error) {
     // The auth library throws APIError for a key it will not accept: unknown,

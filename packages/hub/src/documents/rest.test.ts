@@ -106,6 +106,16 @@ describe("changing", () => {
     await expect(call(member, "PATCH", `/${doc.publicId}`, { title: "x" })).rejects.toBeDefined();
   });
 
+  it("refuses a content save made on a stale copy", async () => {
+    const doc = await create();
+    const opened = (await call(owner, "GET", `/${doc.publicId}/content`)).body as { updatedAt: string };
+    await call(owner, "PUT", `/${doc.publicId}/content`, { content: "别人先改" });
+    await expect(
+      call(owner, "PUT", `/${doc.publicId}/content`, { content: "我后改", expectedUpdatedAt: opened.updatedAt }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(((await call(owner, "GET", `/${doc.publicId}/content`)).body as { content: string }).content).toBe("别人先改");
+  });
+
   it("only moves a document into a folder that exists", async () => {
     const doc = await create();
     await expect(call(owner, "PATCH", `/${doc.publicId}`, { folderPublicId: "nope00000000" })).rejects.toMatchObject({

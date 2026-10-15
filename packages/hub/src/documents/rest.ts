@@ -81,7 +81,11 @@ const patchBody = z.object({
   readable: z.boolean().optional(),
 });
 
-const contentBody = z.object({ content: z.string() });
+const contentBody = z.object({
+  content: z.string(),
+  /** The `updatedAt` from the read; the save is refused if it has changed since. */
+  expectedUpdatedAt: z.string().optional(),
+});
 
 const prepareBody = z.object({ filename: z.string(), size: z.number().int() });
 
@@ -247,6 +251,7 @@ export async function handleDocumentsRest(
       const result = await replaceTextContent(db, storage, actor, {
         documentPublicId: publicId,
         content: input.content,
+        expectedUpdatedAt: input.expectedUpdatedAt,
       });
       return ok(result);
     }

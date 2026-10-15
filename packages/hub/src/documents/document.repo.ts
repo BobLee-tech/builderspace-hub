@@ -164,30 +164,54 @@ export async function insertDocument(
   return created;
 }
 
+export type DocumentPatch = Partial<
+  Pick<
+    DocumentRow,
+    | "title"
+    | "description"
+    | "folderId"
+    | "readable"
+    | "filename"
+    | "ext"
+    | "contentType"
+    | "size"
+    | "sha256"
+    | "storageKey"
+  >
+>;
+
 export async function updateDocument(
   db: DbOrTx,
   id: number,
-  patch: Partial<
-    Pick<
-      DocumentRow,
-      | "title"
-      | "description"
-      | "folderId"
-      | "readable"
-      | "filename"
-      | "ext"
-      | "contentType"
-      | "size"
-      | "sha256"
-      | "storageKey"
-    >
-  >,
+  patch: DocumentPatch,
   now: Date,
 ): Promise<void> {
   await db
     .update(hubDocuments)
     .set({ ...patch, updatedAt: now })
     .where(eq(hubDocuments.id, id));
+}
+
+/**
+ * Like `updateDocument`, but only if nobody changed the document since
+ * `ifUpdatedAt`. The check is part of the write, so two people saving at the
+ * same moment cannot both win. Returns whether the document was changed.
+ */
+export async function updateDocumentIfUnchanged(
+  db: DbOrTx,
+  id: number,
+  patch: DocumentPatch,
+  now: Date,
+  ifUpdatedAt: Date,
+): Promise<boolean> {
+  const rows = await db
+    .update(hubDocuments)
+    .set({ ...patch, updatedAt: now })
+    .where(
+      and(eq(hubDocuments.id, id), eq(hubDocuments.updatedAt, ifUpdatedAt)),
+    )
+    .returning({ id: hubDocuments.id });
+  return rows.length > 0;
 }
 
 export async function deleteDocument(db: DbOrTx, id: number): Promise<void> {

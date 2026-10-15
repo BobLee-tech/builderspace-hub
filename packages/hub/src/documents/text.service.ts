@@ -24,6 +24,7 @@ import {
   findFolder,
   insertDocument,
   updateDocument as updateDocumentRow,
+  updateDocumentIfUnchanged,
 } from "./document.repo";
 import { discardObject, requireStorage } from "./document.service";
 
@@ -59,7 +60,19 @@ const createSchema = z.object({
 const replaceSchema = z.object({
   documentPublicId: idSchema,
   content: z.string(),
+  /**
+   * The `updatedAt` the editor was opened with. When given, the save is
+   * refused if someone changed the document since, instead of silently
+   * overwriting their change.
+   */
+  expectedUpdatedAt: z
+    .string()
+    .datetime({ message: "修改时间的格式不对" })
+    .transform((value) => new Date(value))
+    .optional(),
 });
+
+const STALE = "这份文档在你打开之后被别人改过了，请刷新后再改";
 
 function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, input: unknown) {
   const result = schema.safeParse(input);
@@ -178,7 +191,18 @@ export async function readTextContent(
     throw new HubError("INVALID_INPUT", "这份文档太大，不能在这里读取，请下载");
   }
   const bytes = await store.read(row.storageKey);
-  return { content: bytes.toString("utf8"), updatedAt: row.updatedAt };
+  let content: string;
+  try {
+    // Strict: a file in another encoding (GBK, UTF-16) must not be shown with
+    // replacement characters, because saving it again would write them back.
+    content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new HubError(
+      "INVALID_INPUT",
+      "这份文档不是 UTF-8 编码的文本，不能在线读取或修改，请下载后用本机软件修改",
+    );
+  }
+  return { content, updatedAt: row.updatedAt };
 }
 
 /**
@@ -202,6 +226,9 @@ export async function replaceTextContent(
 
   const bytes = textBytes(input.content);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (input.expectedUpdatedAt && input.expectedUpdatedAt.getTime() !== row.updatedAt.getTime()) {
+    throw new HubError("CONFLICT", STALE);
+  }
   if (row.sha256 === sha256) return { changed: false };
 
   const key = storageKeyFor(row.ext, randomUUID());
@@ -212,12 +239,20 @@ export async function replaceTextContent(
     await withAudit(
       db,
       async (tx) => {
-        await updateDocumentRow(
-          tx,
-          row.id,
-          { size: bytes.length, sha256, storageKey: key },
-          now,
-        );
+        const patch = { size: bytes.length, sha256, storageKey: key };
+        if (input.expectedUpdatedAt) {
+          // Checked again as part of the write: a save that raced ours loses.
+          const written = await updateDocumentIfUnchanged(
+            tx,
+            row.id,
+            patch,
+            now,
+            input.expectedUpdatedAt,
+          );
+          if (!written) throw new HubError("CONFLICT", STALE);
+        } else {
+          await updateDocumentRow(tx, row.id, patch, now);
+        }
       },
       () => ({
         actor,

@@ -57,6 +57,17 @@ describe("authenticateDocumentApiRequest", () => {
     expect(seen.headers.cookie).toBeUndefined();
   });
 
+  it("drops an Authorization header too, which the auth library would prefer over the key", async () => {
+    createNextApiContext.mockResolvedValue({ user, db });
+    await authenticateDocumentApiRequest(
+      request({ "x-api-key": "k", authorization: "Bearer something-else" }),
+      response(),
+    );
+    const seen = createNextApiContext.mock.calls[0]?.[0] as NextApiRequest;
+    expect(seen.headers.authorization).toBeUndefined();
+    expect(seen.headers["x-api-key"]).toBe("k");
+  });
+
   it("returns who is calling, with their back-office role", async () => {
     createNextApiContext.mockResolvedValue({ user, db });
     const res = response();
