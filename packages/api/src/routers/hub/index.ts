@@ -44,6 +44,7 @@ import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
+import { documentsRouter } from "./documents";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
 
 /**
@@ -336,6 +337,7 @@ export const hubRouter = createTRPCRouter({
   settings: settingsRouter,
   tasks: tasksRouter,
   schedule: scheduleRouter,
+  documents: documentsRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

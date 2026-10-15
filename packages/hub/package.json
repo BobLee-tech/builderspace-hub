@@ -20,6 +20,10 @@
       "types": "./src/db.ts",
       "default": "./src/db.ts"
     },
+    "./documents": {
+      "types": "./src/documents/index.ts",
+      "default": "./src/documents/index.ts"
+    },
     "./permissions": {
       "types": "./src/permissions/index.ts",
       "default": "./src/permissions/index.ts"
@@ -66,7 +70,7 @@
     "check-seams": "tsx src/dev/check-seams.ts",
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "cli": "pnpm with-env tsx src/cli/main.ts",
-    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .gitignore",
     "generate": "drizzle-kit generate",
     "lint": "eslint",
     "migrate": "pnpm with-env drizzle-kit migrate",
@@ -77,9 +81,12 @@
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.802.0",
+    "@aws-sdk/s3-request-presigner": "^3.812.0",
     "@electric-sql/pglite": "^0.3.7",
     "@kan/builderspace": "workspace:*",
     "@kan/db": "workspace:*",
+    "@kan/logger": "workspace:*",
     "@kan/shared": "workspace:*",
     "better-auth": "^1.4.6",
     "drizzle-orm": "^0.42.0",

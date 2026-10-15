@@ -7,6 +7,7 @@
  */
 import { createDrizzleClient } from "@kan/db/client";
 
+import { getDocumentStorage } from "../documents/storage.config";
 import { isHubError } from "../shared/errors";
 import { parseCli } from "./args";
 import { runCommand, USAGE } from "./commands";
@@ -37,6 +38,7 @@ const main = async (): Promise<number> => {
       // eslint-disable-next-line turbo/no-undeclared-env-vars
       baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? null,
       now: new Date(),
+      storage: getDocumentStorage(),
     });
     console.log(lines.join("\n"));
     return lines[0]?.startsWith("✗") ? 1 : 0;

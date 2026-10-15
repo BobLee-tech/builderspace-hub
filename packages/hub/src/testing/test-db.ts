@@ -112,3 +112,5 @@ export async function seedHubAccount(
 ): Promise<void> {
   await upsertAccount(db, userId, { ...facts, now: new Date() });
 }
+
+export { MemoryDocumentStorage } from "./memory-storage";

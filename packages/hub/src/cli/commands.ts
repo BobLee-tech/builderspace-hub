@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { sql } from "drizzle-orm";
 
 import { hubStructure } from "@kan/builderspace/structure";
 
 import type { Db } from "../db";
+import type { DocumentStorage } from "../documents/storage";
 import type { CliCommand } from "./args";
 import {
   changeGrantHubRole,
@@ -26,11 +27,14 @@ import { buildJoinLink } from "../public";
 import { normalizeEmail } from "../shared/email";
 import { HubError } from "../shared/errors";
 import { ensureStandardProjects } from "../structure";
+import { importDocuments } from "./import-documents";
 
 export interface CliEnv {
   /** Where the Hub is served, e.g. `https://hub.example.com`. */
   baseUrl: string | null;
   now: Date;
+  /** Where documents are kept; null when none is configured. */
+  storage?: DocumentStorage | null;
 }
 
 export const USAGE = [
@@ -45,6 +49,8 @@ export const USAGE = [
   "            按标准结构建好项目和看板，该邮箱成为项目管理员（可重复执行）",
   "  set-role --email <邮箱> --role owner|admin|viewer|none",
   "            直接设置后台角色（补救用：例如没有人能进后台时）",
+  "  import-documents --source <目录>=<文件夹路径>... [--recursive] [--dry-run]",
+  "            把本地目录里的文件导入文档库（文件夹路径用 / 分层，可重复执行）",
   "  projects  列出所有项目的 ID 和名称",
   "  doctor    检查 Hub 的数据库迁移是否已是最新",
   "  help      显示这段说明",
@@ -112,6 +118,16 @@ export async function runCommand(
   switch (command.name) {
     case "help":
       return USAGE;
+
+    case "import-documents":
+      return importDocuments(db, env.storage ?? null, {
+        sources: command.sources.map((source) => ({
+          ...source,
+          dir: resolve(source.dir),
+        })),
+        recursive: command.recursive,
+        dryRun: command.dryRun,
+      });
 
     case "projects": {
       const projects = await listProjects(db);

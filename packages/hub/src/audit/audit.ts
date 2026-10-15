@@ -25,7 +25,20 @@ export type AuditAction =
   | "account.project_role_changed"
   | "account.project_removed"
   | "project.permission_changed"
-  | "settings.function_colors_changed";
+  | "settings.function_colors_changed"
+  | "document.created"
+  | "document.updated"
+  | "document.file_replaced"
+  | "document.readable_changed"
+  | "document.deleted"
+  | "document.editor_granted"
+  | "document.editor_revoked"
+  | "document.edit_requested"
+  | "document.edit_request_approved"
+  | "document.edit_request_denied"
+  | "document_folder.created"
+  | "document_folder.renamed"
+  | "document_folder.deleted";
 
 export interface AuditActor {
   userId: string | null;

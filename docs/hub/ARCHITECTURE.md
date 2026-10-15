@@ -110,6 +110,20 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **时间**：库里存绝对时刻（UTC），哪一天、几点由浏览器的时钟决定。页面的格子换算在 `apps/web/src/hub/lib/schedule-layout.ts`，是不依赖 React 的纯函数，测试在三个时区下都跑过。
 - **交互**：先选一种「画笔」（没空 / 有空 / 会议，或者点右边的一个任务），再在时间表上拖。点一下是一小时；拖块移动，拖块的下沿缩放。
 
+## 文档库
+
+`packages/hub/src/documents/` 负责 `/documents`：合同、方案、PPT 这类文件的在线管理。
+
+- **库里只有元数据，文件在对象存储里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）、`hub_document_upload`（见下）。文件放在 S3 兼容的私有 bucket；本地开发用磁盘上的一个目录顶替（`storage.fs.ts`），生产环境设了会报错。三种实现（S3、磁盘、测试用的内存）都走 `DocumentStorage` 接口。
+- **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：登录成员，除非这份文档的可读开关被关掉（关掉后只有能修改的人看得到）。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
+- **上传分两步，文件不经过我们的服务器。** Vercel 函数的请求体限 4.5 MB，PPT 放不下。`prepareUpload` 检查格式和大小，在 `hub_document_upload` 里记一条（谁、哪个 key、多大、30 分钟内有效），返回一个签了名的上传地址；浏览器把文件直接传给 bucket；`completeUpload` 向 bucket 确认文件真的在、大小和签名时一致，再建文档。只有这张表里属于本人、没用过、没过期的 key 才能变成文档——否则任何人都能把别人文件的 key 登记成自己的文档，读到它。签名里带了文件大小，bucket 会拒绝别的长度。
+- **格式白名单，类型由我们定。** 只认扩展名（`inspectFile`），不信浏览器报的类型；脚本、可执行文件、SVG 不收。读文件时返回的类型也由我们定：md、csv、json 一律按纯文本显示，从不解释。
+- **读文件只有一个出口** `GET /api/hub/documents/<id>/file`：先按登录状态和权限检查，再重定向到几十秒有效的签名链接（磁盘存储时由服务器直接输出）。不缓存，因为读的权利可以被收回。不接受 API key。
+- **HTML 是唯一能带代码的格式，只在沙箱里显示。** 页面里的 `<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」：能跑脚本，但读不到本站的 cookie、存储和接口。磁盘存储下文件由我们自己的域名输出，响应头再加一道 `Content-Security-Policy: sandbox`。PDF 用不带沙箱的 iframe（浏览器的 PDF 阅读器在沙箱里不能用）。
+- **每个改数据的用例都有操作日志。** `prepareUpload` 是例外：它没有改任何持久的东西，文档在 `completeUpload` 里才出现并记日志。
+- **导入命令** `cli import-documents`（`cli/import-documents.ts`）直接读本地目录、写存储和数据库，不走网页；不做权限检查，因为它只能由有数据库访问权的人在命令行运行。HTML 文件会把相对路径引用的样式、字体、图片内联进去（`cli/inline-html.ts`，只读源目录之内的文件）。
+- **已知的局限**：没有版本历史（替换文件会删掉旧文件）；Word、PPT、Excel 没有预览（只能下载）；没完成的上传留下的孤儿文件还没有定期清理；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
+
 ## 操作日志
 
 每个会改数据的用例都用 `withAudit()` 包起来：改动和日志在同一个事务里，要么都写要么都不写。日志存操作人邮箱的副本（账号删了也能查）、动作名、对象类型和 ID、一句人能读的摘要。新增动作时在 `audit/audit.ts` 的 `AuditAction` 里加一项。
