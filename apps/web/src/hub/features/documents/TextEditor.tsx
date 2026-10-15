@@ -51,6 +51,9 @@ export function TextEditor({
             aria-label={text.title}
             className={`${inputClass} mt-3 min-h-96 font-mono text-[13px] leading-6`}
             spellCheck={false}
+            // Locked while saving: anything typed after clicking save would be
+            // lost when the editor closes on success.
+            readOnly={save.isPending}
             value={value}
             onChange={(event) => setDraft(event.target.value)}
           />
