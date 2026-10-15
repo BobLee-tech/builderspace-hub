@@ -31,7 +31,14 @@ export default withHubRateLimit(
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
 
-    const auth = await authenticateDocumentApiRequest(req, res);
+    let auth;
+    try {
+      auth = await authenticateDocumentApiRequest(req, res);
+    } catch (error) {
+      log.error({ err: error }, "Document API authentication failed");
+      res.status(500).json({ message: "服务出错了，请稍后再试" });
+      return;
+    }
     if (!auth) return;
 
     const path = req.query.path;

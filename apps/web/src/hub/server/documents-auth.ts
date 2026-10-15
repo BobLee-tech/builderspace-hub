@@ -78,9 +78,15 @@ export async function authenticateDocumentApiRequest(
       headers: { ...req.headers, cookie: undefined },
     } as NextApiRequest);
   } catch (error) {
+    // The auth library throws APIError for a key it will not accept: unknown,
+    // disabled, expired, or used too often. None of these is a server fault.
     const e = error as { name?: string; body?: { code?: string } };
-    if (e.name === "APIError" && e.body?.code === "RATE_LIMITED") {
-      res.status(429).json({ message: "这个 API key 请求太频繁，稍后再试" });
+    if (e.name === "APIError") {
+      if (e.body?.code === "RATE_LIMITED") {
+        res.status(429).json({ message: "这个 API key 请求太频繁，稍后再试" });
+      } else {
+        res.status(401).json({ message: "API key 无效或已停用" });
+      }
       return null;
     }
     throw error;
