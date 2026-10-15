@@ -53,6 +53,55 @@ export async function authenticateDocumentRequest(
   };
 }
 
+/**
+ * Who is calling the document API, or a refusal already written to `res`.
+ *
+ * This one is for the command line and takes an API key only. A browser
+ * session is deliberately not accepted here: cookies ride along on requests
+ * any page can make, and nothing on this API needs them. The cookie header is
+ * dropped before the key is looked up, so a request that has both is judged by
+ * its key alone.
+ */
+export async function authenticateDocumentApiRequest(
+  req: NextApiRequest,
+  res: NextApiResponse,
+): Promise<DocumentRequestContext | null> {
+  if (typeof req.headers["x-api-key"] !== "string" || !req.headers["x-api-key"]) {
+    res.status(401).json({ message: "需要 API key（x-api-key 请求头）" });
+    return null;
+  }
+
+  let context;
+  try {
+    context = await createNextApiContext({
+      ...req,
+      headers: { ...req.headers, cookie: undefined },
+    } as NextApiRequest);
+  } catch (error) {
+    const e = error as { name?: string; body?: { code?: string } };
+    if (e.name === "APIError" && e.body?.code === "RATE_LIMITED") {
+      res.status(429).json({ message: "这个 API key 请求太频繁，稍后再试" });
+      return null;
+    }
+    throw error;
+  }
+
+  const { user, db } = context;
+  if (!user) {
+    res.status(401).json({ message: "API key 无效或已停用" });
+    return null;
+  }
+  const facts = await getAccessFacts(db, user.id);
+  if (facts.status === "suspended") {
+    res.status(403).json({ message: "这个账号已被停用" });
+    return null;
+  }
+  return {
+    db,
+    actor: { userId: user.id, email: user.email, role: facts.role },
+  };
+}
+
 /** Writes a use case's expected failure as JSON; anything else is re-thrown. */
 export function respondWithHubError(
   res: NextApiResponse,

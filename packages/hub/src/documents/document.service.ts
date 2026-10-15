@@ -56,7 +56,7 @@ function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, input: unknown) {
   return result.data;
 }
 
-function requireStorage(storage: DocumentStorage | null): DocumentStorage {
+export function requireStorage(storage: DocumentStorage | null): DocumentStorage {
   if (!storage) {
     throw new HubError("CONFLICT", "文件存储还没有配置，暂时不能上传或下载");
   }
@@ -64,7 +64,7 @@ function requireStorage(storage: DocumentStorage | null): DocumentStorage {
 }
 
 /** Deleting a file nobody points at any more must never fail the request. */
-async function discardObject(
+export async function discardObject(
   storage: DocumentStorage | null,
   key: string,
 ): Promise<void> {
@@ -164,6 +164,8 @@ const completeSchema = z.object({
   title: titleSchema.nullish(),
   description: descriptionSchema.nullish(),
   folderPublicId: idSchema.nullish(),
+  /** Defaults to readable by everyone; false hides it from the start. */
+  readable: z.boolean().optional(),
 });
 
 /**
@@ -278,7 +280,7 @@ export async function completeUpload(
         size: upload.size,
         sha256: null,
         storageKey: upload.storageKey,
-        readable: true,
+        readable: input.readable ?? true,
         uploadedBy: userId,
         now,
       });

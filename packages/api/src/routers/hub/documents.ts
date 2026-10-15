@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   completeUpload,
   createFolder,
+  createTextDocument,
   decideEditRequest,
   deleteDocument,
   deleteFolder,
@@ -13,7 +14,9 @@ import {
   grantEditor,
   listDecidableRequests,
   prepareUpload,
+  readTextContent,
   renameFolder,
+  replaceTextContent,
   requestEdit,
   revokeEditor,
   updateDocument,
@@ -105,11 +108,52 @@ export const documentsRouter = createTRPCRouter({
         title: z.string().max(300).nullish(),
         description: z.string().max(2000).nullish(),
         folderPublicId: id.nullish(),
+        readable: z.boolean().optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
         completeUpload(ctx.db, getDocumentStorage(), ctx.actor, input),
+      ),
+    ),
+
+  /** Writes a text document (Markdown, text, CSV, JSON, HTML) in the page. */
+  createText: hubProcedure
+    .input(
+      z.object({
+        title: z.string().max(300),
+        filename: z.string().min(1).max(300),
+        content: z.string().max(1_100_000),
+        description: z.string().max(2000).nullish(),
+        folderPublicId: id.nullish(),
+        readable: z.boolean().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        createTextDocument(ctx.db, getDocumentStorage(), ctx.actor, input),
+      ),
+    ),
+
+  /** The text of a text document, for the editor. */
+  content: hubProcedure
+    .input(documentInput)
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        readTextContent(
+          ctx.db,
+          getDocumentStorage(),
+          ctx.actor,
+          input.documentPublicId,
+        ),
+      ),
+    ),
+
+  replaceText: hubProcedure
+    .input(documentInput.extend({ content: z.string().max(1_100_000) }))
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        replaceTextContent(ctx.db, getDocumentStorage(), ctx.actor, input),
       ),
     ),
 

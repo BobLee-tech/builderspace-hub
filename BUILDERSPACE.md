@@ -54,6 +54,11 @@ EchoAgent       →   开发 / 运营 / 营销
 
 **在线预览**：PDF 和 HTML 直接在页面里渲染，图片也可以；md、txt、csv、json 按纯文本显示；Word、PPT、Excel 等只能下载。HTML 在沙箱里显示：脚本能运行，但碰不到本站的登录状态和数据。HTML 里用相对路径引用的样式、字体、图片，导入时会内联进文件，否则放进库里就找不到它们了。
 
+### 在网页里写、用命令行传
+
+- 「新建文档」直接在页面里写 Markdown、纯文本、HTML、CSV 或 JSON；文本类文档页上有「编辑内容」，保存会覆盖原来的内容。
+- 命令行 `bshub doc +create --title "讲稿" --file 讲稿.md --private`（[CLI 仓库](https://github.com/EdwinjJ1/builderspace-hub-cli)）走 `/api/hub/v1/documents`，用 API key 登录。可以读、新建、改信息、换文本内容、下载；**不能删除，也不能分配修改权限**，这两件只在网页里做。
+
 ### 文件存储
 
 文件不进仓库，也不进数据库，放在 S3 兼容的**私有** bucket（推荐 Cloudflare R2，有免费额度）。浏览器直接把文件传给 bucket，因为 Vercel 函数单次请求最多 4.5 MB，放不下 PPT 和 PDF。用 Kan 本来就有的 `S3_*` 变量，另加一个 bucket 名：

@@ -21,6 +21,7 @@ import {
   formatBytes,
   formatDate,
 } from "./document-display";
+import { NewDocumentDialog } from "./NewDocumentDialog";
 import { UploadDialog } from "./UploadDialog";
 
 const text = copy.documents;
@@ -40,6 +41,7 @@ export function DocumentsPage() {
 
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [writing, setWriting] = useState(false);
 
   const utils = api.useUtils();
   const library = api.hub.documents.library.useQuery(
@@ -75,6 +77,14 @@ export function DocumentsPage() {
                 onClick={() => setCreating(true)}
               >
                 {text.actions.newFolder}
+              </button>
+              <button
+                type="button"
+                className={buttonClass.ghost}
+                disabled={!data.uploadsAvailable}
+                onClick={() => setWriting(true)}
+              >
+                {text.actions.newText}
               </button>
               <button
                 type="button"
@@ -244,6 +254,19 @@ export function DocumentsPage() {
           </>
         )}
       </div>
+
+      {writing && data && (
+        <NewDocumentDialog
+          folderPublicId={data.folder?.publicId ?? null}
+          folderName={data.folder?.name ?? null}
+          onClose={() => setWriting(false)}
+          onCreated={(publicId) => {
+            setWriting(false);
+            void refresh();
+            void router.push(documentHref(publicId));
+          }}
+        />
+      )}
 
       {uploading && data && (
         <UploadDialog

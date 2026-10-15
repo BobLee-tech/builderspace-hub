@@ -439,6 +439,11 @@ export async function listPendingRequests(
     .orderBy(asc(hubDocumentEditRequests.createdAt));
 }
 
+/**
+ * Records a decision on a pending request. Returns false when the request was
+ * no longer pending, i.e. someone else decided it first, so two managers
+ * deciding at once cannot both succeed.
+ */
 export async function decideRequest(
   db: DbOrTx,
   id: number,
@@ -447,15 +452,22 @@ export async function decideRequest(
     by: string | null;
     at: Date;
   },
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const rows = await db
     .update(hubDocumentEditRequests)
     .set({
       status: decision.status,
       decidedBy: decision.by,
       decidedAt: decision.at,
     })
-    .where(eq(hubDocumentEditRequests.id, id));
+    .where(
+      and(
+        eq(hubDocumentEditRequests.id, id),
+        eq(hubDocumentEditRequests.status, "pending"),
+      ),
+    )
+    .returning({ id: hubDocumentEditRequests.id });
+  return rows.length > 0;
 }
 
 /** Closes the person's pending request for the document as approved. */

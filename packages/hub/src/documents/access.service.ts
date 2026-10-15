@@ -238,11 +238,15 @@ export async function decideEditRequest(
   await withAudit(
     db,
     async (tx) => {
-      await decideRequest(tx, request.id, {
+      const decided = await decideRequest(tx, request.id, {
         status: input.approve ? "approved" : "denied",
         by: access.userId,
         at: now,
       });
+      if (!decided) {
+        // Someone decided it between our read above and this write.
+        throw new HubError("CONFLICT", "这条申请已经处理过了");
+      }
       if (input.approve) {
         await addEditor(tx, {
           documentId: document.id,

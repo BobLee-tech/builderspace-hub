@@ -51,3 +51,11 @@ export { FS_UPLOAD_PATH, FsDocumentStorage } from "./storage.fs";
 export { getDocumentStorage } from "./storage.config";
 export { documentStorageFromEnv } from "./storage.config";
 export { S3DocumentStorage, createDocumentS3Client } from "./storage.s3";
+export {
+  createTextDocument,
+  readTextContent,
+  replaceTextContent,
+} from "./text.service";
+export { isTextExtension, MAX_TEXT_BYTES } from "./document.policy";
+export { handleDocumentsRest, statusOfHubError } from "./rest";
+export type { RestRequest, RestResponse } from "./rest";

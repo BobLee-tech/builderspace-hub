@@ -19,6 +19,7 @@ import {
   canRequestEdit,
   fileLabel,
   FOLDER_MAX_DEPTH,
+  isTextExtension,
   FOLDER_NAME_MAX_LENGTH,
   normaliseName,
   previewKindOf,
@@ -248,6 +249,8 @@ export interface DocumentDetail extends DocumentSummary {
   canRequestEdit: boolean;
   /** May replace the file (needs storage as well as the right to edit). */
   canReplace: boolean;
+  /** May rewrite the text in the page's editor: a text format, and storage. */
+  canEditText: boolean;
   /** The viewer's latest request for this document, if any. */
   myRequest: {
     status: "pending" | "approved" | "denied";
@@ -303,6 +306,8 @@ export async function getDocumentDetail(
       hasPendingRequest: hasPending,
     }),
     canReplace: access.canEdit && storage !== null,
+    canEditText:
+      access.canEdit && storage !== null && isTextExtension(row.ext),
     myRequest:
       latest && !access.canEdit
         ? {
