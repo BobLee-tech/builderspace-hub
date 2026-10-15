@@ -84,8 +84,10 @@ export interface Library {
   documents: DocumentSummary[];
   search: string | null;
   canCreate: boolean;
-  /** False until file storage is configured: nothing can be uploaded yet. */
+  /** False until an object-storage bucket is configured: no files can be uploaded. */
   uploadsAvailable: boolean;
+  /** Whether text documents can be written (any storage, the database included). */
+  textAvailable: boolean;
 }
 
 const libraryInput = z.object({
@@ -230,7 +232,8 @@ export async function getLibrary(
     documents: inScope.map(({ row, canEdit }) => summarise(row, canEdit, byId)),
     search,
     canCreate: canCreateDocument(actor.role),
-    uploadsAvailable: storage !== null,
+    uploadsAvailable: storage?.canUpload === true,
+    textAvailable: storage !== null,
   };
 }
 
@@ -306,7 +309,7 @@ export async function getDocumentDetail(
       canEdit: access.canEdit,
       hasPendingRequest: hasPending,
     }),
-    canReplace: access.canEdit && storage !== null,
+    canReplace: access.canEdit && storage?.canUpload === true,
     canEditText:
       access.canEdit &&
       storage !== null &&

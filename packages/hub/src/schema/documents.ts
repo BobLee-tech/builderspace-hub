@@ -10,6 +10,7 @@ import {
   primaryKey,
   timestamp,
   uniqueIndex,
+  customType,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -172,3 +173,21 @@ export const hubDocumentUploads = pgTable(
   },
   (table) => [index("hub_document_upload_user_idx").on(table.userId)],
 ).enableRLS();
+
+/** Postgres `bytea` as a Node Buffer. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+/**
+ * Small files kept in the database itself, for when no object-storage bucket
+ * is configured: text documents only, a megabyte at most. Keyed by the same
+ * `storageKey` a document row points at, so a document does not care where its
+ * bytes live. Once a bucket exists, new files go there and these stay readable.
+ */
+export const hubDocumentBlobs = pgTable("hub_document_blob", {
+  storageKey: varchar("storageKey", { length: 200 }).primaryKey(),
+  body: bytea("body").notNull(),
+  contentType: varchar("contentType", { length: 120 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}).enableRLS();

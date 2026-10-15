@@ -49,7 +49,7 @@ export const documentsRouter = createTRPCRouter({
       }),
     )
     .query(({ ctx, input }) =>
-      runHub(() => getLibrary(ctx.db, getDocumentStorage(), ctx.actor, input)),
+      runHub(() => getLibrary(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input)),
     ),
 
   get: hubProcedure
@@ -58,7 +58,7 @@ export const documentsRouter = createTRPCRouter({
       runHub(() =>
         getDocumentDetail(
           ctx.db,
-          getDocumentStorage(),
+          getDocumentStorage(ctx.db),
           ctx.actor,
           input.documentPublicId,
         ),
@@ -96,7 +96,7 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        prepareUpload(ctx.db, getDocumentStorage(), ctx.actor, input),
+        prepareUpload(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
       ),
     ),
 
@@ -113,7 +113,7 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        completeUpload(ctx.db, getDocumentStorage(), ctx.actor, input),
+        completeUpload(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
       ),
     ),
 
@@ -131,7 +131,7 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        createTextDocument(ctx.db, getDocumentStorage(), ctx.actor, input),
+        createTextDocument(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
       ),
     ),
 
@@ -142,7 +142,7 @@ export const documentsRouter = createTRPCRouter({
       runHub(() =>
         readTextContent(
           ctx.db,
-          getDocumentStorage(),
+          getDocumentStorage(ctx.db),
           ctx.actor,
           input.documentPublicId,
         ),
@@ -158,7 +158,7 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        replaceTextContent(ctx.db, getDocumentStorage(), ctx.actor, input),
+        replaceTextContent(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
       ),
     ),
 
@@ -182,7 +182,7 @@ export const documentsRouter = createTRPCRouter({
       runHub(() =>
         deleteDocument(
           ctx.db,
-          getDocumentStorage(),
+          getDocumentStorage(ctx.db),
           ctx.actor,
           input.documentPublicId,
         ),

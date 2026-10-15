@@ -48,9 +48,14 @@ export {
 export type { PreviewKind } from "./document.policy";
 export type { DocumentSource, DocumentStorage, UploadTarget } from "./storage";
 export { FS_UPLOAD_PATH, FsDocumentStorage } from "./storage.fs";
-export { getDocumentStorage } from "./storage.config";
+export { getDocumentStorage, getPrimaryDocumentStorage } from "./storage.config";
 export { documentStorageFromEnv } from "./storage.config";
 export { S3DocumentStorage, createDocumentS3Client } from "./storage.s3";
+export {
+  DatabaseDocumentStorage,
+  DatabaseFirstDocumentStorage,
+  DB_STORAGE_MAX_BYTES,
+} from "./storage.db";
 export {
   createTextDocument,
   readTextContent,

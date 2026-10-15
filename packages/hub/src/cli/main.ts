@@ -38,7 +38,7 @@ const main = async (): Promise<number> => {
       // eslint-disable-next-line turbo/no-undeclared-env-vars
       baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? null,
       now: new Date(),
-      storage: getDocumentStorage(),
+      storage: getDocumentStorage(db),
     });
     console.log(lines.join("\n"));
     return lines[0]?.startsWith("✗") ? 1 : 0;

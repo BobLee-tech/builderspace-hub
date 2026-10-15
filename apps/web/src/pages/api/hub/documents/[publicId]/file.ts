@@ -46,7 +46,7 @@ export default withHubRateLimit(
     try {
       const opened = await openDocument(
         auth.db,
-        getDocumentStorage(),
+        getDocumentStorage(auth.db),
         auth.actor,
         {
           documentPublicId: publicId,

@@ -123,6 +123,7 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **读文件只有一个出口** `GET /api/hub/documents/<id>/file`：先按登录状态和权限检查，再重定向到几十秒有效的签名链接（磁盘存储时由服务器直接输出）。不缓存，因为读的权利可以被收回。不接受 API key。
 - **HTML 是唯一能带代码的格式，只在沙箱里显示。** 页面里的 `<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」：能跑脚本，但读不到本站的 cookie、存储和接口。磁盘存储下文件由我们自己的域名输出，响应头再加一道 `Content-Security-Policy: sandbox`。PDF 用不带沙箱的 iframe（浏览器的 PDF 阅读器在沙箱里不能用）。
 - **每个改数据的用例都有操作日志。** `prepareUpload` 是例外：它没有改任何持久的东西，文档在 `completeUpload` 里才出现并记日志。
+- **没有 bucket 时，文本文档存在数据库里。** `getDocumentStorage(db)` 永远有存储：配了 bucket（开发时是磁盘目录）就用它，上传和所有新文件都走它；没配时由数据库顶上（`storage.db.ts`，表 `hub_document_blob`，每个文件最大 1 MB），所以文本文档（页面里写、命令行写）在 bucket 配好之前就能用。数据库不能给浏览器一个直传地址，所以 `canUpload` 为 false：上传 PDF、PPT 等文件仍然要先配 bucket，页面上「上传文件」是灰的并说明原因。bucket 配好以后，数据库里已有的文件照常能读（按 `storageKey` 先查数据库再查 bucket），新文件写进 bucket，不需要迁移。
 - **文本文档可以在网页里写、也可以用命令行写。** md、txt、csv、json、html（`isTextExtension`）不必上传文件：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`，都走 `text.service.ts`，服务端自己把内容存进 bucket（`DocumentStorage.read` / `put`），规则、格式白名单和操作日志与上传的文档完全一样。上限 400 KB（页面里写的文本要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
 - **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文件或转让编辑权，这些只在网页里做。可读性规则不变：读不到的文档回 404，和不存在一样。
 - **开发环境的磁盘存储不支持 API key 上传。** 磁盘存储的上传地址是只认浏览器会话的网页路由，所以 `bshub doc +create --file x.pdf` 和 `+download` 只能对接 bucket 存储（生产）；文本文档不受影响，因为服务端自己写。

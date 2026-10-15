@@ -91,7 +91,7 @@ export const zh = {
       managerHint: "点右上角的「上传文件」添加第一份。",
     },
     noStorage:
-      "文件存储还没有配置，现在只能浏览已有记录，不能上传或下载。请联系所有者配置。",
+      "还没有配置对象存储（bucket）：现在可以新建和编辑文本文档，但不能上传 PDF、PPT 等文件。请联系所有者配置。",
     columns: { name: "名称", type: "格式", size: "大小", updated: "更新" },
     badges: {
       canEdit: "可修改",

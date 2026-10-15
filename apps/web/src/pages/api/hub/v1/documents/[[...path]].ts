@@ -51,7 +51,7 @@ export default withHubRateLimit(
     try {
       const response = await handleDocumentsRest(
         auth.db,
-        getDocumentStorage(),
+        getDocumentStorage(auth.db),
         auth.actor,
         { method: req.method ?? "GET", segments, query, body: req.body },
       );
