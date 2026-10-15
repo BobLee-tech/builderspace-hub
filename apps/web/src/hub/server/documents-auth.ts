@@ -16,6 +16,7 @@ const STATUS = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   FORBIDDEN: 403,
+  UNAVAILABLE: 503,
 } as const;
 
 /**

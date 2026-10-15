@@ -22,9 +22,8 @@ const BASE_URL = "http://localhost:3000";
 let db: dbClient;
 let auth: ReturnType<typeof betterAuth>;
 
-beforeEach(async () => {
-  db = await createHubTestDb();
-  auth = betterAuth({
+const createAuth = (rateLimitEnabled: boolean) =>
+  betterAuth({
     secret: "test-secret-test-secret-test-secret-1234",
     baseURL: BASE_URL,
     database: drizzleAdapter(db, {
@@ -32,9 +31,13 @@ beforeEach(async () => {
       schema: { ...schema, user: schema.users },
     }),
     emailAndPassword: { enabled: true },
-    rateLimit: { enabled: true },
+    rateLimit: { enabled: rateLimitEnabled },
     plugins: [hubAuthPlugin(db)],
   });
+
+beforeEach(async () => {
+  db = await createHubTestDb();
+  auth = createAuth(true);
 });
 
 const signIn = () =>
@@ -61,6 +64,22 @@ describe("sign-in rate limiting", () => {
     expect(rows.map((row) => row.key)).toContainEqual(
       expect.stringContaining("/sign-in/email"),
     );
+  });
+
+  it("lets only five through when twenty arrive at once", async () => {
+    const statuses = await Promise.all(
+      Array.from({ length: 20 }, async () => (await signIn()).status),
+    );
+
+    expect(statuses.filter((status) => status !== 429)).toHaveLength(5);
+  });
+
+  it("is off when rate limiting is disabled", async () => {
+    auth = createAuth(false);
+    const statuses: number[] = [];
+    for (let i = 0; i < 8; i += 1) statuses.push((await signIn()).status);
+
+    expect(statuses).not.toContain(429);
   });
 });
 

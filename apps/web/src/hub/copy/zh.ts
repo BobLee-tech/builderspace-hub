@@ -281,6 +281,93 @@ export const zh = {
     },
   },
 
+  personal: {
+    tabs: {
+      schedule: "日程",
+      done: "我完成的",
+      github: "GitHub",
+    },
+  },
+
+  github: {
+    title: "GitHub",
+    description:
+      "连接 GitHub 后，可以看到你在自己所在项目的仓库里最近做了什么。只读取管理员给项目配好的仓库，而且只算你在的项目；Hub 用的 GitHub App 只有只读权限。",
+    notConfigured: {
+      heading: "GitHub 连接还没开通",
+      body: "管理员需要先建好 Hub 的 GitHub App。开通之后这里会出现「连接 GitHub」按钮。",
+    },
+    connect: "连接 GitHub",
+    reconnect: "重新连接",
+    disconnect: "断开连接",
+    sync: "同步最近活动",
+    syncing: "正在同步…",
+    connectedAs: (login: string) => `已连接 ${login}`,
+    lastSynced: (when: string) => `上次同步：${when}`,
+    neverSynced: "还没同步过，点「同步最近活动」读取最近 90 天。",
+    outcomes: {
+      connected: "GitHub 已连接。点「同步最近活动」读取最近 90 天的活动。",
+      denied: "你在 GitHub 上取消了授权，没有连接。",
+      expired: "这次连接已经过期或不完整，请再点一次「连接 GitHub」。",
+      failed: "连接没有成功，请再试一次。如果一直不行，请联系管理员。",
+      not_configured: "GitHub 连接还没开通，请联系管理员。",
+    },
+    windows: {
+      30: "近 30 天",
+      90: "近 90 天",
+    },
+    kinds: {
+      commit: "提交",
+      pr_opened: "提 PR",
+      pr_merged: "PR 合并",
+      issue_opened: "提 Issue",
+    },
+    repos: {
+      title: "统计的仓库",
+      hint: "管理员在后台给你所在的项目配的仓库。",
+      none: "你所在的项目还没有配仓库，请联系管理员在后台「项目仓库」里添加。",
+    },
+    syncReport: {
+      noAccess: (repo: string) =>
+        `读不到 ${repo}：GitHub App 还没装到这个仓库，或者你在 GitHub 上没有它的访问权。`,
+      failed: (repo: string) =>
+        `读取 ${repo} 时 GitHub 出错了，稍后再同步一次。`,
+      done: (count: number) => `同步完成，读到 ${count} 条活动。`,
+    },
+    byProject: "按项目（近 90 天）",
+    recent: {
+      title: "最近活动",
+      empty: "近 90 天在这些仓库里还没有你的活动。",
+    },
+  },
+
+  archive: {
+    title: "我完成的",
+    description:
+      "卡片移到「已完成」的那一刻，它就自动归到这里。有负责人的任务记给负责人，没人负责的记给把它移过去的人。任务被重新打开就不再算。这里只有你自己能看到。",
+    total: "累计完成",
+    thisMonth: "本月完成",
+    months: {
+      title: "最近 12 个月",
+      axis: (month: number) => `${month}月`,
+      tooltip: (year: number, month: number, count: number) =>
+        `${year} 年 ${month} 月 · ${count} 个`,
+      tableCaption: "每月完成的任务数",
+      monthColumn: "月份",
+      countColumn: "完成数",
+    },
+    byProject: "按项目",
+    byFunction: "按职能",
+    otherBoards: "其他看板",
+    recent: {
+      title: "完成记录",
+      monthHeading: (year: number, month: number) => `${year} 年 ${month} 月`,
+      limited: (shown: number, total: number) =>
+        `只列出最近 ${shown} 个，统计数字包含全部 ${total} 个。`,
+      empty: "还没有完成的任务。卡片移到「已完成」后会自动出现在这里。",
+    },
+  },
+
   schedule: {
     title: "个人",
     heading: "我的时间",
@@ -336,7 +423,12 @@ export const zh = {
       body: "后台只对后台管理员开放。如果你需要进入，请联系所有者。",
     },
     loading: "加载中…",
-    groups: { overview: "概览", people: "成员与准入", system: "系统管理" },
+    groups: {
+      overview: "概览",
+      people: "成员与准入",
+      system: "系统管理",
+      site: "官网",
+    },
     roles: { owner: "所有者", admin: "管理员", viewer: "只读", none: "无" },
     projectRoles: {
       admin: "管理员",
@@ -418,6 +510,10 @@ export const zh = {
       restoreHint: "恢复后这个账号可以重新登录。原来的 API key 不会恢复。",
       restore: "恢复账号",
       notFound: "找不到这个账号。",
+      siteHeading: "官网权限",
+      siteHint:
+        "能不能查看和处理官网上提交的数据，和后台角色无关。名单：看志愿者申请和加入登记，改志愿者的状态和备注；管理：在名单之外还能审核项目卡和项目进展。只有所有者能设置。",
+      siteNone: "无",
     },
     grants: {
       title: "注册链接",
@@ -452,6 +548,16 @@ export const zh = {
       reset: "恢复默认",
       readOnly: "只有所有者和管理员能修改颜色。",
     },
+    repos: {
+      title: "项目仓库",
+      description:
+        "每个项目由哪些 GitHub 仓库组成。成员连接 GitHub 后，只统计他能看到的项目里的这些仓库；不在项目里的人，这个项目的仓库一个也不会算进去。",
+      none: "还没有关联仓库。",
+      placeholder: "owner/仓库名，或粘贴仓库链接",
+      add: "关联仓库",
+      remove: "取消关联",
+      readOnly: "只有所有者和管理员能修改项目仓库。",
+    },
     permissions: {
       title: "项目权限",
       description:
@@ -470,6 +576,164 @@ export const zh = {
       homeHint:
         "关掉某个角色的「查看看板」或「查看任务」后，这个角色在首页的「全部」里就看不到这个项目。",
       readOnly: "你是只读角色，只能查看。",
+    },
+    site: {
+      noAccess: {
+        heading: "没有官网权限",
+        body: "官网的数据只对被所有者授予了官网权限的人开放。如果你需要，请联系所有者。",
+      },
+      notConnected: {
+        heading: "还没有连接官网数据库",
+        body: "部署环境里还没有设置 HUB_SITE_DATABASE_URL，连接方法见仓库的 BUILDERSPACE.md。",
+      },
+      overview: {
+        title: "官网概览",
+        description:
+          "官网上提交的项目和报名都在这里处理。数据直接读写官网的数据库，每一次审核、改状态和导出都会记进操作日志。",
+        pendingProjects: "待审核的项目卡",
+        pendingUpdates: "待审核的项目进展",
+        newVolunteers: "未处理的志愿者申请",
+        volunteersTotal: (count: number) => `共 ${count} 份`,
+        joins: "加入登记",
+        recentJoins: (count: number, days: number) =>
+          `近 ${days} 天新增 ${count} 人`,
+        supporters: "支持社团申请的人",
+      },
+      projects: {
+        title: "项目审核",
+        description:
+          "访客在官网提交的项目卡和项目进展，通过后才会在官网公开。待审核的按提交先后排列，先到先审。",
+        tabs: { projects: "项目卡", updates: "项目进展" },
+        approve: "通过",
+        reject: "驳回",
+        takeDown: "下架",
+        empty: "这里没有内容",
+        submittedAt: "提交于",
+        fields: {
+          owner: "发起人",
+          targetUser: "给谁用",
+          needed: "在找",
+          nextStep: "下一步",
+          contact: "联系方式",
+          links: "链接",
+          media: "封面和视频",
+        },
+        repo: "代码仓库",
+        demo: "Demo",
+        cover: "有封面",
+        video: (duration: string) => `演示视频 ${duration}`,
+        noMedia: "没有上传",
+        mediaHint:
+          "封面和视频存在官网的私有存储里，原图和视频请看企业微信群的推送。",
+        updateOf: (project: string) => `「${project}」的进展`,
+        unknownProject: "（项目已删除）",
+      },
+      volunteers: {
+        title: "志愿者申请",
+        description:
+          "想加入核心团队的人。状态和备注会直接写回官网的数据库；备注只有有官网权限的人能看到，不要写证件号这类信息。",
+        all: "全部",
+        email: "邮箱",
+        contact: "联系方式",
+        school: "学校 / 学位",
+        positions: "想做的职位",
+        hours: "每周时间",
+        about: "自我介绍",
+        portfolio: "作品链接",
+        channel: "来源",
+        status: "状态",
+        notes: "备注",
+        notesPlaceholder: "联系情况、面试安排…",
+        saveNotes: "保存备注",
+        saved: "已保存",
+        empty: "还没有志愿者申请",
+      },
+      joins: {
+        title: "加入登记",
+        description:
+          "在官网填写加入表单的人。勾选「只看支持社团申请的」可以拿到附有姓名和 zID 的支持者名单。",
+        supportersOnly: "只看支持社团申请的",
+        columns: {
+          name: "昵称",
+          school: "学校 / 专业",
+          skills: "技能",
+          hours: "每周时间",
+          interest: "下次活动",
+          availability: "方便的时间",
+          source: "来源",
+          supporter: "支持社团申请",
+          createdAt: "登记时间",
+        },
+        empty: "还没有人登记",
+      },
+      export: "导出表格",
+      exporting: "正在导出…",
+      exported: (count: number) => `已导出 ${count} 条`,
+      submittedAt: "提交于",
+      // Keys are the website's own (src/lib/types.ts in its repo); a key
+      // missing here is shown as is.
+      labels: {
+        positions: {
+          events: "活动",
+          content: "内容与渠道",
+          design_media: "设计与影像",
+          partnerships: "对外合作",
+          recruiting: "招募与成员发展",
+          product: "产品与项目",
+          web_tools: "网站与工具",
+          teaching: "教学与支持",
+          tech_explore: "技术探索",
+          secretary: "秘书与行政",
+          finance: "财务",
+        } as Record<string, string>,
+        skills: {
+          frontend: "前端",
+          backend: "后端",
+          design: "设计",
+          product: "产品/商科",
+          beginner: "零基础",
+        } as Record<string, string>,
+        roles: {
+          frontend: "前端",
+          backend: "后端",
+          design: "设计",
+          product: "产品/商科",
+          tester: "试用者",
+        } as Record<string, string>,
+        hours: {
+          lt2: "2 小时以内",
+          "2to5": "2–5 小时",
+          gt5: "5 小时以上",
+        } as Record<string, string>,
+        interest: {
+          yes: "想来",
+          maybe: "看时间",
+          no: "这次不来",
+        } as Record<string, string>,
+        availability: {
+          weekday_evening: "工作日晚上",
+          weekend_day: "周末白天",
+          online: "线上",
+        } as Record<string, string>,
+        referral: {
+          xiaohongshu: "小红书",
+          wechat: "微信群 / 朋友圈",
+          friend: "朋友推荐",
+          poster: "校园海报",
+          other: "其他",
+        } as Record<string, string>,
+        updateKinds: {
+          commit: "代码提交",
+          demo: "Demo",
+          post: "更新帖",
+        } as Record<string, string>,
+        projectStatus: {
+          recruiting: "招募中",
+          building: "进行中",
+          demoed: "已 Demo",
+          paused: "暂停",
+        } as Record<string, string>,
+      },
     },
     audit: {
       title: "操作日志",

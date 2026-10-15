@@ -1,0 +1,2 @@
+ALTER TABLE "hub_account" ADD COLUMN "siteAccess" varchar(16);--> statement-breakpoint
+ALTER TABLE "hub_account" ADD CONSTRAINT "hub_account_site_access_check" CHECK ("hub_account"."siteAccess" IS NULL OR "hub_account"."siteAccess" IN ('people', 'manage'));

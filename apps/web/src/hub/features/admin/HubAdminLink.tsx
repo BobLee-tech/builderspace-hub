@@ -6,6 +6,7 @@ import { twMerge } from "tailwind-merge";
 import { can } from "@kan/hub/public";
 
 import { copy } from "~/hub/copy/zh";
+import { adminHome } from "~/hub/lib/routes";
 import { api } from "~/utils/api";
 
 const linkClass =
@@ -13,8 +14,9 @@ const linkClass =
 
 /**
  * The Hub's own sidebar links, rendered once under Kan's navigation: 文档 for
- * every member, 后台 for back-office members only. They live in one component
- * so the sidebar needs a single registered edit (docs/hub/UPSTREAM_SEAMS.md).
+ * every member, 后台 for back-office members and for those with website
+ * access (who land in the 官网 section). They live in one component so the
+ * sidebar needs a single registered edit (docs/hub/UPSTREAM_SEAMS.md).
  */
 export function HubAdminLink({
   isCollapsed,
@@ -28,6 +30,8 @@ export function HubAdminLink({
     retry: false,
     staleTime: 60_000,
   });
+  const role = me.data?.role ?? null;
+  const showAdmin = can(role, "admin.view") || Boolean(me.data?.siteAccess);
 
   return (
     <>
@@ -44,9 +48,9 @@ export function HubAdminLink({
         <TbFiles size={18} className="shrink-0" />
         {!isCollapsed && copy.documents.entry}
       </Link>
-      {can(me.data?.role ?? null, "admin.view") && (
+      {showAdmin && (
         <Link
-          href="/admin"
+          href={adminHome(role)}
           onClick={onCloseSideNav}
           title={copy.admin.entry}
           className={twMerge(

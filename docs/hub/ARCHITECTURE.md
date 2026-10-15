@@ -95,8 +95,10 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 
 登录、注册和注册链接检查都有按 IP 的限流，计数存在 `hub_rate_limit` 表里（`packages/hub/src/rate-limit/`）。放在数据库而不是内存，是因为线上跑在多个无服务器实例上，各自在内存里计数等于没有限制。
 
-- Better Auth 自带限流逻辑，`hubAuthPlugin` 只给它换上数据库存储（`rateLimitStorage`），并对邮箱密码登录、注册、申请重置密码加了更严的规则（`HUB_AUTH_RATE_LIMITS`）。插件的选项只填补 Kan 没设置的项，所以 `DISABLE_RATE_LIMIT` 仍然有效（测试里就用它关掉）。
-- Hub 自己的 API 路由用 `withHubRateLimit`（`apps/web/src/hub/server/rate-limit.ts`），背后是一条原子的 `INSERT … ON CONFLICT` 语句，并发请求也不会多放行。
+- Better Auth 自带限流逻辑，`hubAuthPlugin` 给它换上数据库存储（`rateLimitStorage`），并对邮箱密码登录、注册、申请重置密码加了更严的规则（`HUB_AUTH_RATE_LIMITS`）。插件的选项只填补 Kan 没设置的项，所以 `DISABLE_RATE_LIMIT` 仍然有效（测试里就用它关掉）。
+- Better Auth 的计数是「先读再写」两步，并发请求会读到同一个旧值、一起放行。所以这三类路径在插件的 `onRequest` 里另用 `consumeRateLimit` 原子计数一次（key 以 `hub-auth:` 开头），并发打进来也只放行规定的次数；Better Auth 自己那层照常保留。
+- 两层在数据库出错时都放行（不因为数据库抖动把人挡在门外），但都会记错误日志（`Sign-in rate limit check failed`、`Rate limit storage failed`）。
+- Hub 自己的 API 路由用 `withHubRateLimit`（`apps/web/src/hub/server/rate-limit.ts`），背后是一条原子的 `INSERT … ON CONFLICT` 语句，并发请求也不会多放行；`DISABLE_RATE_LIMIT=true` 时同样关闭。
 - 计数按 `X-Forwarded-For` 的第一个地址算，自己部署时代理必须改写这个头，见根目录的 [SECURITY.md](../../SECURITY.md)。
 
 ## 个人日程
@@ -123,6 +125,40 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **每个改数据的用例都有操作日志。** `prepareUpload` 是例外：它没有改任何持久的东西，文档在 `completeUpload` 里才出现并记日志。
 - **导入命令** `cli import-documents`（`cli/import-documents.ts`）直接读本地目录、写存储和数据库，不走网页；不做权限检查，因为它只能由有数据库访问权的人在命令行运行。HTML 文件会把相对路径引用的样式、字体、图片内联进去（`cli/inline-html.ts`，只读源目录之内的文件）。
 - **已知的局限**：没有版本历史（替换文件会删掉旧文件）；Word、PPT、Excel 没有预览（只能下载）；没完成的上传留下的孤儿文件还没有定期清理；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
+## 我完成的
+
+`packages/hub/src/archive/` 负责 `/me/done`：一个人完成过的任务，按月、按项目、按职能统计。
+
+- **不建表**：完成的事实本来就在 Kan 的卡片活动记录里（`card_activity` 的 `card.updated.list`）。只读 `kan/archive.gateway.ts`，所以看板里怎么动，这里就怎么算，不会出现两份对不上的数据。
+- **怎样算完成**：卡片现在在「已完成」列（按列名识别，和大看板同一套规则）。完成时间取最后一次移进完成列的记录；直接建在完成列里的卡片取创建时间；什么记录都没有的（比如导入的）取卡片的创建时间，但只算给负责人。任务被重新打开就不再算。
+- **算给谁**：有负责人的算给负责人；没有负责人的算给把它移进完成列的人（`archive.policy.ts` 的 `countsForMe`）。只看自己能看的项目，离开了的项目不再出现。
+- **月份按看的人的时区切**：页面把浏览器时区传给接口，服务端用 `Intl` 换算，纯函数有测试。
+- 和日程一样只有本人能看，只读，不写操作日志。
+
+## 官网后台
+
+`packages/hub/src/site/` 负责后台的「官网」分区（`/admin/site`）：审核官网访客提交的项目卡和项目进展，跟进志愿者申请，查看加入登记。数据不在 Hub 的库里，而在官网自己的 Supabase 库里。
+
+- **两个数据库。** 官网的表定义在 `site/site.tables.ts`，故意放在 `schema/` 外面，drizzle-kit 不会把它们写进 Hub 的迁移；表由官网仓库的迁移创建，这里只列后台用到的列，官网以后加列不影响。连接在 `site/site.db.ts`：读 `HUB_SITE_DATABASE_URL`，每个实例建一个小连接池；没设就是「未连接」。
+- **专用角色，最小权限。** Hub 以 `hub_site_admin` 登录官网的库（建角色的迁移在官网仓库）。它只有四张表的 select、审核状态和志愿者状态 / 备注这几列的 update，外加放行这些操作的 RLS 策略。连非本机地址时一律 TLS 校验证书，URL 里的 `sslmode` 会被忽略（node-postgres 会让 URL 覆盖 `ssl` 选项）。
+- **官网权限和后台角色无关。** `hub_account.siteAccess`：`people`（名单）或 `manage`（管理），只有所有者能设，可以给自己设。规则在 `site/site.policy.ts` 的 `canOnSite()`；接口层用 `hubSiteProcedure(权限)`，用例里再查一遍。只有官网权限、没有后台角色的人，后台入口直接进 `/admin/site`，侧栏只显示「官网」一组。
+- **操作日志跨库。** 改官网数据的用例在写日志的 Hub 事务里执行官网那一步：官网那步失败，什么都不记；只有官网已提交、Hub 随后失败这一种极少见的情况会漏记。日志只写志愿者「改了备注」，不写备注内容；导出名单也记一条，写明筛选条件和条数。
+- **出错时。** 官网库连不上或者报错，用例记一条服务端日志，页面只看到「暂时连不上官网数据库」（`UNAVAILABLE` → `SERVICE_UNAVAILABLE`）。
+- **已知限制。** 封面和视频存在官网的私有存储里，Hub 没有存储的密钥，审核页只显示「有封面 / 视频时长」，原图和视频看企业微信的推送。志愿者备注是接口入参，会和日程标题一样出现在请求日志里。访客填的链接只有 `http(s)` 才渲染成链接；导出的表格会给 `= + - @` 开头的单元格加 `'`，防止在表格软件里被当成公式执行。
+
+## GitHub
+
+`packages/hub/src/github/` 负责连接 GitHub。分两步上线：先是后台的「项目仓库」，再是个人页的「连接 GitHub」。
+
+- **项目仓库**（`hub_project_repo`）：后台给每个项目配它由哪些仓库组成，存成小写的 `owner/name`（GitHub 不区分大小写，统一写法才能正确判断重复）。粘贴的 GitHub 链接会被规范化（`repo.policy.ts`）。所有者和管理员能改（`settings.manage`），每次改动都写操作日志。
+- **一个人的活动只读他能看的项目的仓库**：`listReposForUser()` 用的是和首页同一个出口 `listViewableProjects()`。不在某个项目里的人，那个项目的仓库一个也不会被读取或统计。
+- 连接用 **GitHub App**，不用 OAuth App：GitHub App 的权限是只读的，而且只对安装了它的仓库有效；OAuth App 要读私有仓库就得要 `repo` 权限，等于对这个人所有私有仓库都有读写权（2026-10-14 定）。环境变量叫 `HUB_GITHUB_CLIENT_ID` / `HUB_GITHUB_CLIENT_SECRET`，故意不用 `GITHUB_CLIENT_ID`：那是 Kan 自己的变量名，设了就会打开「用 GitHub 登录」，绕过注册闸门。
+- **连接**（`/me/github` 的「连接 GitHub」）：`/api/hub/github/connect` 生成随机 `state`，放进只有 `/api/hub/github` 收得到的 HttpOnly cookie，再跳去 GitHub 授权；GitHub 跳回 `/api/hub/github/callback`，`state` 和 cookie 对上（常量时间比较）才去换令牌。这两个是普通 API 路由不是 tRPC，因为要做跳转；`code` 不进 tRPC 日志。
+- **令牌加密存**（`hub_github_account`）：AES-256-GCM，密钥用 HKDF 从现有的 `BETTER_AUTH_SECRET` 派生，所以不用多管一个密钥（`token-crypto.ts`）。换了 `BETTER_AUTH_SECRET` 之后旧令牌解不开，大家重新连接一次就行。GitHub App 的用户令牌 8 小时过期，快过期时用 refresh token 自动换新。
+- **同步**（「同步最近活动」）：只读 `listReposForUser()` 给的仓库，读最近 90 天的提交（按作者）、自己开的 PR、合并的 PR、自己开的 Issue，每个仓库一页 100 条，一次最多并行读 4 个仓库；结果存进 `hub_github_event`（按「人 + 仓库 + 类型 + 编号」去重）。一分钟最多同步一次。App 没装或没权限的仓库返回 404/403，标成「读不到」，不影响别的仓库；GitHub 不认令牌（401）就提示重新连接，已存的数据不动。
+- **展示时再按权限过滤一次**：统计和列表只算现在还能看的项目的仓库，离开项目后那些活动就不再显示（数据还在，重新加入项目会回来）。
+- **断开**：请 GitHub 撤销令牌，删掉连接和同步来的活动。连接和断开写操作日志（只有 GitHub 用户名，从不写令牌）；同步本身不写。
+- GitHub 的调用都在 `github.client.ts` 后面，用例测试换成假 GitHub，不走网络。
 
 ## 操作日志
 
@@ -131,6 +167,6 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 ## 测试
 
 - 纯规则：普通单元测试。
-- 用例和 gateway：`createHubTestDb()` 起一个内存 Postgres（PGlite），先跑 Kan 的迁移再跑我们的，每个测试一个全新的库。
+- 用例和 gateway：`createHubTestDb()` 起一个内存 Postgres（PGlite），先跑 Kan 的迁移再跑我们的，每个测试一个全新的库。官网后台的用例另外用 `createSiteTestDb()` 起一个只有官网那几张表的内存库。
 - 注册闸门：`packages/auth/src/hub-plugin.integration.test.ts` 用 Kan 真实的 Better Auth 配置跑在内存库上，走 HTTP 接口。升级 Better Auth 时它会第一个告诉你钩子的行为变没变。
 - 覆盖率门槛 80%，范围是 `packages/hub`。界面的关键流程之后用 Playwright 覆盖。

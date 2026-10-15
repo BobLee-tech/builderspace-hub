@@ -3,6 +3,7 @@
 export * from "./access";
 export * from "./accounts";
 export * from "./audit";
+export * from "./github";
 export * from "./schedule";
 export * from "./settings";
 export * from "./rate-limit";

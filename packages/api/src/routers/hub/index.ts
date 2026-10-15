@@ -19,9 +19,21 @@ import {
   resetPassword,
   restoreAccount,
   setProjectRole,
+  setSiteAccess,
   suspendAccount,
 } from "@kan/hub/accounts";
+import { getArchive } from "@kan/hub/archive";
 import { countAudit, listAudit } from "@kan/hub/audit";
+import {
+  addProjectRepo,
+  disconnectGitHub,
+  getGitHubSummary,
+  gitHubAppConfig,
+  gitHubDeps,
+  listProjectRepos,
+  removeProjectRepo,
+  syncGitHub,
+} from "@kan/hub/github";
 import {
   editablePermissions,
   editableProjectRoles,
@@ -40,12 +52,14 @@ import {
 import { projectRoles } from "@kan/hub/schema";
 import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
+import { siteAccessLevels } from "@kan/hub/site";
 import { listProjects } from "@kan/hub/structure";
 import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
 import { documentsRouter } from "./documents";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
+import { siteRouter } from "./site";
 
 /**
  * The Hub's own API, mounted at `hub.*`: the back office, plus the home page
@@ -79,6 +93,7 @@ const meRouter = createTRPCRouter({
       email: ctx.actor.email,
       role: ctx.actor.role,
       permissions: permissionsOf(ctx.actor.role),
+      siteAccess: ctx.siteAccess,
     };
   }),
 });
@@ -121,6 +136,15 @@ const accountsRouter = createTRPCRouter({
     .input(userIdInput.extend({ role: z.enum(hubRoles).nullable() }))
     .mutation(({ ctx, input }) =>
       runHub(() => changeHubRole(ctx.db, ctx.actor, input.userId, input.role)),
+    ),
+
+  /** 官网权限: who may see the official website's data. Owners only. */
+  setSiteAccess: hubAdminProcedure("admins.manage")
+    .input(userIdInput.extend({ access: z.enum(siteAccessLevels).nullable() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        setSiteAccess(ctx.db, ctx.actor, input.userId, input.access),
+      ),
     ),
 
   suspend: hubAdminProcedure("accounts.manage")
@@ -257,6 +281,84 @@ const tasksRouter = createTRPCRouter({
     ),
 });
 
+const reposRouter = createTRPCRouter({
+  /** Every project with the GitHub repositories it is made of. */
+  list: hubAdminProcedure("admin.view").query(({ ctx }) =>
+    listProjectRepos(ctx.db),
+  ),
+
+  add: hubAdminProcedure("settings.manage")
+    .input(
+      z.object({
+        projectPublicId: z.string().min(1).max(32),
+        repo: z.string().min(1).max(300),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => addProjectRepo(ctx.db, ctx.actor, input)),
+    ),
+
+  remove: hubAdminProcedure("settings.manage")
+    .input(z.object({ repoPublicId: z.string().min(1).max(32) }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => removeProjectRepo(ctx.db, ctx.actor, input.repoPublicId)),
+    ),
+});
+
+/** The GitHub App's settings, or a refusal people can read when it is missing. */
+function requireGitHubApp() {
+  const config = gitHubAppConfig();
+  if (!config) {
+    throw new HubError(
+      "CONFLICT",
+      "管理员还没有配置 GitHub App，暂时不能连接。",
+    );
+  }
+  return config;
+}
+
+const githubRouter = createTRPCRouter({
+  /** My connection, the repositories that count for me, and my activity in them. */
+  summary: hubProcedure.query(async ({ ctx }) => ({
+    configured: gitHubAppConfig() !== null,
+    ...(await getGitHubSummary(ctx.db, {
+      userId: ctx.actor.userId,
+      now: new Date(),
+    })),
+  })),
+
+  sync: hubProcedure.mutation(({ ctx }) =>
+    runHub(() =>
+      syncGitHub(
+        ctx.db,
+        { userId: ctx.actor.userId, now: new Date() },
+        gitHubDeps(requireGitHubApp()),
+      ),
+    ),
+  ),
+
+  disconnect: hubProcedure.mutation(({ ctx }) =>
+    runHub(() =>
+      disconnectGitHub(ctx.db, ctx.actor, gitHubDeps(requireGitHubApp())),
+    ),
+  ),
+});
+
+const archiveRouter = createTRPCRouter({
+  /** 我完成的: my finished tasks, counted by month in the viewer's time zone. */
+  get: hubProcedure
+    .input(z.object({ timeZone: z.string().min(1).max(64) }))
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getArchive(ctx.db, {
+          userId: ctx.actor.userId,
+          timeZone: input.timeZone,
+          now: new Date(),
+        }),
+      ),
+    ),
+});
+
 const scheduleRouter = createTRPCRouter({
   /** My calendar for a window: my blocks plus my unfinished tasks. */
   get: hubProcedure
@@ -338,6 +440,10 @@ export const hubRouter = createTRPCRouter({
   tasks: tasksRouter,
   schedule: scheduleRouter,
   documents: documentsRouter,
+  repos: reposRouter,
+  github: githubRouter,
+  site: siteRouter,
+  archive: archiveRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

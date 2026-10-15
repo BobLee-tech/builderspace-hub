@@ -78,7 +78,7 @@ export function isDependencyBump(upstream: string, current: string): boolean {
   return withoutDependencies(before) === withoutDependencies(after);
 }
 
-const isOwnPath = (file: string, ownPaths: string[]): boolean =>
+export const isOwnPath = (file: string, ownPaths: string[]): boolean =>
   ownPaths.some((own) =>
     own.endsWith("/") ? file.startsWith(own) : file === own,
   );

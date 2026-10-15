@@ -8,6 +8,7 @@ import * as kanSchema from "@kan/db/schema";
 
 import type { Db } from "../db";
 import type { AccountStatus, HubRole } from "../schema";
+import type { SiteAccess } from "../site/site.policy";
 import { upsertAccount } from "../accounts/account.repo";
 import {
   HUB_MIGRATIONS_SCHEMA,
@@ -108,9 +109,21 @@ export async function seedProject(
 export async function seedHubAccount(
   db: Db,
   userId: string,
-  facts: { role?: HubRole | null; status?: AccountStatus },
+  facts: {
+    role?: HubRole | null;
+    siteAccess?: SiteAccess | null;
+    status?: AccountStatus;
+  },
 ): Promise<void> {
   await upsertAccount(db, userId, { ...facts, now: new Date() });
 }
 
 export { MemoryDocumentStorage } from "./memory-storage";
+export { overrideSiteDbForTests } from "../site/site.db";
+export {
+  createSiteTestDb,
+  seedSiteJoin,
+  seedSiteProject,
+  seedSiteUpdate,
+  seedSiteVolunteer,
+} from "./site-test-db";
