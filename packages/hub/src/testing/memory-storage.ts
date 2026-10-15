@@ -12,6 +12,7 @@ import type {
  */
 export class MemoryDocumentStorage implements DocumentStorage {
   readonly name = "memory" as const;
+  readonly canUpload = true;
   readonly files = new Map<string, { body: Buffer; contentType: string }>();
 
   createUpload(input: {

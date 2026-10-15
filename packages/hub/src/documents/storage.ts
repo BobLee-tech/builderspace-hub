@@ -9,7 +9,14 @@ import type { Readable } from "node:stream";
  * Local development has no bucket, so a folder on disk stands in for one.
  */
 export interface DocumentStorage {
-  readonly name: "s3" | "fs" | "memory";
+  readonly name: "s3" | "fs" | "memory" | "db";
+
+  /**
+   * Whether a browser can be handed an address to send a file to. False for
+   * storage that only the server writes to (the database), where only text
+   * documents made in the page or from the command line are possible.
+   */
+  readonly canUpload: boolean;
 
   /** A place the browser can send one file to. */
   createUpload(input: CreateUploadInput): Promise<UploadTarget>;

@@ -57,8 +57,9 @@ describe("hub.documents", () => {
     expect((await asAdmin.documents.library({})).canCreate).toBe(true);
   });
 
-  it("says plainly that uploads are not set up yet", async () => {
-    // No bucket and no folder are configured in the test environment.
+  it("says plainly that uploads need a bucket, while text documents already work", async () => {
+    // No bucket and no folder are configured in the test environment, so the
+    // database holds the text.
     await expect(
       createHubCaller(db, admin).documents.prepareUpload({
         filename: "a.pdf",
@@ -66,11 +67,11 @@ describe("hub.documents", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONFLICT",
-      message: expect.stringContaining("文件存储还没有配置") as string,
+      message: expect.stringContaining("对象存储") as string,
     });
-    expect(
-      (await createHubCaller(db, admin).documents.library({})).uploadsAvailable,
-    ).toBe(false);
+    const library = await createHubCaller(db, admin).documents.library({});
+    expect(library.uploadsAvailable).toBe(false);
+    expect(library.textAvailable).toBe(true);
   });
 
   it("keeps the text-document procedures behind the same doors", async () => {
@@ -88,17 +89,30 @@ describe("hub.documents", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("says plainly that text documents also need file storage", async () => {
-    await expect(
-      createHubCaller(db, admin).documents.createText({
-        title: "讲稿",
-        filename: "讲稿.md",
-        content: "# 讲稿",
-      }),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      message: expect.stringContaining("文件存储还没有配置") as string,
+  it("writes, reads and edits a text document without any bucket", async () => {
+    const asAdmin = createHubCaller(db, admin);
+    const created = await asAdmin.documents.createText({
+      title: "讲稿",
+      filename: "讲稿.md",
+      content: "# 讲稿",
+      readable: false,
     });
+    const opened = await asAdmin.documents.content({ documentPublicId: created.publicId });
+    expect(opened.content).toBe("# 讲稿");
+
+    await asAdmin.documents.replaceText({
+      documentPublicId: created.publicId,
+      content: "# 新稿",
+      expectedUpdatedAt: new Date(opened.updatedAt).toISOString(),
+    });
+    expect((await asAdmin.documents.content({ documentPublicId: created.publicId })).content).toBe("# 新稿");
+
+    // Hidden: a member who is not assigned to it neither lists nor opens it.
+    const asMember = createHubCaller(db, member);
+    expect((await asMember.documents.library({})).documents).toHaveLength(0);
+    await expect(
+      asMember.documents.content({ documentPublicId: created.publicId }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("rejects an oversized or malformed text body before it reaches a use case", async () => {

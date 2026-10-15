@@ -81,7 +81,7 @@ export function DocumentsPage() {
               <button
                 type="button"
                 className={buttonClass.ghost}
-                disabled={!data.uploadsAvailable}
+                disabled={!data.textAvailable}
                 onClick={() => setWriting(true)}
               >
                 {text.actions.newText}

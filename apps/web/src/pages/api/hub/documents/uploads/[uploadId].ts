@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import {
   findUpload,
   FsDocumentStorage,
-  getDocumentStorage,
+  getPrimaryDocumentStorage,
 } from "@kan/hub/documents";
 
 import { authenticateDocumentRequest } from "~/hub/server/documents-auth";
@@ -25,7 +25,7 @@ export default withHubRateLimit(
   async (req: NextApiRequest, res: NextApiResponse) => {
     res.setHeader("Cache-Control", "no-store");
 
-    const storage = getDocumentStorage();
+    const storage = getPrimaryDocumentStorage();
     if (!(storage instanceof FsDocumentStorage)) {
       res.status(404).end();
       return;

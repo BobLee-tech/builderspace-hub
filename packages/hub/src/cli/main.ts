@@ -7,7 +7,7 @@
  */
 import { createDrizzleClient } from "@kan/db/client";
 
-import { getDocumentStorage } from "../documents/storage.config";
+import { getPrimaryDocumentStorage } from "../documents/storage.config";
 import { isHubError } from "../shared/errors";
 import { parseCli } from "./args";
 import { runCommand, USAGE } from "./commands";
@@ -38,7 +38,9 @@ const main = async (): Promise<number> => {
       // eslint-disable-next-line turbo/no-undeclared-env-vars
       baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? null,
       now: new Date(),
-      storage: getDocumentStorage(),
+      // The bucket or folder only: bulk imports take every format, and the
+      // database holds text documents, not PDFs and decks.
+      storage: getPrimaryDocumentStorage(),
     });
     console.log(lines.join("\n"));
     return lines[0]?.startsWith("✗") ? 1 : 0;

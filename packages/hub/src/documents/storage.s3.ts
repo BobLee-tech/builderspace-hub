@@ -54,6 +54,7 @@ const isMissing = (error: unknown): boolean => {
 
 export class S3DocumentStorage implements DocumentStorage {
   readonly name = "s3" as const;
+  readonly canUpload = true;
 
   constructor(
     private readonly client: S3Client,

@@ -63,6 +63,20 @@ export function requireStorage(storage: DocumentStorage | null): DocumentStorage
   return storage;
 }
 
+/** Storage that a browser can send a file to; the database alone cannot. */
+export function requireUploadStorage(
+  storage: DocumentStorage | null,
+): DocumentStorage {
+  const store = requireStorage(storage);
+  if (!store.canUpload) {
+    throw new HubError(
+      "CONFLICT",
+      "上传文件需要先配置对象存储（bucket）；现在只能新建和编辑文本文档",
+    );
+  }
+  return store;
+}
+
 /** Deleting a file nobody points at any more must never fail the request. */
 export async function discardObject(
   storage: DocumentStorage | null,
@@ -117,7 +131,7 @@ export async function prepareUpload(
   rawInput: z.input<typeof prepareSchema>,
   now: Date = new Date(),
 ): Promise<PreparedUpload> {
-  const store = requireStorage(storage);
+  const store = requireUploadStorage(storage);
   const userId = requireUserId(actor);
   const input = parse(prepareSchema, rawInput);
 
@@ -181,7 +195,7 @@ export async function completeUpload(
   rawInput: z.input<typeof completeSchema>,
   now: Date = new Date(),
 ): Promise<{ publicId: string }> {
-  const store = requireStorage(storage);
+  const store = requireUploadStorage(storage);
   const userId = requireUserId(actor);
   const input = parse(completeSchema, rawInput);
 

@@ -20,6 +20,7 @@ export const FS_UPLOAD_PATH = "/api/hub/documents/uploads";
  */
 export class FsDocumentStorage implements DocumentStorage {
   readonly name = "fs" as const;
+  readonly canUpload = true;
   private readonly root: string;
 
   constructor(root: string) {

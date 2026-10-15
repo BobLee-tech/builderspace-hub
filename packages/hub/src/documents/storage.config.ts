@@ -1,4 +1,9 @@
+import type { Db } from "../db";
 import type { DocumentStorage } from "./storage";
+import {
+  DatabaseDocumentStorage,
+  DatabaseFirstDocumentStorage,
+} from "./storage.db";
 import { FsDocumentStorage } from "./storage.fs";
 import { createDocumentS3Client, S3DocumentStorage } from "./storage.s3";
 
@@ -51,11 +56,31 @@ export function documentStorageFromEnv(env: Env): DocumentStorage | null {
   return null;
 }
 
-let cached: { storage: DocumentStorage | null } | undefined;
+let cached: { primary: DocumentStorage | null } | undefined;
 
-/** The process-wide storage, built on first use. */
-export function getDocumentStorage(): DocumentStorage | null {
+/**
+ * The storage to use, built around `db`. There is always some: a configured
+ * bucket (or, in development, a folder) handles uploads and everything new;
+ * without one the database holds text documents, which is enough to write
+ * and edit documents before a bucket exists. Files already in the database
+ * stay readable either way.
+ */
+export function getDocumentStorage(db: Db): DocumentStorage {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
-  cached ??= { storage: documentStorageFromEnv(process.env) };
-  return cached.storage;
+  cached ??= { primary: documentStorageFromEnv(process.env) };
+  return new DatabaseFirstDocumentStorage(
+    new DatabaseDocumentStorage(db),
+    cached.primary,
+  );
+}
+
+/**
+ * The configured bucket or folder on its own, without the database in front
+ * of it: the disk upload route needs to know whether the folder driver is in
+ * use.
+ */
+export function getPrimaryDocumentStorage(): DocumentStorage | null {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  cached ??= { primary: documentStorageFromEnv(process.env) };
+  return cached.primary;
 }
