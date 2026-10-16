@@ -13,7 +13,6 @@ import {
   canCreateDocument,
   DESCRIPTION_MAX_LENGTH,
   inspectFile,
-  isTextExtension,
   MAX_TEXT_BYTES,
   normaliseName,
   storageKeyFor,
@@ -23,15 +22,14 @@ import {
   addEditor,
   findFolder,
   insertDocument,
-  updateDocument as updateDocumentRow,
   updateDocumentIfUnchanged,
+  updateDocument as updateDocumentRow,
 } from "./document.repo";
 import { discardObject, requireStorage } from "./document.service";
 
 /**
- * Text documents (Markdown, plain text, CSV, JSON, HTML) made or changed by
- * the server itself rather than uploaded from a browser: written in the
- * page's editor, or sent from the command line. They go through the same
+ * Documents (Markdown and HTML) written and changed in the page's editor, or
+ * sent from the command line. They go through the same
  * rules as every other document: who may create, who may change, the format
  * allowlist, the audit log.
  */
@@ -98,15 +96,6 @@ function textBytes(content: string): Buffer {
   return bytes;
 }
 
-function requireTextFormat(ext: string): void {
-  if (!isTextExtension(ext)) {
-    throw new HubError(
-      "INVALID_INPUT",
-      "只有文本格式（md、txt、csv、json、html）能这样新建或修改，其他格式请上传文件",
-    );
-  }
-}
-
 /** Creates a text document from its content. Returns its public id. */
 export async function createTextDocument(
   db: Db,
@@ -125,7 +114,6 @@ export async function createTextDocument(
   const bytes = textBytes(input.content);
   const file = inspectFile({ filename: input.filename, size: bytes.length });
   if (!file.ok) throw new HubError("INVALID_INPUT", file.reason);
-  requireTextFormat(file.ext);
 
   const folder = input.folderPublicId
     ? await findFolder(db, input.folderPublicId)
@@ -186,7 +174,6 @@ export async function readTextContent(
 ): Promise<{ content: string; updatedAt: Date }> {
   const store = requireStorage(storage);
   const { row } = await loadReadable(db, actor, documentPublicId);
-  requireTextFormat(row.ext);
   if (row.size > MAX_TEXT_BYTES) {
     throw new HubError("INVALID_INPUT", "这份文档太大，不能在这里读取，请下载");
   }
@@ -222,11 +209,13 @@ export async function replaceTextContent(
   const access = await loadReadable(db, actor, input.documentPublicId);
   requireEdit(access);
   const { row } = access;
-  requireTextFormat(row.ext);
 
   const bytes = textBytes(input.content);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (input.expectedUpdatedAt && input.expectedUpdatedAt.getTime() !== row.updatedAt.getTime()) {
+  if (
+    input.expectedUpdatedAt &&
+    input.expectedUpdatedAt.getTime() !== row.updatedAt.getTime()
+  ) {
     throw new HubError("CONFLICT", STALE);
   }
   if (row.sha256 === sha256) return { changed: false };

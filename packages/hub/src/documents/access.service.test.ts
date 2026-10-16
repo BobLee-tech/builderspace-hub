@@ -13,13 +13,10 @@ import {
   requestEdit,
   revokeEditor,
 } from "./access.service";
-import {
-  completeUpload,
-  prepareUpload,
-  updateDocument,
-} from "./document.service";
 import { decideRequest, findPendingRequest } from "./document.repo";
+import { updateDocument } from "./document.service";
 import { getDocumentDetail, getLibrary } from "./library.service";
+import { createTextDocument } from "./text.service";
 
 let db: Db;
 let storage: MemoryDocumentStorage;
@@ -63,16 +60,12 @@ beforeEach(async () => {
   adminId = a.id;
 
   // Adam adds the document, so he is its editor.
-  const prepared = await prepareUpload(db, storage, admin, {
-    filename: "contract.pdf",
-    size: 10,
-  });
-  storage.uploadFromBrowser(
-    new URL(prepared.target.url).pathname.replace(/^\//, ""),
-    Buffer.alloc(10),
-  );
   documentId = (
-    await completeUpload(db, storage, admin, { uploadId: prepared.uploadId })
+    await createTextDocument(db, storage, admin, {
+      title: "contract",
+      filename: "contract.md",
+      content: "# contract",
+    })
   ).publicId;
 });
 
@@ -179,12 +172,24 @@ describe("asking for the right to edit", () => {
 
   it("lets only one of two simultaneous decisions win", async () => {
     await requestEdit(db, member, { documentPublicId: documentId });
-    const row = await findPendingRequest(db, (await getRow(documentId)).id, memberId);
+    const row = await findPendingRequest(
+      db,
+      (await getRow(documentId)).id,
+      memberId,
+    );
     if (!row) throw new Error("the request should be pending");
 
     // Both managers read "pending"; the write itself must settle who was first.
-    const first = await decideRequest(db, row.id, { status: "approved", by: null, at: new Date() });
-    const second = await decideRequest(db, row.id, { status: "denied", by: null, at: new Date() });
+    const first = await decideRequest(db, row.id, {
+      status: "approved",
+      by: null,
+      at: new Date(),
+    });
+    const second = await decideRequest(db, row.id, {
+      status: "denied",
+      by: null,
+      at: new Date(),
+    });
     expect(first).toBe(true);
     expect(second).toBe(false);
   });

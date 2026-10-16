@@ -1,8 +1,13 @@
 import type { HubRole } from "../accounts/roles";
 import { can } from "../accounts/roles";
 
-/** Largest file we accept; PPT decks are the big ones. */
-export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+/**
+ * Largest document the server reads or writes. Text written in the page
+ * travels as JSON through Kan's tRPC route, whose request body is capped at
+ * 1 MB; quotes and line breaks double in size when escaped, so the limit
+ * leaves that margin.
+ */
+export const MAX_TEXT_BYTES = 400 * 1024;
 
 /** How deep folders may nest (a top-level folder is depth 1). */
 export const FOLDER_MAX_DEPTH = 3;
@@ -12,25 +17,29 @@ export const DESCRIPTION_MAX_LENGTH = 500;
 export const FOLDER_NAME_MAX_LENGTH = 80;
 export const REQUEST_NOTE_MAX_LENGTH = 280;
 
-/** How a file is shown on its page. `null` means download only. */
-export type PreviewKind = "pdf" | "html" | "image" | "text";
+/** How a document is shown on its page. */
+export type PreviewKind = "html" | "markdown";
 
 interface FileType {
   /** What the bytes are stored as. */
   contentType: string;
-  preview: PreviewKind | null;
+  preview: PreviewKind;
   label: string;
 }
 
 const TEXT_VIEW = "text/plain; charset=utf-8";
 
 /**
- * Every format a document may have. An allowlist: anything that can run code
- * on its own (scripts, executables, SVG) is left out. HTML is allowed because
- * it is a format we render, and is only ever shown inside a sandbox.
+ * The only two formats a document may have: Markdown and HTML, both written
+ * and edited in the page. HTML can carry code, so it is only ever shown inside
+ * a sandbox; Markdown is rendered without any raw HTML.
  */
 const FILE_TYPES: Record<string, FileType> = {
-  pdf: { contentType: "application/pdf", preview: "pdf", label: "PDF" },
+  md: {
+    contentType: "text/markdown; charset=utf-8",
+    preview: "markdown",
+    label: "Markdown",
+  },
   html: {
     contentType: "text/html; charset=utf-8",
     preview: "html",
@@ -41,98 +50,14 @@ const FILE_TYPES: Record<string, FileType> = {
     preview: "html",
     label: "HTML",
   },
-  png: { contentType: "image/png", preview: "image", label: "PNG" },
-  jpg: { contentType: "image/jpeg", preview: "image", label: "JPG" },
-  jpeg: { contentType: "image/jpeg", preview: "image", label: "JPG" },
-  gif: { contentType: "image/gif", preview: "image", label: "GIF" },
-  webp: { contentType: "image/webp", preview: "image", label: "WEBP" },
-  txt: { contentType: TEXT_VIEW, preview: "text", label: "TXT" },
-  md: {
-    contentType: "text/markdown; charset=utf-8",
-    preview: "text",
-    label: "MD",
-  },
-  csv: {
-    contentType: "text/csv; charset=utf-8",
-    preview: "text",
-    label: "CSV",
-  },
-  json: {
-    contentType: "application/json",
-    preview: "text",
-    label: "JSON",
-  },
-  doc: { contentType: "application/msword", preview: null, label: "Word" },
-  docx: {
-    contentType:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    preview: null,
-    label: "Word",
-  },
-  ppt: {
-    contentType: "application/vnd.ms-powerpoint",
-    preview: null,
-    label: "PPT",
-  },
-  pptx: {
-    contentType:
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    preview: null,
-    label: "PPT",
-  },
-  xls: {
-    contentType: "application/vnd.ms-excel",
-    preview: null,
-    label: "Excel",
-  },
-  xlsx: {
-    contentType:
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    preview: null,
-    label: "Excel",
-  },
-  key: {
-    contentType: "application/vnd.apple.keynote",
-    preview: null,
-    label: "Keynote",
-  },
-  pages: {
-    contentType: "application/vnd.apple.pages",
-    preview: null,
-    label: "Pages",
-  },
-  numbers: {
-    contentType: "application/vnd.apple.numbers",
-    preview: null,
-    label: "Numbers",
-  },
-  zip: { contentType: "application/zip", preview: null, label: "ZIP" },
 };
-
-/**
- * Formats that are plain UTF-8 text. Only these can be created or changed
- * without a file upload: from the command line, or in the page's editor.
- */
-const TEXT_EXTENSIONS = new Set(["md", "txt", "csv", "json", "html", "htm"]);
-
-/**
- * Largest text document the server reads or writes itself. Text written in the
- * page travels as JSON through Kan's tRPC route, whose request body is capped
- * at 1 MB; quotes and line breaks double in size when escaped, so the limit
- * leaves that margin.
- */
-export const MAX_TEXT_BYTES = 400 * 1024;
-
-export function isTextExtension(ext: string): boolean {
-  return TEXT_EXTENSIONS.has(ext.toLowerCase());
-}
 
 export type FileCheck =
   | {
       ok: true;
       ext: string;
       contentType: string;
-      preview: PreviewKind | null;
+      preview: PreviewKind;
       /** The name to show, with any path and control characters removed. */
       displayName: string;
     }
@@ -167,15 +92,18 @@ export function inspectFile(input: {
   const type = Object.hasOwn(FILE_TYPES, ext) ? FILE_TYPES[ext] : undefined;
 
   if (!type) {
-    return { ok: false, reason: "不支持这种文件格式" };
-  }
-  if (!Number.isInteger(input.size) || input.size <= 0) {
-    return { ok: false, reason: "文件是空的" };
-  }
-  if (input.size > MAX_FILE_BYTES) {
     return {
       ok: false,
-      reason: `文件太大，上限 ${MAX_FILE_BYTES / 1024 / 1024} MB`,
+      reason: "文档只支持 Markdown（.md）和 HTML（.html）两种格式",
+    };
+  }
+  if (!Number.isInteger(input.size) || input.size <= 0) {
+    return { ok: false, reason: "内容是空的" };
+  }
+  if (input.size > MAX_TEXT_BYTES) {
+    return {
+      ok: false,
+      reason: `内容太大，上限 ${MAX_TEXT_BYTES / 1024} KB`,
     };
   }
   return {
@@ -195,7 +123,7 @@ export function fileLabel(filename: string): string {
   return type?.label ?? ext.toUpperCase();
 }
 
-/** How a previewable file is shown, or null for download-only formats. */
+/** How a document is shown, or null for a format the library no longer holds. */
 export function previewKindOf(ext: string): PreviewKind | null {
   const type = Object.hasOwn(FILE_TYPES, ext) ? FILE_TYPES[ext] : undefined;
   return type?.preview ?? null;
@@ -203,18 +131,18 @@ export function previewKindOf(ext: string): PreviewKind | null {
 
 /**
  * The content type a file is served with when shown in the page. Text-like
- * formats (Markdown, CSV, JSON) are shown as plain text so nothing in them is
- * ever interpreted. Null for formats that are not shown.
+ * formats (Markdown) are shown as plain text so nothing in them is
+ * ever interpreted. Null for formats the library does not hold.
  */
 export function viewContentType(ext: string): string | null {
   const type = Object.hasOwn(FILE_TYPES, ext) ? FILE_TYPES[ext] : undefined;
-  if (!type?.preview) return null;
-  return type.preview === "text" ? TEXT_VIEW : type.contentType;
+  if (!type) return null;
+  return type.preview === "markdown" ? TEXT_VIEW : type.contentType;
 }
 
 /**
- * The object key. It carries the extension (handy in a bucket listing) and
- * nothing the uploader chose: file names are untrusted input.
+ * The key a document's content is stored under. It carries the extension and
+ * nothing the author chose: file names are untrusted input.
  */
 export function storageKeyFor(ext: string, random: string): string {
   return `documents/${random}.${ext}`;

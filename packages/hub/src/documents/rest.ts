@@ -6,17 +6,8 @@ import type { HubErrorCode } from "../shared/errors";
 import type { DocumentSummary } from "./library.service";
 import type { DocumentStorage } from "./storage";
 import { HubError } from "../shared/errors";
-import {
-  completeUpload,
-  openDocument,
-  prepareUpload,
-  updateDocument,
-} from "./document.service";
-import {
-  createFolder,
-  getDocumentDetail,
-  getLibrary,
-} from "./library.service";
+import { updateDocument } from "./document.service";
+import { createFolder, getDocumentDetail, getLibrary } from "./library.service";
 import {
   createTextDocument,
   readTextContent,
@@ -85,15 +76,6 @@ const contentBody = z.object({
   content: z.string(),
   /** The `updatedAt` from the read; the save is refused if it has changed since. */
   expectedUpdatedAt: z.string().optional(),
-});
-
-const prepareBody = z.object({ filename: z.string(), size: z.number().int() });
-
-const completeBody = z.object({
-  title: z.string().nullish(),
-  description: z.string().nullish(),
-  folderPublicId: id.nullish(),
-  readable: z.boolean().optional(),
 });
 
 const folderBody = z.object({
@@ -175,7 +157,7 @@ export async function handleDocumentsRest(
     return wrongMethod();
   }
 
-  const [first, second, third] = segments;
+  const [first, second] = segments;
 
   // /documents/folders
   if (first === "folders") {
@@ -193,39 +175,7 @@ export async function handleDocumentsRest(
     );
   }
 
-  // /documents/uploads and /documents/uploads/{uploadId}/complete
-  if (first === "uploads") {
-    if (segments.length === 1) {
-      if (method !== "POST") return wrongMethod();
-      const prepared = await prepareUpload(
-        db,
-        storage,
-        actor,
-        body(prepareBody, request.body),
-      );
-      return ok(
-        {
-          uploadId: prepared.uploadId,
-          url: prepared.target.url,
-          method: prepared.target.method,
-          headers: prepared.target.headers,
-          expiresAt: prepared.expiresAt.toISOString(),
-        },
-        201,
-      );
-    }
-    if (segments.length === 3 && third === "complete" && second) {
-      if (method !== "POST") return wrongMethod();
-      const created = await completeUpload(db, storage, actor, {
-        ...body(completeBody, request.body),
-        uploadId: second,
-      });
-      return ok(await detail(created.publicId), 201);
-    }
-    return notFound();
-  }
-
-  // /documents/{id}, /documents/{id}/content, /documents/{id}/download
+  // /documents/{id} and /documents/{id}/content
   const publicId = first;
   if (!publicId) return notFound();
 
@@ -244,7 +194,10 @@ export async function handleDocumentsRest(
   if (segments.length === 2 && second === "content") {
     if (method === "GET") {
       const text = await readTextContent(db, storage, actor, publicId);
-      return ok({ content: text.content, updatedAt: text.updatedAt.toISOString() });
+      return ok({
+        content: text.content,
+        updatedAt: text.updatedAt.toISOString(),
+      });
     }
     if (method === "PUT") {
       const input = body(contentBody, request.body);
@@ -256,22 +209,6 @@ export async function handleDocumentsRest(
       return ok(result);
     }
     return wrongMethod();
-  }
-
-  if (segments.length === 2 && second === "download") {
-    if (method !== "GET") return wrongMethod();
-    const doc = await getDocumentDetail(db, storage, actor, publicId);
-    const opened = await openDocument(db, storage, actor, {
-      documentPublicId: publicId,
-      mode: "download",
-    });
-    if (opened.source.kind !== "redirect") {
-      throw new HubError(
-        "CONFLICT",
-        "当前的文件存储不能给出下载链接（只有开发环境的磁盘存储会这样）",
-      );
-    }
-    return ok({ url: opened.source.url, filename: doc.filename });
   }
 
   return notFound();

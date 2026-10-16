@@ -7,25 +7,14 @@ export {
   revokeEditor,
 } from "./access.service";
 export {
-  completeUpload,
   deleteDocument,
-  importDocument,
   openDocument,
-  prepareUpload,
-  previewImport,
   updateDocument,
 } from "./document.service";
-export type {
-  ImportStatus,
-  OpenedDocument,
-  OpenMode,
-  PreparedUpload,
-} from "./document.service";
+export type { OpenedDocument, OpenMode } from "./document.service";
 export {
   createFolder,
   deleteFolder,
-  ensureFolderPath,
-  findFolderPath,
   getDocumentDetail,
   getLibrary,
   renameFolder,
@@ -37,30 +26,21 @@ export type {
   FolderSummary,
   Library,
 } from "./library.service";
-export { findUpload } from "./document.repo";
 export {
   DESCRIPTION_MAX_LENGTH,
   FOLDER_NAME_MAX_LENGTH,
-  MAX_FILE_BYTES,
+  MAX_TEXT_BYTES,
   REQUEST_NOTE_MAX_LENGTH,
   TITLE_MAX_LENGTH,
 } from "./document.policy";
 export type { PreviewKind } from "./document.policy";
-export type { DocumentSource, DocumentStorage, UploadTarget } from "./storage";
-export { FS_UPLOAD_PATH, FsDocumentStorage } from "./storage.fs";
-export { getDocumentStorage, getPrimaryDocumentStorage } from "./storage.config";
-export { documentStorageFromEnv } from "./storage.config";
-export { S3DocumentStorage, createDocumentS3Client } from "./storage.s3";
-export {
-  DatabaseDocumentStorage,
-  DatabaseFirstDocumentStorage,
-  DB_STORAGE_MAX_BYTES,
-} from "./storage.db";
+export type { DocumentSource, DocumentStorage } from "./storage";
+export { getDocumentStorage } from "./storage.config";
+export { DatabaseDocumentStorage, DB_STORAGE_MAX_BYTES } from "./storage.db";
 export {
   createTextDocument,
   readTextContent,
   replaceTextContent,
 } from "./text.service";
-export { isTextExtension, MAX_TEXT_BYTES } from "./document.policy";
 export { handleDocumentsRest, statusOfHubError } from "./rest";
 export type { RestRequest, RestResponse } from "./rest";

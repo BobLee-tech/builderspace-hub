@@ -23,7 +23,6 @@ import {
 } from "./document-display";
 import { DocumentViewer } from "./DocumentViewer";
 import { TextEditor } from "./TextEditor";
-import { UploadDialog } from "./UploadDialog";
 
 const text = copy.documents;
 
@@ -41,7 +40,6 @@ export function DocumentPage() {
   const doc = query.data;
 
   const [editing, setEditing] = useState(false);
-  const [replacing, setReplacing] = useState(false);
   const [writing, setWriting] = useState(false);
   const remove = api.hub.documents.delete.useMutation({
     onSuccess: () => {
@@ -99,7 +97,7 @@ export function DocumentPage() {
                     · {text.detail.updated} {formatDate(doc.updatedAt)}
                   </span>
                   {doc.uploadedByName && (
-                    <span>· {text.detail.uploadedBy(doc.uploadedByName)}</span>
+                    <span>· {text.detail.createdBy(doc.uploadedByName)}</span>
                   )}
                   {!doc.readable && (
                     <Pill tone="alert">{text.badges.hidden}</Pill>
@@ -152,15 +150,6 @@ export function DocumentPage() {
                     {text.actions.editText}
                   </button>
                 )}
-                {doc.canReplace && (
-                  <button
-                    type="button"
-                    className={buttonClass.ghost}
-                    onClick={() => setReplacing(true)}
-                  >
-                    {text.actions.replace}
-                  </button>
-                )}
                 <ConfirmButton
                   label={text.actions.delete}
                   isPending={remove.isPending}
@@ -196,7 +185,7 @@ export function DocumentPage() {
             )}
 
             <DocumentViewer
-              // The file may be replaced under the same address.
+              // Saved content replaces the old under the same address.
               key={`${doc.publicId}-${doc.updatedAt.toString()}`}
               publicId={doc.publicId}
               title={doc.title}
@@ -207,17 +196,6 @@ export function DocumentPage() {
           </div>
         )}
       </div>
-
-      {replacing && doc && (
-        <UploadDialog
-          documentPublicId={doc.publicId}
-          onClose={() => setReplacing(false)}
-          onUploaded={() => {
-            void utils.hub.documents.get.invalidate();
-            void utils.hub.documents.library.invalidate();
-          }}
-        />
-      )}
     </>
   );
 }

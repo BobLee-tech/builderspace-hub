@@ -20,7 +20,6 @@ import {
   hubDocumentEditRequests,
   hubDocumentFolders,
   hubDocuments,
-  hubDocumentUploads,
 } from "../schema";
 
 /** A person's name for display; their e-mail when they never set one. */
@@ -28,7 +27,6 @@ const userName = sql<string>`coalesce(${users.name}, ${users.email})`;
 
 export type FolderRow = typeof hubDocumentFolders.$inferSelect;
 export type DocumentRow = typeof hubDocuments.$inferSelect;
-export type UploadRow = typeof hubDocumentUploads.$inferSelect;
 
 /* ── folders ─────────────────────────────────────────────────────────── */
 
@@ -124,27 +122,6 @@ export async function findDocumentById(
     .select()
     .from(hubDocuments)
     .where(eq(hubDocuments.id, id))
-    .limit(1);
-  return row ?? null;
-}
-
-/** A document already in `folderId` with this file name (the import's identity). */
-export async function findDocumentByFilename(
-  db: DbOrTx,
-  folderId: number | null,
-  filename: string,
-): Promise<DocumentRow | null> {
-  const [row] = await db
-    .select()
-    .from(hubDocuments)
-    .where(
-      and(
-        folderId === null
-          ? isNull(hubDocuments.folderId)
-          : eq(hubDocuments.folderId, folderId),
-        eq(hubDocuments.filename, filename),
-      ),
-    )
     .limit(1);
   return row ?? null;
 }
@@ -512,45 +489,6 @@ export async function approvePendingRequest(
         eq(hubDocumentEditRequests.status, "pending"),
       ),
     );
-}
-
-/* ── uploads ─────────────────────────────────────────────────────────── */
-
-export async function insertUpload(
-  db: DbOrTx,
-  row: Omit<UploadRow, "id" | "consumedAt" | "createdAt">,
-): Promise<UploadRow> {
-  const [created] = await db.insert(hubDocumentUploads).values(row).returning();
-  if (!created) throw new Error("insertUpload: no row returned");
-  return created;
-}
-
-export async function findUpload(
-  db: DbOrTx,
-  publicId: string,
-): Promise<UploadRow | null> {
-  const [row] = await db
-    .select()
-    .from(hubDocumentUploads)
-    .where(eq(hubDocumentUploads.publicId, publicId))
-    .limit(1);
-  return row ?? null;
-}
-
-/** True when this call was the one that consumed it. */
-export async function consumeUpload(
-  db: DbOrTx,
-  id: number,
-  at: Date,
-): Promise<boolean> {
-  const updated = await db
-    .update(hubDocumentUploads)
-    .set({ consumedAt: at })
-    .where(
-      and(eq(hubDocumentUploads.id, id), isNull(hubDocumentUploads.consumedAt)),
-    )
-    .returning({ id: hubDocumentUploads.id });
-  return updated.length > 0;
 }
 
 /* ── users ───────────────────────────────────────────────────────────── */

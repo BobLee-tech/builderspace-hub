@@ -77,8 +77,8 @@ export const zh = {
     title: "文档",
     entry: "文档",
     description:
-      "合同、方案、PPT 和其他文件都放在这里。所有成员都能查看和下载；要修改某份文档，需要有修改权限，可以在文档页向管理员申请。",
-    searchPlaceholder: "搜索标题或文件名",
+      "用 Markdown 或 HTML 写的文档都放在这里，直接在页面里写和编辑。所有成员都能查看；要修改某份文档，需要有修改权限，可以在文档页向管理员申请。",
+    searchPlaceholder: "搜索标题",
     root: "全部文档",
     searchResults: (count: number) => `找到 ${count} 份文档`,
     folderMeta: (documents: number, folders: number) =>
@@ -88,17 +88,14 @@ export const zh = {
     empty: {
       folder: "这里还没有文档。",
       search: "没有找到匹配的文档。",
-      managerHint: "点右上角的「上传文件」添加第一份。",
+      managerHint: "点右上角的「新建文档」写第一份。",
     },
-    noStorage:
-      "还没有配置对象存储（bucket）：现在可以新建和编辑文本文档，但不能上传 PDF、PPT 等文件。请联系所有者配置。",
     columns: { name: "名称", type: "格式", size: "大小", updated: "更新" },
     badges: {
       canEdit: "可修改",
       hidden: "仅编辑者可见",
     },
     actions: {
-      upload: "上传文件",
       newFolder: "新建文件夹",
       requests: "待处理申请",
       rename: "重命名",
@@ -108,15 +105,15 @@ export const zh = {
       cancel: "取消",
       download: "下载",
       openNewTab: "新标签页打开",
-      replace: "替换文件",
       edit: "编辑信息",
       newText: "新建文档",
       editText: "编辑内容",
     },
     newText: {
       title: "新建文档",
-      hint: "直接在这里写，保存成一份文档。支持 Markdown、纯文本、HTML、CSV、JSON。",
+      hint: "直接在这里写，保存成一份文档。支持 Markdown 和 HTML 两种格式。",
       destination: "放进",
+      topLevel: "最上层",
       titleLabel: "标题",
       formatLabel: "格式",
       contentLabel: "内容",
@@ -126,10 +123,7 @@ export const zh = {
       create: "创建",
       formats: {
         md: "Markdown（.md）",
-        txt: "纯文本（.txt）",
         html: "HTML（.html）",
-        csv: "CSV（.csv）",
-        json: "JSON（.json）",
       },
     },
     editText: {
@@ -144,32 +138,14 @@ export const zh = {
       create: "创建",
       renamePrompt: "新名称",
     },
-    upload: {
-      title: "上传文件",
-      hint: "可以一次选多个。合同、方案、PPT、表格都行；HTML 和 PDF 可以在线预览，其他格式可下载。",
-      choose: "选择文件",
-      drop: "把文件拖到这里，或",
-      destination: "放进",
-      topLevel: "最上层",
-      status: {
-        waiting: "等待",
-        preparing: "准备中",
-        uploading: "上传中",
-        finishing: "收尾",
-        done: "完成",
-        failed: "失败",
-      },
-      close: "关闭",
-      progress: (done: number, total: number) => `已完成 ${done} / ${total}`,
-    },
     detail: {
       back: "返回文档",
-      uploadedBy: (name: string) => `${name} 上传`,
+      createdBy: (name: string) => `${name} 创建`,
       size: "大小",
       format: "格式",
       updated: "最后更新",
       location: "位置",
-      noPreview: "这种格式不能在线预览。点「下载」用本机的软件打开。",
+      noPreview: "这种格式不能在线预览。",
       previewFailed: "预览打不开，可以试试下载。",
       title: "标题",
       descriptionLabel: "说明",
@@ -178,7 +154,6 @@ export const zh = {
       readable: "所有成员可读",
       readableHint: "关闭后，只有能修改这份文档的人看得到它。",
       deleteConfirm: "删除",
-      replaceHint: "替换后原来的文件会被删掉。",
     },
     access: {
       title: "修改权限",
@@ -215,10 +190,6 @@ export const zh = {
       back: "返回文档",
     },
     loading: "加载中…",
-    errors: {
-      uploadFailed: "上传失败，请重试",
-      network: "网络出错，请重试",
-    },
   },
 
   home: {

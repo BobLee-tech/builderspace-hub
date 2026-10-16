@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import {
-  completeUpload,
   createFolder,
   createTextDocument,
   decideEditRequest,
@@ -13,7 +12,6 @@ import {
   getLibrary,
   grantEditor,
   listDecidableRequests,
-  prepareUpload,
   readTextContent,
   renameFolder,
   replaceTextContent,
@@ -27,12 +25,9 @@ import { hubProcedure, runHub } from "./procedures";
 
 /**
  * The document library, mounted at `hub.documents.*`. Every procedure is open
- * to any signed-in member; what each person may actually do (read, upload,
+ * to any signed-in member; what each person may actually do (read, write,
  * change, hand out edit rights) is decided inside the use cases, which are the
- * single place those rules live.
- *
- * No input carries a secret. The upload address returned by `prepareUpload` is
- * a short-lived signed link, and appears only in that output.
+ * single place those rules live. No input carries a secret.
  */
 
 const id = z.string().min(1).max(32);
@@ -49,7 +44,9 @@ export const documentsRouter = createTRPCRouter({
       }),
     )
     .query(({ ctx, input }) =>
-      runHub(() => getLibrary(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input)),
+      runHub(() =>
+        getLibrary(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
+      ),
     ),
 
   get: hubProcedure
@@ -85,39 +82,7 @@ export const documentsRouter = createTRPCRouter({
       runHub(() => deleteFolder(ctx.db, ctx.actor, input.folderPublicId)),
     ),
 
-  /** Step one of an upload: where to send the bytes. */
-  prepareUpload: hubProcedure
-    .input(
-      z.object({
-        filename: z.string().min(1).max(300),
-        size: z.number().int(),
-        documentPublicId: id.nullish(),
-      }),
-    )
-    .mutation(({ ctx, input }) =>
-      runHub(() =>
-        prepareUpload(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
-      ),
-    ),
-
-  /** Step two: the bytes are there; make it a document. */
-  completeUpload: hubProcedure
-    .input(
-      z.object({
-        uploadId: id,
-        title: z.string().max(300).nullish(),
-        description: z.string().max(2000).nullish(),
-        folderPublicId: id.nullish(),
-        readable: z.boolean().optional(),
-      }),
-    )
-    .mutation(({ ctx, input }) =>
-      runHub(() =>
-        completeUpload(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
-      ),
-    ),
-
-  /** Writes a text document (Markdown, text, CSV, JSON, HTML) in the page. */
+  /** Writes a document (Markdown or HTML) in the page. */
   createText: hubProcedure
     .input(
       z.object({
@@ -131,7 +96,12 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        createTextDocument(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
+        createTextDocument(
+          ctx.db,
+          getDocumentStorage(ctx.db),
+          ctx.actor,
+          input,
+        ),
       ),
     ),
 
@@ -158,7 +128,12 @@ export const documentsRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       runHub(() =>
-        replaceTextContent(ctx.db, getDocumentStorage(ctx.db), ctx.actor, input),
+        replaceTextContent(
+          ctx.db,
+          getDocumentStorage(ctx.db),
+          ctx.actor,
+          input,
+        ),
       ),
     ),
 

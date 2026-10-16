@@ -5,12 +5,12 @@ import {
   bigserial,
   boolean,
   check,
+  customType,
   index,
   pgTable,
   primaryKey,
   timestamp,
   uniqueIndex,
-  customType,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -144,7 +144,12 @@ export const hubDocumentEditRequests = pgTable(
 ).enableRLS();
 
 /**
- * An upload the server handed out a place for. The browser sends the bytes
+ * Unused since documents became Markdown and HTML written in the page: there
+ * is no file upload any more. The table (and its migration) stays so the
+ * production database and the migration history are not rewritten; it is
+ * empty and nothing reads or writes it.
+ *
+ * It was: an upload the server handed out a place for. The browser sends the bytes
  * straight to storage, then asks us to register them; only a key listed here,
  * for the same person and not yet used, can become a document. That is what
  * stops anyone from registering someone else's file by guessing its key.

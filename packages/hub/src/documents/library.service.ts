@@ -3,7 +3,6 @@ import { z } from "zod";
 import { generateUID } from "@kan/shared/utils";
 
 import type { AdminActor } from "../accounts/account.service";
-import type { AuditActor } from "../audit";
 import type { Db } from "../db";
 import type { PreviewKind } from "./document.policy";
 import type { DocumentRow, FolderRow } from "./document.repo";
@@ -19,9 +18,8 @@ import {
   canRequestEdit,
   fileLabel,
   FOLDER_MAX_DEPTH,
-  isTextExtension,
-  MAX_TEXT_BYTES,
   FOLDER_NAME_MAX_LENGTH,
+  MAX_TEXT_BYTES,
   normaliseName,
   previewKindOf,
 } from "./document.policy";
@@ -84,10 +82,6 @@ export interface Library {
   documents: DocumentSummary[];
   search: string | null;
   canCreate: boolean;
-  /** False until an object-storage bucket is configured: no files can be uploaded. */
-  uploadsAvailable: boolean;
-  /** Whether text documents can be written (any storage, the database included). */
-  textAvailable: boolean;
 }
 
 const libraryInput = z.object({
@@ -232,8 +226,6 @@ export async function getLibrary(
     documents: inScope.map(({ row, canEdit }) => summarise(row, canEdit, byId)),
     search,
     canCreate: canCreateDocument(actor.role),
-    uploadsAvailable: storage?.canUpload === true,
-    textAvailable: storage !== null,
   };
 }
 
@@ -251,9 +243,7 @@ export interface DocumentDetail extends DocumentSummary {
   /** May hand out edit rights and decide requests. */
   canManageEditors: boolean;
   canRequestEdit: boolean;
-  /** May replace the file (needs storage as well as the right to edit). */
-  canReplace: boolean;
-  /** May rewrite the text in the page's editor: a text format, and storage. */
+  /** May rewrite the content in the page's editor. */
   canEditText: boolean;
   /** The viewer's latest request for this document, if any. */
   myRequest: {
@@ -309,11 +299,10 @@ export async function getDocumentDetail(
       canEdit: access.canEdit,
       hasPendingRequest: hasPending,
     }),
-    canReplace: access.canEdit && storage?.canUpload === true,
     canEditText:
       access.canEdit &&
       storage !== null &&
-      isTextExtension(row.ext) &&
+      previewKindOf(row.ext) !== null &&
       row.size <= MAX_TEXT_BYTES,
     myRequest:
       latest && !access.canEdit
@@ -509,78 +498,4 @@ export async function deleteFolder(
       summary: `删除文件夹「${folder.name}」`,
     }),
   );
-}
-
-/**
- * Looks up the folder at `names` without creating anything: `exists` is false
- * when any part of the path is missing. For the import's dry run.
- */
-export async function findFolderPath(
-  db: Db,
-  names: string[],
-): Promise<{ exists: boolean; folderId: number | null }> {
-  const folders = await listFolders(db);
-  let parentId: number | null = null;
-  for (const raw of names) {
-    const name = normaliseName(raw, FOLDER_NAME_MAX_LENGTH);
-    const found: FolderRow | undefined = folders.find(
-      (f) =>
-        f.parentId === parentId &&
-        f.name.toLowerCase() === (name ?? "").toLowerCase(),
-    );
-    if (!found) return { exists: false, folderId: null };
-    parentId = found.id;
-  }
-  return { exists: true, folderId: parentId };
-}
-
-/**
- * Finds or creates the folder at `names` (top to bottom), returning its public
- * id. For the operations command line only: it makes no permission check, and
- * is idempotent so an import can be run again.
- */
-export async function ensureFolderPath(
-  db: Db,
-  actor: AuditActor,
-  names: string[],
-): Promise<string | null> {
-  let parent: FolderRow | null = null;
-  for (const raw of names) {
-    const name = normaliseName(raw, FOLDER_NAME_MAX_LENGTH);
-    if (!name) throw new HubError("INVALID_INPUT", `文件夹名不合法：${raw}`);
-    if ((await depthOf(db, parent)) >= FOLDER_MAX_DEPTH) {
-      throw new HubError(
-        "INVALID_INPUT",
-        `文件夹最多嵌套 ${FOLDER_MAX_DEPTH} 层`,
-      );
-    }
-    const existing: FolderRow | undefined = (await listFolders(db)).find(
-      (f) =>
-        f.parentId === (parent?.id ?? null) &&
-        f.name.toLowerCase() === name.toLowerCase(),
-    );
-    if (existing) {
-      parent = existing;
-      continue;
-    }
-    const parentId: number | null = parent?.id ?? null;
-    parent = await withAudit(
-      db,
-      (tx) =>
-        insertFolderOrConflict(tx, {
-          publicId: generateUID(),
-          name,
-          parentId,
-          createdBy: actor.userId,
-        }),
-      (created) => ({
-        actor,
-        action: "document_folder.created",
-        entityType: "document_folder",
-        entityId: created.publicId,
-        summary: `新建文件夹「${name}」`,
-      }),
-    );
-  }
-  return parent?.publicId ?? null;
 }

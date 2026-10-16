@@ -55,8 +55,7 @@ export function NewDocumentDialog({
           {text.title}
         </h2>
         <p className="mt-1 text-xs leading-5 text-light-900 dark:text-dark-900">
-          {text.destination}：{folderName ?? copy.documents.upload.topLevel}。
-          {text.hint}
+          {text.destination}：{folderName ?? text.topLevel}。{text.hint}
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">

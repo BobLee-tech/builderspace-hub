@@ -118,7 +118,6 @@ export async function seedHubAccount(
   await upsertAccount(db, userId, { ...facts, now: new Date() });
 }
 
-export { MemoryDocumentStorage } from "./memory-storage";
 export { overrideSiteDbForTests } from "../site/site.db";
 export {
   createSiteTestDb,
@@ -127,3 +126,5 @@ export {
   seedSiteUpdate,
   seedSiteVolunteer,
 } from "./site-test-db";
+
+export { MemoryDocumentStorage } from "./memory-storage";
