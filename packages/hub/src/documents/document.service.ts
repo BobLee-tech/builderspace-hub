@@ -387,7 +387,7 @@ export async function updateDocument(
         action: "document.readable_changed",
         entityType: "document",
         entityId: row.publicId,
-        summary: `「${row.title}」${input.readable ? "设为所有人可读" : "设为不可读，只有编辑者能看到"}`,
+        summary: `「${row.title}」${input.readable ? "设为所有成员可读" : "设为仅编辑者可见"}`,
       });
     }
   });
