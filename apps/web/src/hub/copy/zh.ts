@@ -95,7 +95,7 @@ export const zh = {
     columns: { name: "名称", type: "格式", size: "大小", updated: "更新" },
     badges: {
       canEdit: "可修改",
-      hidden: "不可读",
+      hidden: "仅编辑者可见",
     },
     actions: {
       upload: "上传文件",
@@ -176,8 +176,7 @@ export const zh = {
       folder: "所在文件夹",
       topLevel: "最上层",
       readable: "所有成员可读",
-      readableHint:
-        "关闭后，只有能修改这份文档的人看得到它。现在所有文档都是可读的。",
+      readableHint: "关闭后，只有能修改这份文档的人看得到它。",
       deleteConfirm: "删除",
       replaceHint: "替换后原来的文件会被删掉。",
     },
