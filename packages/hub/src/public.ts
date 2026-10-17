@@ -74,3 +74,5 @@ export {
   volunteerStatuses,
   volunteerStatusLabels,
 } from "./site/site.policy";
+
+export { IMPORT_ACCEPT } from "./documents/document.policy";

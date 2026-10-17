@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import type { ImportedDocument } from "@kan/hub/documents/file-import";
+
 import { copy } from "~/hub/copy/zh";
 import { buttonClass, ErrorText, inputClass } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
@@ -9,21 +11,26 @@ const text = copy.documents.newText;
 type Format = keyof typeof text.formats;
 const formats = Object.keys(text.formats) as Format[];
 
-/** Write a text document in the page and save it into the library. */
+/**
+ * Write a text document in the page and save it into the library. With
+ * `initial` it starts from an uploaded file, which can still be changed.
+ */
 export function NewDocumentDialog({
   folderPublicId,
   folderName,
+  initial,
   onClose,
   onCreated,
 }: {
   folderPublicId?: string | null;
   folderName?: string | null;
+  initial?: ImportedDocument | null;
   onClose: () => void;
   onCreated: (publicId: string) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [format, setFormat] = useState<Format>("md");
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [format, setFormat] = useState<Format>(initial?.format ?? "md");
+  const [content, setContent] = useState(initial?.content ?? "");
   const [readable, setReadable] = useState(true);
   const create = api.hub.documents.createText.useMutation({
     onSuccess: (created) => onCreated(created.publicId),
@@ -57,6 +64,13 @@ export function NewDocumentDialog({
         <p className="mt-1 text-xs leading-5 text-light-900 dark:text-dark-900">
           {text.destination}：{folderName ?? text.topLevel}。{text.hint}
         </p>
+        {initial && (
+          <p className="mt-2 text-xs leading-5 text-light-1000 dark:text-dark-1000">
+            {text.fromFile(initial.fileName)}
+            {initial.droppedImages > 0 &&
+              ` ${text.droppedImages(initial.droppedImages)}`}
+          </p>
+        )}
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <label className="block text-sm sm:col-span-2">

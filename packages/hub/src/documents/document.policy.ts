@@ -9,6 +9,16 @@ import { can } from "../accounts/roles";
  */
 export const MAX_TEXT_BYTES = 400 * 1024;
 
+/** Files the upload button offers; each becomes a Markdown or HTML document (see file-import.ts). */
+export const IMPORT_ACCEPT = ".md,.markdown,.html,.htm,.docx";
+
+/**
+ * Largest file read for an upload. A .docx is mostly pictures and zip
+ * overhead, so it may be far bigger than the text that comes out of it; the
+ * text itself is still held to MAX_TEXT_BYTES.
+ */
+export const MAX_IMPORT_FILE_BYTES = 20 * 1024 * 1024;
+
 /** How deep folders may nest (a top-level folder is depth 1). */
 export const FOLDER_MAX_DEPTH = 3;
 

@@ -3,6 +3,8 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { TbChevronRight, TbFolder, TbSearch } from "react-icons/tb";
 
+import type { ImportedDocument } from "@kan/hub/documents/file-import";
+
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
 import {
@@ -22,6 +24,7 @@ import {
   formatDate,
 } from "./document-display";
 import { NewDocumentDialog } from "./NewDocumentDialog";
+import { UploadButton } from "./UploadButton";
 
 const text = copy.documents;
 
@@ -40,6 +43,8 @@ export function DocumentsPage() {
 
   const [creating, setCreating] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [uploaded, setUploaded] = useState<ImportedDocument | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const utils = api.useUtils();
   const library = api.hub.documents.library.useQuery(
@@ -76,6 +81,7 @@ export function DocumentsPage() {
               >
                 {text.actions.newFolder}
               </button>
+              <UploadButton onImported={setUploaded} onError={setUploadError} />
               <button
                 type="button"
                 className={buttonClass.primary}
@@ -103,7 +109,7 @@ export function DocumentsPage() {
           />
         </div>
 
-        <ErrorText message={library.error?.message} />
+        <ErrorText message={library.error?.message ?? uploadError} />
         {library.isLoading && (
           <p className="text-sm text-light-900 dark:text-dark-900">
             {text.loading}
@@ -238,13 +244,18 @@ export function DocumentsPage() {
         )}
       </div>
 
-      {writing && data && (
+      {(writing || uploaded) && data && (
         <NewDocumentDialog
           folderPublicId={data.folder?.publicId ?? null}
           folderName={data.folder?.name ?? null}
-          onClose={() => setWriting(false)}
+          initial={uploaded}
+          onClose={() => {
+            setWriting(false);
+            setUploaded(null);
+          }}
           onCreated={(publicId) => {
             setWriting(false);
+            setUploaded(null);
             void refresh();
             void router.push(documentHref(publicId));
           }}
