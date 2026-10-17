@@ -35,6 +35,27 @@ async function wordFile(children: (Paragraph | Table)[]): Promise<Uint8Array> {
   return new Uint8Array(buffer);
 }
 
+/** Rewrites what a .docx's zip directory says one part unpacks to. */
+function claimUnpackedSize(
+  bytes: Uint8Array,
+  part: string,
+  size: number,
+): Uint8Array {
+  const copy = bytes.slice();
+  const view = new DataView(copy.buffer);
+  const name = new TextEncoder().encode(part);
+  for (let at = 0; at + 46 + name.length <= copy.length; at++) {
+    if (view.getUint32(at, true) !== 0x02014b50) continue;
+    if (view.getUint16(at + 28, true) !== name.length) continue;
+    const entryName = copy.subarray(at + 46, at + 46 + name.length);
+    if (entryName.every((byte, index) => byte === name[index])) {
+      view.setUint32(at + 24, size, true);
+      return copy;
+    }
+  }
+  throw new Error(`no directory entry for ${part}`);
+}
+
 async function imported(name: string, bytes: Uint8Array) {
   const result = await importDocumentFile({ name, bytes });
   if (!result.ok) throw new Error(`expected ok, got: ${result.reason}`);
@@ -147,6 +168,22 @@ describe("importDocumentFile: Word", () => {
 
     // Shown as C:\temp\ and a\|b, in two cells of one row.
     expect(doc.content).toContain(String.raw`| C:\\temp\\ | a\\\|b |`);
+  });
+
+  it("refuses a Word file whose text would unpack too far, before converting it", async () => {
+    const bytes = await wordFile([new Paragraph("短短一句")]);
+    // Over the 50 MB limit; the part itself is untouched.
+    const bomb = claimUnpackedSize(
+      bytes,
+      "word/document.xml",
+      60 * 1024 * 1024,
+    );
+
+    expect(await refused("炸弹.docx", bomb)).toBe(
+      "这个 Word 文件里的内容太多，拆成几份再上传",
+    );
+    // The same file with its real directory converts as usual.
+    expect((await imported("正常.docx", bytes)).content).toContain("短短一句");
   });
 
   it("refuses a file that is not a readable .docx", async () => {

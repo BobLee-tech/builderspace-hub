@@ -43,7 +43,11 @@ export function DocumentsPage() {
 
   const [creating, setCreating] = useState(false);
   const [writing, setWriting] = useState(false);
-  const [uploaded, setUploaded] = useState<ImportedDocument | null>(null);
+  // Numbered so each finished upload gets a fresh dialog (see the key below).
+  const [uploaded, setUploaded] = useState<{
+    id: number;
+    document: ImportedDocument;
+  } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const utils = api.useUtils();
@@ -81,7 +85,16 @@ export function DocumentsPage() {
               >
                 {text.actions.newFolder}
               </button>
-              <UploadButton onImported={setUploaded} onError={setUploadError} />
+              <UploadButton
+                onImported={(document) => {
+                  setWriting(false);
+                  setUploaded((previous) => ({
+                    id: (previous?.id ?? 0) + 1,
+                    document,
+                  }));
+                }}
+                onError={setUploadError}
+              />
               <button
                 type="button"
                 className={buttonClass.primary}
@@ -246,9 +259,13 @@ export function DocumentsPage() {
 
       {(writing || uploaded) && data && (
         <NewDocumentDialog
+          // The form copies `initial` once, when it mounts. A file that
+          // finishes reading while a blank draft is open must replace that
+          // draft, not leave it under the file's name.
+          key={uploaded ? `upload-${uploaded.id}` : "blank"}
           folderPublicId={data.folder?.publicId ?? null}
           folderName={data.folder?.name ?? null}
-          initial={uploaded}
+          initial={uploaded?.document ?? null}
           onClose={() => {
             setWriting(false);
             setUploaded(null);

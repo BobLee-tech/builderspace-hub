@@ -37,6 +37,15 @@ const TEXT_FORMATS: Record<string, ImportedDocument["format"]> = {
 };
 
 const UNSUPPORTED = "只能上传 .md、.html 和 Word（.docx）文件";
+const UNREADABLE_WORD = "这个 Word 文件打不开，可能已经损坏";
+
+/**
+ * Most XML a .docx may unpack to before it is converted. The 20 MB file limit
+ * counts compressed bytes, and XML compresses well, so a crafted file could
+ * otherwise expand to hundreds of megabytes inside the tab. 400 KB of text
+ * needs a small fraction of this, even heavily formatted.
+ */
+const MAX_DOCX_UNPACKED_BYTES = 50 * 1024 * 1024;
 
 /** Reads a file into a document that can still be checked and edited before it is saved. */
 export async function importDocumentFile(file: {
@@ -70,10 +79,16 @@ export async function importDocumentFile(file: {
       };
     }
   } else {
-    const converted = await docxToMarkdown(file.bytes);
-    if (!converted) {
-      return { ok: false, reason: "这个 Word 文件打不开，可能已经损坏" };
+    const unpacked = unpackedXmlBytes(file.bytes);
+    if (unpacked === null) return { ok: false, reason: UNREADABLE_WORD };
+    if (unpacked > MAX_DOCX_UNPACKED_BYTES) {
+      return {
+        ok: false,
+        reason: "这个 Word 文件里的内容太多，拆成几份再上传",
+      };
     }
+    const converted = await docxToMarkdown(file.bytes);
+    if (!converted) return { ok: false, reason: UNREADABLE_WORD };
     ({ content, droppedImages } = converted);
   }
 
@@ -99,6 +114,54 @@ export async function importDocumentFile(file: {
 function titleFrom(baseName: string): string {
   const title = baseName.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX_LENGTH);
   return title || "未命名";
+}
+
+/**
+ * How many bytes the XML parts of a .docx unpack to, as its zip directory
+ * says, or null when there is no readable zip directory. Only XML is counted
+ * because that is all the converter unpacks: pictures are dropped unread.
+ * The sizes are what the file claims; a file that lies about them can only
+ * slow down the tab of the person who picked it.
+ */
+function unpackedXmlBytes(bytes: Uint8Array): number | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const END_OF_DIRECTORY = 0x06054b50;
+  const DIRECTORY_ENTRY = 0x02014b50;
+
+  // The end-of-directory record is 22 bytes plus a comment of up to 64 KB.
+  let end = -1;
+  const earliest = Math.max(0, bytes.byteLength - 22 - 0xffff);
+  for (let at = bytes.byteLength - 22; at >= earliest; at--) {
+    if (view.getUint32(at, true) === END_OF_DIRECTORY) {
+      end = at;
+      break;
+    }
+  }
+  if (end === -1) return null;
+
+  const entries = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  let total = 0;
+  for (let index = 0; index < entries; index++) {
+    if (
+      at + 46 > bytes.byteLength ||
+      view.getUint32(at, true) !== DIRECTORY_ENTRY
+    ) {
+      return null;
+    }
+    const nameLength = view.getUint16(at + 28, true);
+    const name = new TextDecoder().decode(
+      bytes.subarray(at + 46, at + 46 + nameLength),
+    );
+    // A zip64 entry says 0xFFFFFFFF here, which counts as too big.
+    if (/\.(xml|rels)$/i.test(name)) total += view.getUint32(at + 24, true);
+    at +=
+      46 +
+      nameLength +
+      view.getUint16(at + 30, true) +
+      view.getUint16(at + 32, true);
+  }
+  return total;
 }
 
 /**
