@@ -12,12 +12,6 @@ export type CliCommand =
   | { name: "provision"; email: string }
   | { name: "setup-projects"; ownerEmail: string }
   | { name: "set-role"; email: string; role: HubRole | null }
-  | {
-      name: "import-documents";
-      sources: { dir: string; folder: string[] }[];
-      recursive: boolean;
-      dryRun: boolean;
-    }
   | { name: "projects" }
   | { name: "doctor" }
   | { name: "help" };
@@ -81,50 +75,11 @@ function parseGrant(args: string[]): ParsedCli {
   };
 }
 
-function parseImportDocuments(args: string[]): ParsedCli {
-  const sources: { dir: string; folder: string[] }[] = [];
-  let recursive = false;
-  let dryRun = false;
-
-  for (let i = 0; i < args.length; i += 1) {
-    const flag = args[i];
-    if (flag === "--recursive") {
-      recursive = true;
-    } else if (flag === "--dry-run") {
-      dryRun = true;
-    } else if (flag === "--source") {
-      const value = args[i + 1];
-      if (value === undefined) return fail("--source 后面缺少值");
-      i += 1;
-      // Split on the last "=": the folder side never has one, a path might.
-      const at = value.lastIndexOf("=");
-      const dir = at === -1 ? value : value.slice(0, at);
-      const folder = (at === -1 ? "" : value.slice(at + 1))
-        .split("/")
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0);
-      if (dir.length === 0) return fail("--source 的格式是 <目录>=<文件夹>");
-      sources.push({ dir, folder });
-    } else {
-      return fail(`未知参数: ${flag}`);
-    }
-  }
-
-  if (sources.length === 0) {
-    return fail("import-documents 需要至少一个 --source <目录>=<文件夹>");
-  }
-  return {
-    ok: true,
-    command: { name: "import-documents", sources, recursive, dryRun },
-  };
-}
-
 /** Turns `process.argv.slice(2)` into a command, or a message saying why not. */
 export function parseCli(argv: string[]): ParsedCli {
   const [name = "help", ...rest] = argv;
 
   if (name === "grant") return parseGrant(rest);
-  if (name === "import-documents") return parseImportDocuments(rest);
 
   if (name === "set-role") {
     const flags = new Map<string, string>();

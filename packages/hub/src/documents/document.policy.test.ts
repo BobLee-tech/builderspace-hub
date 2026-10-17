@@ -9,91 +9,98 @@ import {
   contentDisposition,
   FOLDER_MAX_DEPTH,
   inspectFile,
-  MAX_FILE_BYTES,
+  MAX_TEXT_BYTES,
   normaliseName,
   storageKeyFor,
   viewContentType,
 } from "./document.policy";
 
 describe("inspectFile", () => {
-  it("accepts the formats we render and the ones we only keep", () => {
-    expect(inspectFile({ filename: "Proposal.PDF", size: 10 })).toMatchObject({
+  it("accepts Markdown and HTML, whatever the case", () => {
+    expect(inspectFile({ filename: "Notes.MD", size: 10 })).toMatchObject({
       ok: true,
-      ext: "pdf",
-      contentType: "application/pdf",
-      preview: "pdf",
+      ext: "md",
+      contentType: "text/markdown; charset=utf-8",
+      preview: "markdown",
     });
-    expect(inspectFile({ filename: "deck.html", size: 10 })).toMatchObject({
-      ok: true,
-      preview: "html",
-    });
-    expect(inspectFile({ filename: "deck.pptx", size: 10 })).toMatchObject({
-      ok: true,
-      preview: null,
-    });
-    expect(inspectFile({ filename: "合同.docx", size: 10 })).toMatchObject({
-      ok: true,
-      ext: "docx",
-      preview: null,
-    });
+    for (const filename of ["deck.html", "deck.htm"]) {
+      expect(inspectFile({ filename, size: 10 })).toMatchObject({
+        ok: true,
+        contentType: "text/html; charset=utf-8",
+        preview: "html",
+      });
+    }
   });
 
-  it("refuses types that can run code or that we do not know", () => {
-    for (const filename of ["x.exe", "x.svg", "x.js", "x.sh", "noext", "x."]) {
+  it("refuses every other format, files and scripts alike", () => {
+    for (const filename of [
+      "a.pdf",
+      "a.pptx",
+      "a.docx",
+      "a.xlsx",
+      "a.txt",
+      "a.csv",
+      "a.json",
+      "a.png",
+      "x.exe",
+      "x.svg",
+      "x.js",
+      "x.sh",
+      "noext",
+      "x.",
+    ]) {
       expect(inspectFile({ filename, size: 10 })).toMatchObject({ ok: false });
     }
   });
 
-  it("refuses empty and oversized files", () => {
-    expect(inspectFile({ filename: "a.pdf", size: 0 })).toMatchObject({
+  it("refuses empty and oversized content", () => {
+    expect(inspectFile({ filename: "a.md", size: 0 })).toMatchObject({
       ok: false,
     });
     expect(
-      inspectFile({ filename: "a.pdf", size: MAX_FILE_BYTES + 1 }),
+      inspectFile({ filename: "a.md", size: MAX_TEXT_BYTES + 1 }),
     ).toMatchObject({ ok: false });
     expect(
-      inspectFile({ filename: "a.pdf", size: MAX_FILE_BYTES }),
+      inspectFile({ filename: "a.md", size: MAX_TEXT_BYTES }),
     ).toMatchObject({ ok: true });
   });
 
   it("strips paths and control characters from the display name", () => {
     expect(
-      inspectFile({ filename: "../../etc/a\u0000b.pdf", size: 1 }),
-    ).toMatchObject({ ok: true, displayName: "a b.pdf" });
+      inspectFile({ filename: "../../etc/a\u0000b.md", size: 1 }),
+    ).toMatchObject({ ok: true, displayName: "a b.md" });
     expect(
-      inspectFile({ filename: "C:\\Users\\me\\合同.pdf", size: 1 }),
-    ).toMatchObject({ ok: true, displayName: "合同.pdf" });
+      inspectFile({ filename: "C:\\Users\\me\\合同.md", size: 1 }),
+    ).toMatchObject({ ok: true, displayName: "合同.md" });
   });
 });
 
 describe("viewContentType", () => {
-  it("is the type a file is shown as, or null when it is not shown", () => {
-    expect(viewContentType("pdf")).toBe("application/pdf");
+  it("is the type a document is shown as", () => {
     expect(viewContentType("html")).toBe("text/html; charset=utf-8");
-    // Markdown and CSV are shown as plain text, never interpreted.
+    // Markdown is shown as plain text, never interpreted.
     expect(viewContentType("md")).toBe("text/plain; charset=utf-8");
-    expect(viewContentType("csv")).toBe("text/plain; charset=utf-8");
-    expect(viewContentType("png")).toBe("image/png");
+    expect(viewContentType("pdf")).toBeNull();
     expect(viewContentType("pptx")).toBeNull();
   });
 });
 
 describe("storageKeyFor", () => {
   it("never carries the file name, only the extension", () => {
-    expect(storageKeyFor("pdf", "abc-123")).toBe("documents/abc-123.pdf");
+    expect(storageKeyFor("md", "abc-123")).toBe("documents/abc-123.md");
   });
 });
 
 describe("contentDisposition", () => {
   it("encodes non-ASCII names and keeps an ASCII fallback", () => {
-    const header = contentDisposition("attachment", "合同 v2.pdf");
+    const header = contentDisposition("attachment", "合同 v2.md");
     expect(header).toBe(
-      `attachment; filename="_ v2.pdf"; filename*=UTF-8''%E5%90%88%E5%90%8C%20v2.pdf`,
+      `attachment; filename="_ v2.md"; filename*=UTF-8''%E5%90%88%E5%90%8C%20v2.md`,
     );
   });
 
   it("cannot be broken out of with quotes or line breaks", () => {
-    const header = contentDisposition("inline", 'a"b\r\nc.pdf');
+    const header = contentDisposition("inline", 'a"b\r\nc.md');
     expect(header).not.toMatch(/[\r\n]/);
     expect(header.startsWith("inline; filename=")).toBe(true);
     expect(header).not.toContain('a"b');

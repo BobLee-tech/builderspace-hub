@@ -57,21 +57,27 @@ describe("hub.documents", () => {
     expect((await asAdmin.documents.library({})).canCreate).toBe(true);
   });
 
-  it("says plainly that uploads need a bucket, while text documents already work", async () => {
-    // No bucket and no folder are configured in the test environment, so the
-    // database holds the text.
+  it("has no file upload: documents are written in the page", async () => {
+    const documents = createHubCaller(db, admin).documents as unknown as Record<
+      string,
+      (input: unknown) => Promise<unknown>
+    >;
     await expect(
-      createHubCaller(db, admin).documents.prepareUpload({
-        filename: "a.pdf",
-        size: 10,
+      documents.prepareUpload?.({ filename: "a.md", size: 1 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      documents.completeUpload?.({ uploadId: "x" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("takes only Markdown and HTML", async () => {
+    await expect(
+      createHubCaller(db, admin).documents.createText({
+        title: "合同",
+        filename: "合同.pdf",
+        content: "x",
       }),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      message: expect.stringContaining("对象存储") as string,
-    });
-    const library = await createHubCaller(db, admin).documents.library({});
-    expect(library.uploadsAvailable).toBe(false);
-    expect(library.textAvailable).toBe(true);
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("keeps the text-document procedures behind the same doors", async () => {
@@ -80,7 +86,9 @@ describe("hub.documents", () => {
       createHubCaller(db, null).documents.createText(input),
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(
-      createHubCaller(db, admin, { "x-api-key": "k" }).documents.createText(input),
+      createHubCaller(db, admin, { "x-api-key": "k" }).documents.createText(
+        input,
+      ),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       createHubCaller(db, admin, { "x-api-key": "k" }).documents.content({
@@ -97,7 +105,9 @@ describe("hub.documents", () => {
       content: "# 讲稿",
       readable: false,
     });
-    const opened = await asAdmin.documents.content({ documentPublicId: created.publicId });
+    const opened = await asAdmin.documents.content({
+      documentPublicId: created.publicId,
+    });
     expect(opened.content).toBe("# 讲稿");
 
     await asAdmin.documents.replaceText({
@@ -105,7 +115,10 @@ describe("hub.documents", () => {
       content: "# 新稿",
       expectedUpdatedAt: new Date(opened.updatedAt).toISOString(),
     });
-    expect((await asAdmin.documents.content({ documentPublicId: created.publicId })).content).toBe("# 新稿");
+    expect(
+      (await asAdmin.documents.content({ documentPublicId: created.publicId }))
+        .content,
+    ).toBe("# 新稿");
 
     // Hidden: a member who is not assigned to it neither lists nor opens it.
     const asMember = createHubCaller(db, member);

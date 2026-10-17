@@ -22,7 +22,6 @@ import {
   formatDate,
 } from "./document-display";
 import { NewDocumentDialog } from "./NewDocumentDialog";
-import { UploadDialog } from "./UploadDialog";
 
 const text = copy.documents;
 
@@ -39,7 +38,6 @@ export function DocumentsPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [writing, setWriting] = useState(false);
 
@@ -80,29 +78,14 @@ export function DocumentsPage() {
               </button>
               <button
                 type="button"
-                className={buttonClass.ghost}
-                disabled={!data.textAvailable}
+                className={buttonClass.primary}
                 onClick={() => setWriting(true)}
               >
                 {text.actions.newText}
               </button>
-              <button
-                type="button"
-                className={buttonClass.primary}
-                disabled={!data.uploadsAvailable}
-                onClick={() => setUploading(true)}
-              >
-                {text.actions.upload}
-              </button>
             </>
           )}
         </PageHeader>
-
-        {data && !data.uploadsAvailable && (
-          <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            {text.noStorage}
-          </p>
-        )}
 
         <div className="relative mb-4">
           <TbSearch
@@ -265,15 +248,6 @@ export function DocumentsPage() {
             void refresh();
             void router.push(documentHref(publicId));
           }}
-        />
-      )}
-
-      {uploading && data && (
-        <UploadDialog
-          folderPublicId={data.folder?.publicId ?? null}
-          folderName={data.folder?.name ?? null}
-          onClose={() => setUploading(false)}
-          onUploaded={() => void refresh()}
         />
       )}
     </>

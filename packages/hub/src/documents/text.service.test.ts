@@ -7,11 +7,10 @@ import { MemoryDocumentStorage } from "../testing/memory-storage";
 import { createHubTestDb, seedHubAccount, seedUser } from "../testing/test-db";
 import { MAX_TEXT_BYTES } from "./document.policy";
 import {
-  completeUpload,
-  openDocument,
-  prepareUpload,
-  updateDocument,
-} from "./document.service";
+  findDocument,
+  updateDocument as updateDocumentRow,
+} from "./document.repo";
+import { openDocument, updateDocument } from "./document.service";
 import { getDocumentDetail, getLibrary } from "./library.service";
 import {
   createTextDocument,
@@ -57,7 +56,12 @@ describe("createTextDocument", () => {
   it("stores the text, makes the creator an editor, and logs it", async () => {
     const created = await make(admin);
 
-    const detail = await getDocumentDetail(db, storage, admin, created.publicId);
+    const detail = await getDocumentDetail(
+      db,
+      storage,
+      admin,
+      created.publicId,
+    );
     expect(detail).toMatchObject({
       title: "讲稿",
       filename: "讲稿.md",
@@ -67,16 +71,25 @@ describe("createTextDocument", () => {
     });
     expect(storage.files.size).toBe(1);
     const [entry] = await listAudit(db, { limit: 1, offset: 0 });
-    expect(entry).toMatchObject({ action: "document.created", entityId: created.publicId });
+    expect(entry).toMatchObject({
+      action: "document.created",
+      entityId: created.publicId,
+    });
   });
 
   it("can start out hidden, and then only people who can change it see it", async () => {
     const created = await make(owner, { readable: false });
-    expect((await getLibrary(db, storage, member, {})).documents).toHaveLength(0);
-    await expect(getDocumentDetail(db, storage, member, created.publicId)).rejects.toMatchObject({
+    expect((await getLibrary(db, storage, member, {})).documents).toHaveLength(
+      0,
+    );
+    await expect(
+      getDocumentDetail(db, storage, member, created.publicId),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect((await getLibrary(db, storage, owner, {})).documents).toHaveLength(1);
+    expect((await getLibrary(db, storage, owner, {})).documents).toHaveLength(
+      1,
+    );
   });
 
   it("is for owners and admins only", async () => {
@@ -85,28 +98,71 @@ describe("createTextDocument", () => {
   });
 
   it("refuses formats that are not text, empty or oversized content, and unknown folders", async () => {
-    await expect(make(owner, { filename: "合同.pdf" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    await expect(make(owner, { filename: "run.exe" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    await expect(make(owner, { content: "" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    await expect(make(owner, { content: "x".repeat(MAX_TEXT_BYTES + 1) })).rejects.toMatchObject({
+    await expect(make(owner, { filename: "合同.pdf" })).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
-    await expect(make(owner, { title: "   " })).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    await expect(make(owner, { folderPublicId: "nope00000000" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(make(owner, { filename: "run.exe" })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    await expect(make(owner, { content: "" })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    await expect(
+      make(owner, { content: "x".repeat(MAX_TEXT_BYTES + 1) }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    await expect(make(owner, { title: "   " })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    await expect(
+      make(owner, { folderPublicId: "nope00000000" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(storage.files.size).toBe(0);
   });
 
-  it("needs file storage", async () => {
+  it("needs a storage", async () => {
     await expect(
-      createTextDocument(db, null, owner, { title: "t", filename: "t.md", content: "x" }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+      createTextDocument(db, null, owner, {
+        title: "t",
+        filename: "t.md",
+        content: "x",
+      }),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  });
+
+  it("takes only Markdown and HTML", async () => {
+    for (const filename of ["t.pdf", "t.txt", "t.csv", "t.docx", "t"]) {
+      await expect(
+        createTextDocument(db, storage, owner, {
+          title: "t",
+          filename,
+          content: "x",
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    }
+    await expect(
+      createTextDocument(db, storage, owner, {
+        title: "页",
+        filename: "p.html",
+        content: "<p>hi</p>",
+      }),
+    ).resolves.toBeDefined();
+    expect(storage.files.size).toBe(1);
   });
 
   it("removes the stored object if the document cannot be recorded", async () => {
     // The file is stored first; a failing insert (here: an unknown uploader) must clean it up.
-    const stranger = { ...owner, userId: "00000000-0000-4000-8000-000000000000" };
+    const stranger = {
+      ...owner,
+      userId: "00000000-0000-4000-8000-000000000000",
+    };
     await expect(
-      createTextDocument(db, storage, stranger, { title: "t", filename: "t.md", content: "x" }),
+      createTextDocument(db, storage, stranger, {
+        title: "t",
+        filename: "t.md",
+        content: "x",
+      }),
     ).rejects.toBeDefined();
     expect(storage.files.size).toBe(0);
   });
@@ -115,26 +171,18 @@ describe("createTextDocument", () => {
 describe("readTextContent", () => {
   it("returns the text to anyone who can read the document", async () => {
     const created = await make(owner);
-    expect((await readTextContent(db, storage, member, created.publicId)).content).toBe("# 讲稿\n\n大家好");
+    expect(
+      (await readTextContent(db, storage, member, created.publicId)).content,
+    ).toBe("# 讲稿\n\n大家好");
   });
 
   it("answers like a missing document when it is hidden from the reader", async () => {
     const created = await make(owner, { readable: false });
-    await expect(readTextContent(db, storage, member, created.publicId)).rejects.toMatchObject({
+    await expect(
+      readTextContent(db, storage, member, created.publicId),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-  });
-
-  it("refuses documents that are not text", async () => {
-    const prepared = await prepareUpload(db, storage, owner, { filename: "合同.pdf", size: 4 });
-    const key = new URL(prepared.target.url).pathname.replace(/^\//, "");
-    storage.uploadFromBrowser(key, Buffer.from("%PDF"));
-    const pdf = await completeUpload(db, storage, owner, { uploadId: prepared.uploadId });
-
-    await expect(readTextContent(db, storage, owner, pdf.publicId)).rejects.toMatchObject({ code: "INVALID_INPUT" });
-    await expect(
-      replaceTextContent(db, storage, owner, { documentPublicId: pdf.publicId, content: "x" }),
-    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 });
 
@@ -149,7 +197,9 @@ describe("replaceTextContent", () => {
       content: "新的内容",
     });
     expect(result).toEqual({ changed: true });
-    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("新的内容");
+    expect(
+      (await readTextContent(db, storage, owner, created.publicId)).content,
+    ).toBe("新的内容");
     expect(storage.files.has(before)).toBe(false);
     expect(storage.files.size).toBe(1);
     const [entry] = await listAudit(db, { limit: 1, offset: 0 });
@@ -168,34 +218,79 @@ describe("replaceTextContent", () => {
   it("is for people who can change the document, not for everyone who can read it", async () => {
     const created = await make(owner);
     await expect(
-      replaceTextContent(db, storage, member, { documentPublicId: created.publicId, content: "x" }),
+      replaceTextContent(db, storage, member, {
+        documentPublicId: created.publicId,
+        content: "x",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     // An admin is not an editor of documents they did not create.
     await expect(
-      replaceTextContent(db, storage, admin, { documentPublicId: created.publicId, content: "x" }),
+      replaceTextContent(db, storage, admin, {
+        documentPublicId: created.publicId,
+        content: "x",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("# 讲稿\n\n大家好");
+    expect(
+      (await readTextContent(db, storage, owner, created.publicId)).content,
+    ).toBe("# 讲稿\n\n大家好");
   });
 
-  it("does not offer the editor for a text file that is over the limit", async () => {
-    const prepared = await prepareUpload(db, storage, owner, { filename: "big.csv", size: MAX_TEXT_BYTES + 1 });
-    const key = new URL(prepared.target.url).pathname.replace(/^\//, "");
-    storage.uploadFromBrowser(key, Buffer.alloc(MAX_TEXT_BYTES + 1, "a"));
-    const big = await completeUpload(db, storage, owner, { uploadId: prepared.uploadId });
+  it("does not offer the editor for a document that is over the limit", async () => {
+    const big = await make(owner);
+    const row = await findDocument(db, big.publicId);
+    if (!row) throw new Error("missing");
+    await updateDocumentRow(
+      db,
+      row.id,
+      { size: MAX_TEXT_BYTES + 1 },
+      new Date(),
+    );
     const small = await make(owner);
 
-    expect((await getDocumentDetail(db, storage, owner, big.publicId)).canEditText).toBe(false);
-    expect((await getDocumentDetail(db, storage, owner, small.publicId)).canEditText).toBe(true);
-    expect((await getDocumentDetail(db, storage, member, small.publicId)).canEditText).toBe(false);
+    expect(
+      (await getDocumentDetail(db, storage, owner, big.publicId)).canEditText,
+    ).toBe(false);
+    expect(
+      (await getDocumentDetail(db, storage, owner, small.publicId)).canEditText,
+    ).toBe(true);
+    expect(
+      (await getDocumentDetail(db, storage, member, small.publicId))
+        .canEditText,
+    ).toBe(false);
   });
 
-  it("refuses to show a text file that is not UTF-8, so the editor cannot write replacement characters back", async () => {
-    const prepared = await prepareUpload(db, storage, owner, { filename: "旧.txt", size: 4 });
-    const key = new URL(prepared.target.url).pathname.replace(/^\//, "");
+  it("refuses to write into a document of a format the library no longer holds", async () => {
+    const legacy = await make(owner);
+    const row = await findDocument(db, legacy.publicId);
+    if (!row) throw new Error("missing");
+    await updateDocumentRow(
+      db,
+      row.id,
+      { filename: "notes.txt", ext: "txt", contentType: "text/plain" },
+      new Date(),
+    );
+
+    await expect(
+      replaceTextContent(db, storage, owner, {
+        documentPublicId: legacy.publicId,
+        content: "new text",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect((await findDocument(db, legacy.publicId))?.sha256).toBe(row.sha256);
+  });
+
+  it("refuses to show content that is not UTF-8, so the editor cannot write replacement characters back", async () => {
+    const gbk = await make(owner);
+    const [key] = [...storage.files.keys()];
+    if (!key) throw new Error("nothing stored");
     // GBK bytes for 你好
-    storage.uploadFromBrowser(key, Buffer.from([0xc4, 0xe3, 0xba, 0xc3]));
-    const gbk = await completeUpload(db, storage, owner, { uploadId: prepared.uploadId });
-    await expect(readTextContent(db, storage, owner, gbk.publicId)).rejects.toMatchObject({
+    storage.files.set(key, {
+      body: Buffer.from([0xc4, 0xe3, 0xba, 0xc3]),
+      contentType: "text/markdown",
+    });
+    await expect(
+      readTextContent(db, storage, owner, gbk.publicId),
+    ).rejects.toMatchObject({
       code: "INVALID_INPUT",
       message: expect.stringContaining("UTF-8") as string,
     });
@@ -206,7 +301,10 @@ describe("replaceTextContent", () => {
     const opened = await readTextContent(db, storage, owner, created.publicId);
 
     // Someone else saves first.
-    await replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "别人的改动" });
+    await replaceTextContent(db, storage, owner, {
+      documentPublicId: created.publicId,
+      content: "别人的改动",
+    });
     const objects = storage.files.size;
 
     await expect(
@@ -216,7 +314,9 @@ describe("replaceTextContent", () => {
         expectedUpdatedAt: opened.updatedAt.toISOString(),
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("别人的改动");
+    expect(
+      (await readTextContent(db, storage, owner, created.publicId)).content,
+    ).toBe("别人的改动");
     expect(storage.files.size).toBe(objects);
   });
 
@@ -228,23 +328,44 @@ describe("replaceTextContent", () => {
       content: "第一次",
       expectedUpdatedAt: opened.updatedAt.toISOString(),
     });
-    await replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "第二次" });
-    expect((await readTextContent(db, storage, owner, created.publicId)).content).toBe("第二次");
+    await replaceTextContent(db, storage, owner, {
+      documentPublicId: created.publicId,
+      content: "第二次",
+    });
+    expect(
+      (await readTextContent(db, storage, owner, created.publicId)).content,
+    ).toBe("第二次");
   });
 
   it("rejects a malformed time", async () => {
     const created = await make(owner);
     await expect(
-      replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "x", expectedUpdatedAt: "昨天" }),
+      replaceTextContent(db, storage, owner, {
+        documentPublicId: created.publicId,
+        content: "x",
+        expectedUpdatedAt: "昨天",
+      }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
   it("keeps working after the document is hidden and unhidden", async () => {
     const created = await make(owner);
-    await updateDocument(db, owner, { documentPublicId: created.publicId, readable: false });
-    await replaceTextContent(db, storage, owner, { documentPublicId: created.publicId, content: "隐藏中也能改" });
-    await updateDocument(db, owner, { documentPublicId: created.publicId, readable: true });
-    const opened = await openDocument(db, storage, member, { documentPublicId: created.publicId, mode: "download" });
-    expect(opened.source.kind).toBe("redirect");
+    await updateDocument(db, owner, {
+      documentPublicId: created.publicId,
+      readable: false,
+    });
+    await replaceTextContent(db, storage, owner, {
+      documentPublicId: created.publicId,
+      content: "隐藏中也能改",
+    });
+    await updateDocument(db, owner, {
+      documentPublicId: created.publicId,
+      readable: true,
+    });
+    const opened = await openDocument(db, storage, member, {
+      documentPublicId: created.publicId,
+      mode: "download",
+    });
+    expect(opened.source.kind).toBe("stream");
   });
 });

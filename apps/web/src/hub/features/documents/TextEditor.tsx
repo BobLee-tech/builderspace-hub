@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { copy } from "~/hub/copy/zh";
-import { buttonClass, Card, ErrorText, inputClass } from "~/hub/ui/admin-primitives";
+import {
+  buttonClass,
+  Card,
+  ErrorText,
+  inputClass,
+} from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 
 const text = copy.documents.editText;
@@ -20,7 +25,11 @@ export function TextEditor({
     { documentPublicId },
     { retry: false, refetchOnWindowFocus: false },
   );
-  const [draft, setDraft] = useState<string | null>(null);
+  // The draft keeps the revision it was started from. The content query is
+  // shared with the viewer and may refetch while someone types; saving
+  // against the refetched revision would overwrite another editor's change
+  // instead of reporting the conflict.
+  const [draft, setDraft] = useState<{ text: string; base: Date } | null>(null);
   const save = api.hub.documents.replaceText.useMutation({
     onSuccess: () => {
       onSaved();
@@ -28,7 +37,7 @@ export function TextEditor({
     },
   });
 
-  const value = draft ?? current.data?.content ?? "";
+  const value = draft?.text ?? current.data?.content ?? "";
   const unchanged = value === (current.data?.content ?? "");
 
   return (
@@ -55,20 +64,29 @@ export function TextEditor({
             // lost when the editor closes on success.
             readOnly={save.isPending}
             value={value}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              const text = event.target.value;
+              setDraft((previous) => ({
+                text,
+                base: previous?.base ?? new Date(current.data.updatedAt),
+              }));
+            }}
           />
           <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
               className={buttonClass.primary}
-              disabled={save.isPending || unchanged || value.length === 0}
-              onClick={() =>
+              disabled={
+                save.isPending || !draft || unchanged || value.length === 0
+              }
+              onClick={() => {
+                if (!draft) return;
                 save.mutate({
                   documentPublicId,
-                  content: value,
-                  expectedUpdatedAt: new Date(current.data.updatedAt).toISOString(),
-                })
-              }
+                  content: draft.text,
+                  expectedUpdatedAt: draft.base.toISOString(),
+                });
+              }}
             >
               {text.save}
             </button>

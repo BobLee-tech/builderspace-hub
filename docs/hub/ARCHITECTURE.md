@@ -114,55 +114,18 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 
 ## 文档库
 
-`packages/hub/src/documents/` 负责 `/documents`：合同、方案、PPT 这类文件的在线管理。
+`packages/hub/src/documents/` 负责 `/documents`：用 Markdown 或 HTML 在页面里写和编辑的文档。**不上传文件，不用对象存储。**
 
-- **库里只有元数据，文件在对象存储里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）、`hub_document_upload`（见下）。文件放在 S3 兼容的私有 bucket；本地开发用磁盘上的一个目录顶替（`storage.fs.ts`），生产环境设了会报错。三种实现（S3、磁盘、测试用的内存）都走 `DocumentStorage` 接口。
+- **内容在数据库里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_blob`（内容本身，按 `storageKey` 存，最大 400 KB）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）。`DocumentStorage` 接口只剩一个实现 `storage.db.ts`；接口保留是为了让内容存放的位置和业务规则分开，测试里另有一个内存实现。
+- **历史：** 文档库最早做过文件上传（浏览器直传 S3 兼容存储，PDF、PPT 等），后来决定不需要附件，整条路删掉了：上传分两步的用例、S3 和磁盘存储、上传路由、导入命令。迁移历史不改写：`hub_document_upload` 表留着（表里没有数据，代码不再读写它），要彻底去掉得另写一条迁移。`hub_document.storageKey` 仍在用：它是内容在 `hub_document_blob` 里的键。线上从没配过 bucket，所以没有需要搬走的文件。
 - **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：登录成员，除非这份文档的可读开关被关掉（关掉后只有能修改的人看得到）。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
-- **上传分两步，文件不经过我们的服务器。** Vercel 函数的请求体限 4.5 MB，PPT 放不下。`prepareUpload` 检查格式和大小，在 `hub_document_upload` 里记一条（谁、哪个 key、多大、30 分钟内有效），返回一个签了名的上传地址；浏览器把文件直接传给 bucket；`completeUpload` 向 bucket 确认文件真的在、大小和签名时一致，再建文档。只有这张表里属于本人、没用过、没过期的 key 才能变成文档——否则任何人都能把别人文件的 key 登记成自己的文档，读到它。签名里带了文件大小，bucket 会拒绝别的长度。
-- **格式白名单，类型由我们定。** 只认扩展名（`inspectFile`），不信浏览器报的类型；脚本、可执行文件、SVG 不收。读文件时返回的类型也由我们定：md、csv、json 一律按纯文本显示，从不解释。
-- **读文件只有一个出口** `GET /api/hub/documents/<id>/file`：先按登录状态和权限检查，再重定向到几十秒有效的签名链接（磁盘存储时由服务器直接输出）。不缓存，因为读的权利可以被收回。不接受 API key。
-- **HTML 是唯一能带代码的格式，只在沙箱里显示。** 页面里的 `<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」：能跑脚本，但读不到本站的 cookie、存储和接口。磁盘存储下文件由我们自己的域名输出，响应头再加一道 `Content-Security-Policy: sandbox`。PDF 用不带沙箱的 iframe（浏览器的 PDF 阅读器在沙箱里不能用）。
-- **每个改数据的用例都有操作日志。** `prepareUpload` 是例外：它没有改任何持久的东西，文档在 `completeUpload` 里才出现并记日志。
-- **没有 bucket 时，文本文档存在数据库里。** `getDocumentStorage(db)` 永远有存储：配了 bucket（开发时是磁盘目录）就用它，上传和所有新文件都走它；没配时由数据库顶上（`storage.db.ts`，表 `hub_document_blob`，每个文件最大 1 MB），所以文本文档（页面里写、命令行写）在 bucket 配好之前就能用。数据库不能给浏览器一个直传地址，所以 `canUpload` 为 false：上传 PDF、PPT 等文件仍然要先配 bucket，页面上「上传文件」是灰的并说明原因。bucket 配好以后，数据库里已有的文件照常能读（按 `storageKey` 先查数据库再查 bucket），新文件写进 bucket，不需要迁移。
-- **文本文档可以在网页里写、也可以用命令行写。** md、txt、csv、json、html（`isTextExtension`）不必上传文件：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`，都走 `text.service.ts`，服务端自己把内容存进 bucket（`DocumentStorage.read` / `put`），规则、格式白名单和操作日志与上传的文档完全一样。上限 400 KB（页面里写的文本要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
-- **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文件或转让编辑权，这些只在网页里做。可读性规则不变：读不到的文档回 404，和不存在一样。
-- **开发环境的磁盘存储不支持 API key 上传。** 磁盘存储的上传地址是只认浏览器会话的网页路由，所以 `bshub doc +create --file x.pdf` 和 `+download` 只能对接 bucket 存储（生产）；文本文档不受影响，因为服务端自己写。
-- **导入命令** `cli import-documents`（`cli/import-documents.ts`）直接读本地目录、写存储和数据库，不走网页；不做权限检查，因为它只能由有数据库访问权的人在命令行运行。HTML 文件会把相对路径引用的样式、字体、图片内联进去（`cli/inline-html.ts`，只读源目录之内的文件）。
-- **已知的局限**：没有版本历史（替换文件会删掉旧文件）；Word、PPT、Excel 没有预览（只能下载）；没完成的上传留下的孤儿文件还没有定期清理；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
-## 我完成的
-
-`packages/hub/src/archive/` 负责 `/me/done`：一个人完成过的任务，按月、按项目、按职能统计。
-
-- **不建表**：完成的事实本来就在 Kan 的卡片活动记录里（`card_activity` 的 `card.updated.list`）。只读 `kan/archive.gateway.ts`，所以看板里怎么动，这里就怎么算，不会出现两份对不上的数据。
-- **怎样算完成**：卡片现在在「已完成」列（按列名识别，和大看板同一套规则）。完成时间取最后一次移进完成列的记录；直接建在完成列里的卡片取创建时间；什么记录都没有的（比如导入的）取卡片的创建时间，但只算给负责人。任务被重新打开就不再算。
-- **算给谁**：有负责人的算给负责人；没有负责人的算给把它移进完成列的人（`archive.policy.ts` 的 `countsForMe`）。只看自己能看的项目，离开了的项目不再出现。
-- **月份按看的人的时区切**：页面把浏览器时区传给接口，服务端用 `Intl` 换算，纯函数有测试。
-- 和日程一样只有本人能看，只读，不写操作日志。
-
-## 官网后台
-
-`packages/hub/src/site/` 负责后台的「官网」分区（`/admin/site`）：审核官网访客提交的项目卡和项目进展，跟进志愿者申请，查看加入登记。数据不在 Hub 的库里，而在官网自己的 Supabase 库里。
-
-- **两个数据库。** 官网的表定义在 `site/site.tables.ts`，故意放在 `schema/` 外面，drizzle-kit 不会把它们写进 Hub 的迁移；表由官网仓库的迁移创建，这里只列后台用到的列，官网以后加列不影响。连接在 `site/site.db.ts`：读 `HUB_SITE_DATABASE_URL`，每个实例建一个小连接池；没设就是「未连接」。
-- **专用角色，最小权限。** Hub 以 `hub_site_admin` 登录官网的库（建角色的迁移在官网仓库）。它只有四张表的 select、审核状态和志愿者状态 / 备注这几列的 update，外加放行这些操作的 RLS 策略。连非本机地址时一律 TLS 校验证书，URL 里的 `sslmode` 会被忽略（node-postgres 会让 URL 覆盖 `ssl` 选项）。
-- **官网权限和后台角色无关。** `hub_account.siteAccess`：`people`（名单）或 `manage`（管理），只有所有者能设，可以给自己设。规则在 `site/site.policy.ts` 的 `canOnSite()`；接口层用 `hubSiteProcedure(权限)`，用例里再查一遍。只有官网权限、没有后台角色的人，后台入口直接进 `/admin/site`，侧栏只显示「官网」一组。
-- **操作日志跨库。** 改官网数据的用例在写日志的 Hub 事务里执行官网那一步：官网那步失败，什么都不记；只有官网已提交、Hub 随后失败这一种极少见的情况会漏记。日志只写志愿者「改了备注」，不写备注内容；导出名单也记一条，写明筛选条件和条数。
-- **出错时。** 官网库连不上或者报错，用例记一条服务端日志，页面只看到「暂时连不上官网数据库」（`UNAVAILABLE` → `SERVICE_UNAVAILABLE`）。
-- **已知限制。** 封面和视频存在官网的私有存储里，Hub 没有存储的密钥，审核页只显示「有封面 / 视频时长」，原图和视频看企业微信的推送。志愿者备注是接口入参，会和日程标题一样出现在请求日志里。访客填的链接只有 `http(s)` 才渲染成链接；导出的表格会给 `= + - @` 开头的单元格加 `'`，防止在表格软件里被当成公式执行。
-
-## GitHub
-
-`packages/hub/src/github/` 负责连接 GitHub。分两步上线：先是后台的「项目仓库」，再是个人页的「连接 GitHub」。
-
-- **项目仓库**（`hub_project_repo`）：后台给每个项目配它由哪些仓库组成，存成小写的 `owner/name`（GitHub 不区分大小写，统一写法才能正确判断重复）。粘贴的 GitHub 链接会被规范化（`repo.policy.ts`）。所有者和管理员能改（`settings.manage`），每次改动都写操作日志。
-- **一个人的活动只读他能看的项目的仓库**：`listReposForUser()` 用的是和首页同一个出口 `listViewableProjects()`。不在某个项目里的人，那个项目的仓库一个也不会被读取或统计。
-- 连接用 **GitHub App**，不用 OAuth App：GitHub App 的权限是只读的，而且只对安装了它的仓库有效；OAuth App 要读私有仓库就得要 `repo` 权限，等于对这个人所有私有仓库都有读写权（2026-10-14 定）。环境变量叫 `HUB_GITHUB_CLIENT_ID` / `HUB_GITHUB_CLIENT_SECRET`，故意不用 `GITHUB_CLIENT_ID`：那是 Kan 自己的变量名，设了就会打开「用 GitHub 登录」，绕过注册闸门。
-- **连接**（`/me/github` 的「连接 GitHub」）：`/api/hub/github/connect` 生成随机 `state`，放进只有 `/api/hub/github` 收得到的 HttpOnly cookie，再跳去 GitHub 授权；GitHub 跳回 `/api/hub/github/callback`，`state` 和 cookie 对上（常量时间比较）才去换令牌。这两个是普通 API 路由不是 tRPC，因为要做跳转；`code` 不进 tRPC 日志。
-- **令牌加密存**（`hub_github_account`）：AES-256-GCM，密钥用 HKDF 从现有的 `BETTER_AUTH_SECRET` 派生，所以不用多管一个密钥（`token-crypto.ts`）。换了 `BETTER_AUTH_SECRET` 之后旧令牌解不开，大家重新连接一次就行。GitHub App 的用户令牌 8 小时过期，快过期时用 refresh token 自动换新。
-- **同步**（「同步最近活动」）：只读 `listReposForUser()` 给的仓库，读最近 90 天的提交（按作者）、自己开的 PR、合并的 PR、自己开的 Issue，每个仓库一页 100 条，一次最多并行读 4 个仓库；结果存进 `hub_github_event`（按「人 + 仓库 + 类型 + 编号」去重）。一分钟最多同步一次。App 没装或没权限的仓库返回 404/403，标成「读不到」，不影响别的仓库；GitHub 不认令牌（401）就提示重新连接，已存的数据不动。
-- **展示时再按权限过滤一次**：统计和列表只算现在还能看的项目的仓库，离开项目后那些活动就不再显示（数据还在，重新加入项目会回来）。
-- **断开**：请 GitHub 撤销令牌，删掉连接和同步来的活动。连接和断开写操作日志（只有 GitHub 用户名，从不写令牌）；同步本身不写。
-- GitHub 的调用都在 `github.client.ts` 后面，用例测试换成假 GitHub，不走网络。
+- **格式白名单，类型由我们定。** 只认扩展名 `.md`、`.html`、`.htm`（`inspectFile`），不信客户端报的类型。读的时候返回的类型也由我们定：Markdown 经文件接口一律按纯文本输出，从不解释。
+- **渲染：** Markdown 在页面里用 react-markdown 渲染（不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。
+- **读内容有两个出口：** 页面里的 `hub.documents.content`（tRPC，给编辑器和 Markdown 渲染），和 `GET /api/hub/documents/<id>/file`（给 HTML 的 iframe 和「下载」）。两者都先检查登录状态和权限，不缓存（读的权利可以被收回），文件接口不接受 API key。
+- **写内容** 都走 `text.service.ts`：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`。保存时带上打开时的 `updatedAt`，别人在此之后改过就拒绝，不会悄悄覆盖。上限 400 KB（页面里写的内容要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
+- **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文档或转让编辑权，这些只在网页里做。读不到的文档回 404，和不存在一样。
+- **每个改数据的用例都有操作日志。**
+- **已知的局限**：没有版本历史（保存会覆盖旧内容）；只有 Markdown 和 HTML，没有附件；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
 
 ## 操作日志
 

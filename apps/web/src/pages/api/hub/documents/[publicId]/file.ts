@@ -54,17 +54,12 @@ export default withHubRateLimit(
         },
       );
 
-      if (opened.source.kind === "redirect") {
-        res.redirect(302, opened.source.url);
-        return;
-      }
-
       res.setHeader("Content-Type", opened.contentType);
       res.setHeader("Content-Disposition", opened.disposition);
       res.setHeader("Content-Length", String(opened.source.size));
       res.setHeader("X-Content-Type-Options", "nosniff");
       if (opened.mode === "view" && opened.ext.startsWith("htm")) {
-        // Served from our own origin, so scripts in an uploaded page must not
+        // Served from our own origin, so scripts in a document must not
         // be able to reach it: an opaque origin cannot read our cookies or API.
         res.setHeader("Content-Security-Policy", "sandbox allow-scripts");
       }
