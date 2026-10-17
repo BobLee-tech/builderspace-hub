@@ -2,7 +2,7 @@ import mammoth from "mammoth";
 import TurndownService from "turndown";
 
 import {
-  MAX_IMPORT_FILE_BYTES,
+  importSizeProblem,
   MAX_TEXT_BYTES,
   TITLE_MAX_LENGTH,
 } from "./document.policy";
@@ -55,13 +55,8 @@ export async function importDocumentFile(file: {
   }
   const textFormat = TEXT_FORMATS[ext];
   if (!textFormat && ext !== "docx") return { ok: false, reason: UNSUPPORTED };
-  if (file.bytes.byteLength === 0) return { ok: false, reason: "文件是空的" };
-  if (file.bytes.byteLength > MAX_IMPORT_FILE_BYTES) {
-    return {
-      ok: false,
-      reason: `文件太大，上限 ${MAX_IMPORT_FILE_BYTES / 1024 / 1024} MB`,
-    };
-  }
+  const sizeProblem = importSizeProblem(file.bytes.byteLength);
+  if (sizeProblem) return { ok: false, reason: sizeProblem };
 
   let content: string;
   let droppedImages = 0;

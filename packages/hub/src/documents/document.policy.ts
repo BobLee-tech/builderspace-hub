@@ -19,6 +19,18 @@ export const IMPORT_ACCEPT = ".md,.markdown,.html,.htm,.docx";
  */
 export const MAX_IMPORT_FILE_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Why a file of this size cannot be uploaded, or null. Checked on the size
+ * alone, so the browser can refuse a huge file before reading it.
+ */
+export function importSizeProblem(size: number): string | null {
+  if (size === 0) return "文件是空的";
+  if (size > MAX_IMPORT_FILE_BYTES) {
+    return `文件太大，上限 ${MAX_IMPORT_FILE_BYTES / 1024 / 1024} MB`;
+  }
+  return null;
+}
+
 /** How deep folders may nest (a top-level folder is depth 1). */
 export const FOLDER_MAX_DEPTH = 3;
 

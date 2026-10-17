@@ -75,4 +75,4 @@ export {
   volunteerStatusLabels,
 } from "./site/site.policy";
 
-export { IMPORT_ACCEPT } from "./documents/document.policy";
+export { IMPORT_ACCEPT, importSizeProblem } from "./documents/document.policy";

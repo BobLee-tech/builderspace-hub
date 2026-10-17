@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import type { ImportedDocument } from "@kan/hub/documents/file-import";
-import { IMPORT_ACCEPT } from "@kan/hub/public";
+import { IMPORT_ACCEPT, importSizeProblem } from "@kan/hub/public";
 
 import { copy } from "~/hub/copy/zh";
 import { buttonClass } from "~/hub/ui/admin-primitives";
@@ -24,8 +24,15 @@ export function UploadButton({
   const [reading, setReading] = useState(false);
 
   async function read(file: File) {
-    setReading(true);
     onError(null);
+    // Refused on its size before it is read: a huge file would otherwise be
+    // loaded into memory in full first.
+    const sizeProblem = importSizeProblem(file.size);
+    if (sizeProblem) {
+      onError(sizeProblem);
+      return;
+    }
+    setReading(true);
     try {
       const { importDocumentFile } = await import(
         "@kan/hub/documents/file-import"
