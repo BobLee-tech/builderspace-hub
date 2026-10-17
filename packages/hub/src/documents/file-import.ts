@@ -163,6 +163,8 @@ function markdownService(): TurndownService {
   });
   service.addRule("tableCell", {
     filter: ["th", "td"],
+    // Turndown has already escaped the text, backslashes included, so only
+    // the pipe, which would end the cell, still needs a backslash.
     replacement: (content) =>
       `| ${content
         .replace(/\s*\n+\s*/g, " ")

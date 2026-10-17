@@ -133,6 +133,22 @@ describe("importDocumentFile: Word", () => {
     expect(doc.droppedImages).toBe(0);
   });
 
+  it("keeps backslashes and pipes in table cells as text", async () => {
+    const bytes = await wordFile([
+      new Table({
+        rows: [
+          new TableRow({ children: [cell("路径"), cell("说明")] }),
+          new TableRow({ children: [cell("C:\\temp\\"), cell("a\\|b")] }),
+        ],
+      }),
+    ]);
+
+    const doc = await imported("路径.docx", bytes);
+
+    // Shown as C:\temp\ and a\|b, in two cells of one row.
+    expect(doc.content).toContain(String.raw`| C:\\temp\\ | a\\\|b |`);
+  });
+
   it("refuses a file that is not a readable .docx", async () => {
     expect(await refused("坏文件.docx", utf8("not a zip"))).toBe(
       "这个 Word 文件打不开，可能已经损坏",
