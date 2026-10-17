@@ -77,7 +77,7 @@ export const zh = {
     title: "文档",
     entry: "文档",
     description:
-      "用 Markdown 或 HTML 写的文档都放在这里，直接在页面里写和编辑。所有成员都能查看；要修改某份文档，需要有修改权限，可以在文档页向管理员申请。",
+      "用 Markdown 或 HTML 写的文档都放在这里：可以直接在页面里写，也可以上传 .md、.html 或 Word（.docx）文件。所有成员都能查看；要修改某份文档，需要有修改权限，可以在文档页向管理员申请。",
     searchPlaceholder: "搜索标题",
     root: "全部文档",
     searchResults: (count: number) => `找到 ${count} 份文档`,
@@ -88,7 +88,7 @@ export const zh = {
     empty: {
       folder: "这里还没有文档。",
       search: "没有找到匹配的文档。",
-      managerHint: "点右上角的「新建文档」写第一份。",
+      managerHint: "点右上角的「新建文档」写第一份，或者「上传文件」。",
     },
     columns: { name: "名称", type: "格式", size: "大小", updated: "更新" },
     badges: {
@@ -107,11 +107,18 @@ export const zh = {
       openNewTab: "新标签页打开",
       edit: "编辑信息",
       newText: "新建文档",
+      upload: "上传文件",
+      uploading: "读取中…",
+      uploadFailed: "读取文件失败，请再试一次",
       editText: "编辑内容",
     },
     newText: {
       title: "新建文档",
       hint: "直接在这里写，保存成一份文档。支持 Markdown 和 HTML 两种格式。",
+      fromFile: (fileName: string) =>
+        `内容来自「${fileName}」，保存前可以再改。`,
+      droppedImages: (count: number) =>
+        `Word 里的 ${count} 张图片没有带进来：文档只保存文字。`,
       destination: "放进",
       topLevel: "最上层",
       titleLabel: "标题",

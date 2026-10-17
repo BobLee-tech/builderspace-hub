@@ -72,6 +72,7 @@
     "react-image-crop": "^11.0.10",
     "react-lottie-player": "^1.5.5",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "superjson": "2.2.1",
     "tailwind-merge": "^2.5.2",
     "tippy.js": "^6.3.7",

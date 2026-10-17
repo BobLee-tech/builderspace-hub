@@ -114,13 +114,14 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 
 ## 文档库
 
-`packages/hub/src/documents/` 负责 `/documents`：用 Markdown 或 HTML 在页面里写和编辑的文档。**不上传文件，不用对象存储。**
+`packages/hub/src/documents/` 负责 `/documents`：用 Markdown 或 HTML 在页面里写和编辑的文档。**不存附件，不用对象存储。**
 
 - **内容在数据库里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_blob`（内容本身，按 `storageKey` 存，最大 400 KB）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）。`DocumentStorage` 接口只剩一个实现 `storage.db.ts`；接口保留是为了让内容存放的位置和业务规则分开，测试里另有一个内存实现。
 - **历史：** 文档库最早做过文件上传（浏览器直传 S3 兼容存储，PDF、PPT 等），后来决定不需要附件，整条路删掉了：上传分两步的用例、S3 和磁盘存储、上传路由、导入命令。迁移历史不改写：`hub_document_upload` 表留着（表里没有数据，代码不再读写它），要彻底去掉得另写一条迁移。`hub_document.storageKey` 仍在用：它是内容在 `hub_document_blob` 里的键。线上从没配过 bucket，所以没有需要搬走的文件。
 - **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：登录成员，除非这份文档的可读开关被关掉（关掉后只有能修改的人看得到）。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
+- **上传 = 在浏览器里把文件变成文本。** `file-import.ts` 读 `.md` / `.markdown` / `.html` / `.htm`（必须是 UTF-8），把 Word（`.docx`）用 mammoth 转 HTML、再用 turndown 转 Markdown：表格的第一行当表头，图片去掉并计数。结果填进「新建文档」对话框，人看过再保存，走的还是 `createText`，服务端没有上传接口。转换放在浏览器，是因为带图的 `.docx` 很容易超过 tRPC 1 MB 的请求上限；转换库只在选了文件时才加载（`import()`），`IMPORT_ACCEPT` 在 `@kan/hub/public` 里，页面不用为了它加载转换库。
 - **格式白名单，类型由我们定。** 只认扩展名 `.md`、`.html`、`.htm`（`inspectFile`），不信客户端报的类型。读的时候返回的类型也由我们定：Markdown 经文件接口一律按纯文本输出，从不解释。
-- **渲染：** Markdown 在页面里用 react-markdown 渲染（不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。
+- **渲染：** Markdown 在页面里用 react-markdown 加 remark-gfm 渲染（支持 GitHub 的表格、任务列表、删除线；不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。
 - **读内容有两个出口：** 页面里的 `hub.documents.content`（tRPC，给编辑器和 Markdown 渲染），和 `GET /api/hub/documents/<id>/file`（给 HTML 的 iframe 和「下载」）。两者都先检查登录状态和权限，不缓存（读的权利可以被收回），文件接口不接受 API key。
 - **写内容** 都走 `text.service.ts`：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`。保存时带上打开时的 `updatedAt`，别人在此之后改过就拒绝，不会悄悄覆盖。上限 400 KB（页面里写的内容要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
 - **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文档或转让编辑权，这些只在网页里做。读不到的文档回 404，和不存在一样。

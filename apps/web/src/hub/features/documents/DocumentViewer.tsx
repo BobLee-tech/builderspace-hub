@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { PreviewKind } from "@kan/hub/documents";
 
@@ -19,9 +20,11 @@ const frame =
  * (charts and interactive pages need them) but the page is treated as coming
  * from nowhere, so it cannot touch this app's cookies, storage or API.
  *
- * Markdown is rendered in the page itself, from the text. Raw HTML inside it
- * is not interpreted (react-markdown shows it as text), and unsafe link
- * addresses such as `javascript:` are dropped, so it needs no sandbox.
+ * Markdown is rendered in the page itself, from the text, with GitHub's
+ * tables, task lists and strikethrough (a Word upload's tables come out as
+ * GitHub tables). Raw HTML inside it is not interpreted (react-markdown shows
+ * it as text), and unsafe link addresses such as `javascript:` are dropped,
+ * so it needs no sandbox.
  */
 export function DocumentViewer({
   publicId,
@@ -71,6 +74,7 @@ function MarkdownView({ publicId }: { publicId: string }) {
       {content.data && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
             components={{
               a: ({ node: _node, ...props }) => (
                 <a {...props} target="_blank" rel="noopener noreferrer" />

@@ -8,12 +8,24 @@ import {
   canRequestEdit,
   contentDisposition,
   FOLDER_MAX_DEPTH,
+  importSizeProblem,
   inspectFile,
+  MAX_IMPORT_FILE_BYTES,
   MAX_TEXT_BYTES,
   normaliseName,
   storageKeyFor,
   viewContentType,
 } from "./document.policy";
+
+describe("importSizeProblem", () => {
+  it("refuses empty and oversized files on their size alone", () => {
+    expect(importSizeProblem(0)).toBe("文件是空的");
+    expect(importSizeProblem(MAX_IMPORT_FILE_BYTES)).toBeNull();
+    expect(importSizeProblem(MAX_IMPORT_FILE_BYTES + 1)).toBe(
+      "文件太大，上限 20 MB",
+    );
+  });
+});
 
 describe("inspectFile", () => {
   it("accepts Markdown and HTML, whatever the case", () => {
