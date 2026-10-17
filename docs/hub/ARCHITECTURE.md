@@ -117,7 +117,7 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 `packages/hub/src/documents/` 负责 `/documents`：用 Markdown 或 HTML 在页面里写和编辑的文档。**不上传文件，不用对象存储。**
 
 - **内容在数据库里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_blob`（内容本身，按 `storageKey` 存，最大 400 KB）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）。`DocumentStorage` 接口只剩一个实现 `storage.db.ts`；接口保留是为了让内容存放的位置和业务规则分开，测试里另有一个内存实现。
-- **历史：** 文档库最早做过文件上传（浏览器直传 S3 兼容存储，PDF、PPT 等），后来决定不需要附件，整条路删掉了：上传分两步的用例、S3 和磁盘存储、上传路由、导入命令。迁移历史不改写：`hub_document_upload` 表和 `hub_document.storageKey` 留着（表里没有数据，代码不再读写它），要彻底去掉得另写一条迁移。线上从没配过 bucket，所以没有需要搬走的文件。
+- **历史：** 文档库最早做过文件上传（浏览器直传 S3 兼容存储，PDF、PPT 等），后来决定不需要附件，整条路删掉了：上传分两步的用例、S3 和磁盘存储、上传路由、导入命令。迁移历史不改写：`hub_document_upload` 表留着（表里没有数据，代码不再读写它），要彻底去掉得另写一条迁移。`hub_document.storageKey` 仍在用：它是内容在 `hub_document_blob` 里的键。线上从没配过 bucket，所以没有需要搬走的文件。
 - **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：登录成员，除非这份文档的可读开关被关掉（关掉后只有能修改的人看得到）。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
 - **格式白名单，类型由我们定。** 只认扩展名 `.md`、`.html`、`.htm`（`inspectFile`），不信客户端报的类型。读的时候返回的类型也由我们定：Markdown 经文件接口一律按纯文本输出，从不解释。
 - **渲染：** Markdown 在页面里用 react-markdown 渲染（不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。

@@ -15,6 +15,7 @@ import {
   inspectFile,
   MAX_TEXT_BYTES,
   normaliseName,
+  previewKindOf,
   storageKeyFor,
   TITLE_MAX_LENGTH,
 } from "./document.policy";
@@ -90,7 +91,7 @@ function textBytes(content: string): Buffer {
   if (bytes.length > MAX_TEXT_BYTES) {
     throw new HubError(
       "INVALID_INPUT",
-      `文本文档最大 ${MAX_TEXT_BYTES / 1024 / 1024} MB，这份太大了`,
+      `文本文档最大 ${MAX_TEXT_BYTES / 1024} KB，这份太大了`,
     );
   }
   return bytes;
@@ -209,6 +210,15 @@ export async function replaceTextContent(
   const access = await loadReadable(db, actor, input.documentPublicId);
   requireEdit(access);
   const { row } = access;
+  if (!previewKindOf(row.ext)) {
+    // A document from before the library held Markdown and HTML only (a
+    // .txt, .csv or .json written earlier). Writing text into it would keep
+    // its old name and type, so it is left as it is.
+    throw new HubError(
+      "INVALID_INPUT",
+      "这份文档的格式已经不支持在线修改，只有 Markdown 和 HTML 可以",
+    );
+  }
 
   const bytes = textBytes(input.content);
   const sha256 = createHash("sha256").update(bytes).digest("hex");

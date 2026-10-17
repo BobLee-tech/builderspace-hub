@@ -259,6 +259,26 @@ describe("replaceTextContent", () => {
     ).toBe(false);
   });
 
+  it("refuses to write into a document of a format the library no longer holds", async () => {
+    const legacy = await make(owner);
+    const row = await findDocument(db, legacy.publicId);
+    if (!row) throw new Error("missing");
+    await updateDocumentRow(
+      db,
+      row.id,
+      { filename: "notes.txt", ext: "txt", contentType: "text/plain" },
+      new Date(),
+    );
+
+    await expect(
+      replaceTextContent(db, storage, owner, {
+        documentPublicId: legacy.publicId,
+        content: "new text",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect((await findDocument(db, legacy.publicId))?.sha256).toBe(row.sha256);
+  });
+
   it("refuses to show content that is not UTF-8, so the editor cannot write replacement characters back", async () => {
     const gbk = await make(owner);
     const [key] = [...storage.files.keys()];
