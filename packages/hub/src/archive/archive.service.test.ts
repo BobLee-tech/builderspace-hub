@@ -283,7 +283,7 @@ describe("when a task was finished", () => {
 describe("the counts", () => {
   it("splits by month on the viewer's clock, by project and by function", async () => {
     const dev = await seedBoard(coursemate, "开发");
-    const ops = await seedBoard(coursemate, "运营");
+    const ops = await seedBoard(coursemate, "活动");
     const ideas = await seedBoard(coursemate, "灵感池");
     // October in Sydney, still September in UTC.
     await finish(coursemate, dev, "跨月", me, "2026-09-30T15:30:00Z", [me]);
