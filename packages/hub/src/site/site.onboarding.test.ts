@@ -377,6 +377,19 @@ describe("sending a link again", () => {
     );
     expect(open).toHaveLength(1);
     expect(await auditActions()).toContain("grant.restored");
+
+    const { items } = await listSiteVolunteers(
+      db,
+      site,
+      admin,
+      { status: null, page: 1 },
+      now,
+    );
+    expect(items[0]?.hubAccess).toEqual({
+      state: "linked",
+      issuedAt: now,
+      expiresAt: later(7),
+    });
   });
 
   it("only works on accepted applications", async () => {

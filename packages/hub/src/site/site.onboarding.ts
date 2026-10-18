@@ -107,16 +107,18 @@ export async function describeHubAccess(
       result.set(email, { state: "registered" });
       continue;
     }
-    // Newest first, so the first match is the address's latest link.
-    const latest = grants.find((grant) => grant.email === email);
-    const state = latest ? grantState(latest, now) : null;
-    if (latest && state === "pending") {
+    // A working link wins, even when a newer one was revoked after it (a
+    // refused resend gives the older one back). Otherwise the newest decides.
+    const own = grants.filter((grant) => grant.email === email);
+    const working = own.find((grant) => grantState(grant, now) === "pending");
+    const latest = own[0];
+    if (working) {
       result.set(email, {
         state: "linked",
-        issuedAt: latest.createdAt,
-        expiresAt: latest.expiresAt,
+        issuedAt: working.createdAt,
+        expiresAt: working.expiresAt,
       });
-    } else if (latest && state === "expired") {
+    } else if (latest && grantState(latest, now) === "expired") {
       result.set(email, { state: "expired", expiresAt: latest.expiresAt });
     } else {
       result.set(email, { state: "none" });
