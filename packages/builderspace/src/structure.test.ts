@@ -36,9 +36,9 @@ describe("hubStructure (the real BuilderSpace config)", () => {
       "EchoAgent",
     ]);
     expect(hubStructure.functions.map((f) => f.name)).toEqual([
-      "开发",
-      "运营",
-      "营销",
+      "技术",
+      "活动",
+      "宣传",
     ]);
   });
 
@@ -74,6 +74,12 @@ describe("validateStructure", () => {
     const errors = validateStructure(s);
     expect(errors).toContain('重复的职能 key: "dev"');
     expect(errors).toContain('重复的职能名称: "开发"');
+  });
+
+  it("rejects a former function name that another function still uses", () => {
+    const s = base();
+    s.functions.push({ key: "ops", name: "运营", formerNames: ["开发"] });
+    expect(validateStructure(s)).toContain('重复的职能名称: "开发"');
   });
 
   it("rejects slugs the Hub API would refuse", () => {

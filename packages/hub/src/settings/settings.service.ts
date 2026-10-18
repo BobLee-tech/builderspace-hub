@@ -12,7 +12,7 @@ import { readSetting, writeSetting } from "./settings.repo";
 
 const FUNCTION_COLORS_KEY = "function_colors";
 
-/** The colours every page paints 开发 / 运营 / 营销 in. */
+/** The colours every page paints 技术 / 活动 / 宣传 in. */
 export async function getFunctionColors(db: Db): Promise<FunctionColors> {
   return readFunctionColors(await readSetting(db, FUNCTION_COLORS_KEY));
 }

@@ -7,10 +7,15 @@ export interface ProjectDef {
   description?: string;
 }
 
-/** A function inside every project (开发 / 运营 / 营销). Becomes one board per project. */
+/** A function inside every project (技术 / 活动 / 宣传). Becomes one board per project. */
 export interface FunctionDef {
   key: string;
   name: string;
+  /**
+   * Names this function's boards had before a rename. A board still called
+   * one of them is recognised as this function until it is renamed.
+   */
+  formerNames?: string[];
 }
 
 export interface TaskDef {

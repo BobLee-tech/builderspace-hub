@@ -4,7 +4,7 @@ import { DEFAULT_FUNCTION_COLORS } from "@kan/hub/public";
 import { api } from "~/utils/api";
 
 /**
- * The colours 开发 / 运营 / 营销 are painted in, set in the back office.
+ * The colours 技术 / 活动 / 宣传 are painted in, set in the back office.
  * Falls back to the defaults while loading or when signed out, so a page
  * never waits for them.
  */
