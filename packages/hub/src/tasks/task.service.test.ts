@@ -255,7 +255,7 @@ describe("getHome", () => {
 
   it("counts open tasks per tile and lists mine soonest first", async () => {
     const dev = await seedBoard(coursemate, "开发");
-    const ops = await seedBoard(echo, "运营");
+    const ops = await seedBoard(echo, "活动");
     const mine = [{ user: me, project: coursemate }];
     await seedCard(dev.todo, "下周到期", { dueInDays: 6, assignees: mine });
     await seedCard(dev.doing, "已经逾期", {
@@ -318,7 +318,7 @@ describe("getHome", () => {
 
   it("leaves out templates, archived boards and deleted cards", async () => {
     const template = await seedBoard(coursemate, "开发", { type: "template" });
-    const archived = await seedBoard(coursemate, "运营", { isArchived: true });
+    const archived = await seedBoard(coursemate, "活动", { isArchived: true });
     const live = await seedBoard(coursemate, "营销");
     await seedCard(template.todo, "模板里的");
     await seedCard(archived.todo, "归档的");
@@ -388,7 +388,7 @@ describe("getTaskBoard", () => {
 
   it("shows my tasks across projects, including finished ones", async () => {
     const dev = await seedBoard(coursemate, "开发");
-    const echoOps = await seedBoard(echo, "运营");
+    const echoOps = await seedBoard(echo, "活动");
     await seedCard(dev.doing, "我的 CourseMate", {
       assignees: [{ user: me, project: coursemate }],
     });

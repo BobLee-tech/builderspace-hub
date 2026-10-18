@@ -403,7 +403,7 @@ const hexColor = z
   .regex(/^#[0-9a-fA-F]{6}$/, "颜色要写成 #RRGGBB 的形式");
 
 const settingsRouter = createTRPCRouter({
-  /** Every page paints 开发 / 运营 / 营销 in these, so every member reads them. */
+  /** Every page paints 技术 / 活动 / 运营 in these, so every member reads them. */
   functionColors: hubProcedure.query(({ ctx }) => getFunctionColors(ctx.db)),
 
   setFunctionColors: hubAdminProcedure("settings.manage")

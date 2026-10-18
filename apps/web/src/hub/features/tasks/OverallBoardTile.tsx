@@ -11,7 +11,7 @@ const text = copy.tasks.overallTile;
 
 /**
  * The first tile on a project's boards page: its 总版, the board that shows
- * every task of 技术 / 活动 / 宣传 together, coloured by function.
+ * every task of 技术 / 活动 / 运营 together, coloured by function.
  */
 export function OverallBoardTile() {
   const { workspace } = useWorkspace();

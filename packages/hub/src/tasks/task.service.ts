@@ -306,7 +306,7 @@ function orderProjects(projects: ViewableProject[]): ViewableProject[] {
   );
 }
 
-/** Boards in project order, then 技术 / 活动 / 宣传, then the rest by name. */
+/** Boards in project order, then 技术 / 活动 / 运营, then the rest by name. */
 function byTeamOrder(projects: readonly ViewableProject[]) {
   const projectRank = new Map(projects.map((p, index) => [p.publicId, index]));
   const functionRank = (key: FunctionKey | null) =>

@@ -97,7 +97,7 @@ export function TaskBoardBody({
   );
 }
 
-/** 技术 / 活动 / 宣传 and their colours. */
+/** 技术 / 活动 / 运营 and their colours. */
 export function ColorLegend() {
   const colors = useFunctionColors();
   return (

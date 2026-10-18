@@ -66,6 +66,12 @@ describe("functionKeyOf", () => {
     expect(functionKeyOf("开发")).toBe("dev");
   });
 
+  it("reads 运营 as marketing now that the ops board is called 活动", () => {
+    expect(functionKeyOf("运营")).toBe("marketing");
+    expect(functionKeyOf("营销")).toBe("marketing");
+    expect(functionKeyOf("活动")).toBe("ops");
+  });
+
   it("returns null for any other board", () => {
     expect(functionKeyOf("Roadmap")).toBeNull();
   });

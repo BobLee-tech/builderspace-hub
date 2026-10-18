@@ -13,11 +13,13 @@ export const hubStructure: HubStructure = {
   lists: ["待办", "进行中", "待验收", "已完成"],
   labels: ["P0", "P1", "P2", "卡住"],
   // Named after the club's three departments; the former names keep boards
-  // that have not been renamed yet working.
+  // that have not been renamed yet working. 运营 used to be the ops board's
+  // name and is now marketing's, so it cannot also be a former name of ops:
+  // every 运营 board was renamed to 活动 before this shipped.
   functions: [
     { key: "dev", name: "技术", formerNames: ["开发"] },
-    { key: "ops", name: "活动", formerNames: ["运营"] },
-    { key: "marketing", name: "宣传", formerNames: ["营销"] },
+    { key: "ops", name: "活动" },
+    { key: "marketing", name: "运营", formerNames: ["营销"] },
   ],
   // Listed in the order the team wants them shown.
   projects: [
