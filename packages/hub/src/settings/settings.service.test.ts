@@ -38,7 +38,7 @@ describe("function colours", () => {
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
       action: "settings.function_colors_changed",
-      summary: "职能颜色改为 开发 #7C8796、运营 #4FA3A5、营销 #C77F95",
+      summary: "职能颜色改为 技术 #7C8796、活动 #4FA3A5、宣传 #C77F95",
     });
   });
 

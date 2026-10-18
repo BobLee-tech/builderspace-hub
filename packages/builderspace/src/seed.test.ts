@@ -209,6 +209,29 @@ describe("seedHub", () => {
     expect(fake.mutations.filter((m) => m === "board:开发")).toHaveLength(1);
   });
 
+  it("reuses a board that still has its function's former name", async () => {
+    const fake = createFakeClient();
+    const ws = await fake.client.createWorkspace({
+      name: "社群",
+      slug: "bss-community",
+    });
+    await fake.client.createBoard(ws.publicId, {
+      name: "开发",
+      lists: ["待办"],
+      labels: [],
+    });
+    fake.mutations.length = 0;
+    const renamed = structure();
+    renamed.functions = [{ key: "dev", name: "技术", formerNames: ["开发"] }];
+
+    const report = await seedHub(fake.client, renamed);
+
+    expect(report.boards.existing).toContain("社群 / 技术");
+    expect(must(fake.boards.get(ws.publicId)).map((b) => b.name)).toEqual([
+      "开发",
+    ]);
+  });
+
   it("skips labels a pre-existing board does not have instead of failing", async () => {
     const fake = createFakeClient();
     const ws = await fake.client.createWorkspace({

@@ -47,7 +47,9 @@ export function validateStructure(structure: HubStructure): string[] {
     errors.push(`重复的项目 slug: "${slug}"`);
   for (const key of duplicates(functions.map((f) => f.key)))
     errors.push(`重复的职能 key: "${key}"`);
-  for (const name of duplicates(functions.map((f) => f.name)))
+  for (const name of duplicates(
+    functions.flatMap((f) => [f.name, ...(f.formerNames ?? [])]),
+  ))
     errors.push(`重复的职能名称: "${name}"`);
 
   for (const project of projects) {

@@ -2,7 +2,7 @@ import type { FunctionKey } from "../tasks/task.policy";
 import { functionKeys } from "../tasks/task.policy";
 
 /**
- * The colour each function (开发 / 运营 / 营销) is shown in. Pure: shared by
+ * The colour each function (技术 / 活动 / 宣传) is shown in. Pure: shared by
  * the server, which validates and stores it, and the browser, which paints
  * with it and falls back to the defaults while loading.
  */

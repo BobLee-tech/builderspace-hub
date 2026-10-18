@@ -166,7 +166,7 @@ function HomeContent({ home }: { home: Home }) {
 
 /**
  * The 总版 of the chosen scope, right on the home page: every task of the
- * 开发 / 运营 / 营销 boards (of one project, or of all of them), editable in
+ * 技术 / 活动 / 宣传 boards (of one project, or of all of them), editable in
  * place. Same component and same data as `/tasks/all`.
  */
 function OverallBoard({ scopeId }: { scopeId: string | null }) {

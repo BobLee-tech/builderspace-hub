@@ -53,7 +53,7 @@ export function DueBadge({ task }: { task: HubTask }) {
   );
 }
 
-/** "CourseMate · 开发", or the board's own name when it is not a function. */
+/** "CourseMate · 技术", or the board's own name when it is not a function. */
 export function taskWhere(task: HubTask): string {
   const where = task.functionKey
     ? functionNames[task.functionKey]

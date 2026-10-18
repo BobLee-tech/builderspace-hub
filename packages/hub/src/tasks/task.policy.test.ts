@@ -59,6 +59,13 @@ describe("functionKeyOf", () => {
     }
   });
 
+  it("still recognises a board under its function's former name", () => {
+    for (const { key, formerNames = [] } of hubStructure.functions) {
+      for (const name of formerNames) expect(functionKeyOf(name)).toBe(key);
+    }
+    expect(functionKeyOf("开发")).toBe("dev");
+  });
+
   it("returns null for any other board", () => {
     expect(functionKeyOf("Roadmap")).toBeNull();
   });

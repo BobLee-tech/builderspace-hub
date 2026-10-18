@@ -12,10 +12,12 @@ import type { HubStructure } from "./types";
 export const hubStructure: HubStructure = {
   lists: ["待办", "进行中", "待验收", "已完成"],
   labels: ["P0", "P1", "P2", "卡住"],
+  // Named after the club's three departments; the former names keep boards
+  // that have not been renamed yet working.
   functions: [
-    { key: "dev", name: "开发" },
-    { key: "ops", name: "运营" },
-    { key: "marketing", name: "营销" },
+    { key: "dev", name: "技术", formerNames: ["开发"] },
+    { key: "ops", name: "活动", formerNames: ["运营"] },
+    { key: "marketing", name: "宣传", formerNames: ["营销"] },
   ],
   // Listed in the order the team wants them shown.
   projects: [

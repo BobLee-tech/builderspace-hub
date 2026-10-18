@@ -89,7 +89,8 @@ export async function seedHub(
       const tasks = structure.tasks.filter(
         (t) => t.project === project.key && t.function === fn.key,
       );
-      let board = boards.find((b) => b.name === fn.name);
+      const names = [fn.name, ...(fn.formerNames ?? [])];
+      let board = boards.find((b) => names.includes(b.name));
 
       if (board) {
         report.boards.existing.push(boardName);
