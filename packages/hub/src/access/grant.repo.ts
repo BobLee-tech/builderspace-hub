@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { workspaces } from "@kan/db/schema";
 import { generateUID } from "@kan/shared/utils";
@@ -148,6 +148,30 @@ export async function markGrantRevoked(
     .update(hubAccessGrants)
     .set({ revokedAt: by.at, revokedBy: by.userId })
     .where(and(eq(hubAccessGrants.id, grantId), isOpen))
+    .returning({ id: hubAccessGrants.id });
+
+  return updated.length > 0;
+}
+
+/**
+ * Undoes a revocation, so the grant is open again. Returns false when it was
+ * not a revoked, unused grant. Only one grant per address may be open, so the
+ * caller closes any other first.
+ */
+export async function reopenGrant(
+  db: DbOrTx,
+  grantId: number,
+): Promise<boolean> {
+  const updated = await db
+    .update(hubAccessGrants)
+    .set({ revokedAt: null, revokedBy: null })
+    .where(
+      and(
+        eq(hubAccessGrants.id, grantId),
+        isNull(hubAccessGrants.consumedAt),
+        isNotNull(hubAccessGrants.revokedAt),
+      ),
+    )
     .returning({ id: hubAccessGrants.id });
 
   return updated.length > 0;

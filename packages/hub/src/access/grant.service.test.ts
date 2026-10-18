@@ -14,6 +14,7 @@ import {
   describeGrantForJoin,
   issueGrant,
   listGrants,
+  restoreGrant,
   revokeGrant,
 } from "./grant.service";
 
@@ -266,6 +267,45 @@ describe("revokeGrant", () => {
       revokeGrant(db, actor, issued.publicId, now),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await auditActions()).toEqual(["grant.revoked", "grant.issued"]);
+  });
+});
+
+describe("restoreGrant", () => {
+  const issue = (at: Date = now) =>
+    issueGrant(db, actor, {
+      email: "new@example.test",
+      source: "direct",
+      projects: [],
+      now: at,
+    });
+
+  it("gives back a link that a newer one replaced, and logs it", async () => {
+    const first = await issue();
+    const second = await issue();
+    await revokeGrant(db, actor, second.publicId, now);
+
+    expect(await restoreGrant(db, actor, first.publicId, now)).toBe(true);
+    expect(await describeGrantForJoin(db, first.token, now)).toMatchObject({
+      state: "valid",
+    });
+    expect(await auditActions()).toContain("grant.restored");
+  });
+
+  it("refuses a link that is open, used, run out or unknown", async () => {
+    const open = await issue();
+    expect(await restoreGrant(db, actor, open.publicId, now)).toBe(false);
+
+    await revokeGrant(db, actor, open.publicId, now);
+    expect(await restoreGrant(db, actor, open.publicId, weekLater)).toBe(false);
+
+    await db
+      .update(hubAccessGrants)
+      .set({ consumedAt: now })
+      .where(eq(hubAccessGrants.publicId, open.publicId));
+    expect(await restoreGrant(db, actor, open.publicId, now)).toBe(false);
+
+    expect(await restoreGrant(db, actor, "nope", now)).toBe(false);
+    expect(await auditActions()).not.toContain("grant.restored");
   });
 });
 

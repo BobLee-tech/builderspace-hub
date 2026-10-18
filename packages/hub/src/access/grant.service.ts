@@ -26,6 +26,7 @@ import {
   listGrantsPage,
   listProjectsOfGrants,
   markGrantRevoked,
+  reopenGrant,
   setGrantHubRole,
 } from "./grant.repo";
 
@@ -184,6 +185,44 @@ export async function revokeGrant(
       summary: `撤销 ${grant.email} 的注册许可`,
     }),
   );
+}
+
+/**
+ * Gives back a link that was replaced by one that never reached its owner
+ * (the mail carrying the replacement was refused). Only an unused grant that
+ * has not run out can come back. Returns whether it did.
+ */
+export async function restoreGrant(
+  db: Db,
+  actor: AuditActor,
+  grantPublicId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const grant = await findGrantByPublicId(db, grantPublicId);
+  if (!grant || grantState(grant, now) !== "revoked") return false;
+  if (grant.expiresAt <= now) return false;
+
+  try {
+    await withAudit(
+      db,
+      async (tx) => {
+        if (!(await reopenGrant(tx, grant.id))) {
+          throw new HubError("CONFLICT", "这条注册许可已经不能恢复");
+        }
+      },
+      () => ({
+        actor,
+        action: "grant.restored",
+        entityType: "grant",
+        entityId: grant.publicId,
+        summary: `恢复 ${grant.email} 之前的注册许可（替换它的链接没有发出去）`,
+      }),
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof HubError) return false;
+    throw error;
+  }
 }
 
 /**

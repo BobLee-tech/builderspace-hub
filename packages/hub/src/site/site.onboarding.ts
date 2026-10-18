@@ -4,8 +4,8 @@ import type { AuditActor } from "../audit";
 import type { Db } from "../db";
 import type { Mailer } from "../mail";
 import type { HubRole } from "../schema";
-import { grantState, issueGrant, revokeGrant } from "../access";
-import { listGrantsByEmails } from "../access/grant.repo";
+import { grantState, issueGrant, restoreGrant, revokeGrant } from "../access";
+import { findOpenGrantByEmail, listGrantsByEmails } from "../access/grant.repo";
 import { can } from "../accounts/roles";
 import { recordAudit } from "../audit";
 import { findProjectBySlug } from "../kan/projects.gateway";
@@ -161,6 +161,10 @@ export async function onboardApplicant(
   if (access?.state === "linked" && !options.replace) {
     return { kind: "linked", expiresAt: access.expiresAt };
   }
+  // The link the applicant may already hold: issuing a new one revokes it,
+  // so it is given back if the new one's mail is refused.
+  const previous =
+    access?.state === "linked" ? await findOpenGrantByEmail(db, email) : null;
 
   const slug = hubStructure.projects.find(
     (project) => project.key === ONBOARDING_PROJECT_KEY,
@@ -220,12 +224,20 @@ export async function onboardApplicant(
       };
     }
     await revokeGrant(db, actor, issued.publicId, now);
+    const restored = previous
+      ? await restoreGrant(db, actor, previous.publicId, now)
+      : false;
     if (!(error instanceof MailError)) {
       console.error("[hub/site] welcome mail failed unexpectedly", error);
     }
     const reason =
       error instanceof MailError ? error.message : "发信时出了意外";
-    return { kind: "failed", message: `邮件没发出去（${reason}），链接已作废` };
+    return {
+      kind: "failed",
+      message: restored
+        ? `邮件没发出去（${reason}），新链接已作废，之前那条链接仍然有效`
+        : `邮件没发出去（${reason}），链接已作废`,
+    };
   }
 
   await recordAudit(db, {

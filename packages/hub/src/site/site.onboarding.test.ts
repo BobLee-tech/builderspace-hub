@@ -345,6 +345,40 @@ describe("sending a link again", () => {
     );
   });
 
+  it("keeps the old link working when the new mail is refused", async () => {
+    const volunteer = await seedSiteVolunteer(site, {
+      email: "a@example.test",
+    });
+    await accept(volunteer.id);
+    const first = tokenIn(sent[0]);
+    mailer.send.mockRejectedValueOnce(
+      new MailError("发信服务拒绝了：HTTP 403"),
+    );
+
+    const outcome = await sendVolunteerLink(
+      db,
+      site,
+      admin,
+      { id: volunteer.id },
+      deps,
+      now,
+    );
+
+    expect(outcome).toEqual({
+      kind: "failed",
+      message:
+        "邮件没发出去（发信服务拒绝了：HTTP 403），新链接已作废，之前那条链接仍然有效",
+    });
+    expect(await describeGrantForJoin(db, first, now)).toMatchObject({
+      state: "valid",
+    });
+    const open = (await db.select().from(hubAccessGrants)).filter(
+      (grant) => grant.revokedAt === null,
+    );
+    expect(open).toHaveLength(1);
+    expect(await auditActions()).toContain("grant.restored");
+  });
+
   it("only works on accepted applications", async () => {
     const volunteer = await seedSiteVolunteer(site, {
       email: "a@example.test",
