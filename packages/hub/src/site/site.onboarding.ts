@@ -194,6 +194,7 @@ export async function onboardApplicant(
     email,
     link: buildJoinLink(origin, issued.token),
     expiresAt: issued.expiresAt,
+    canReply: deps.mailer.acceptsReplies,
   });
 
   let mailId: string | null;

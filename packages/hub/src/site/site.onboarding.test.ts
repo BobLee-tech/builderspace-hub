@@ -72,6 +72,7 @@ beforeEach(async () => {
   await seedProject(db, owner, { name: "CourseMate", slug: "bss-coursemate" });
   sent = [];
   mailer = {
+    acceptsReplies: true,
     send: vi.fn((message: MailMessage) => {
       sent.push(message);
       return Promise.resolve({ id: `mail-${sent.length}` });
@@ -125,6 +126,19 @@ describe("accepting an application", () => {
         "grant.mailed",
       ]),
     );
+  });
+
+  it("points to the club group instead of a reply when replies go nowhere", async () => {
+    deps = {
+      mailer: { ...mailer, acceptsReplies: false },
+      baseUrl: deps.baseUrl,
+    };
+    const volunteer = await seedSiteVolunteer(site, {
+      email: "a@example.test",
+    });
+    await accept(volunteer.id);
+    expect(sent[0]?.text).not.toContain("回复这封邮件");
+    expect(sent[0]?.text).toContain("在社团群里说一声");
   });
 
   it("sends nothing when the application was already accepted", async () => {

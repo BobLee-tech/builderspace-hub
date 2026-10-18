@@ -233,11 +233,11 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 发信走 Resend，要在 Hub 的生产环境加：
 
-| 变量                 | 值                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `HUB_RESEND_API_KEY` | Resend 的 API key，sensitive。建议单独建一个只有 Sending access、只限发信域名的 key         |
-| `HUB_MAIL_FROM`      | 可选，发件人，默认 `BuilderSpace 创客社 <hello@builderspace.dev>`，域名要在 Resend 里验证过 |
-| `HUB_MAIL_REPLY_TO`  | 可选，收件人点「回复」时发到哪里；不设就没有回复地址                                        |
+| 变量                 | 值                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `HUB_RESEND_API_KEY` | Resend 的 API key，sensitive。建议单独建一个只有 Sending access、只限发信域名的 key                            |
+| `HUB_MAIL_FROM`      | 可选，发件人，默认 `BuilderSpace 创客社 <hello@builderspace.dev>`，域名要在 Resend 里验证过                    |
+| `HUB_MAIL_REPLY_TO`  | 建议设，收件人点「回复」时发到哪里（比如负责人的邮箱）。不设时，邮件里不会让人回复，改成请对方在社团群里说一声 |
 
 **不要用 `SMTP_*`、`EMAIL_FROM`**：那是 Kan 自己的发信配置，设了会打开 Kan 的邀请和魔法链接邮件，绕过注册闸门。没设 `HUB_RESEND_API_KEY` 时，改成「已录取」照常生效，但不发链接，页面会提示。
 

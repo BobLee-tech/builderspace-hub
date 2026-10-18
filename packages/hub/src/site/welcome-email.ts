@@ -35,6 +35,8 @@ export function welcomeEmail(input: {
   email: string;
   link: string;
   expiresAt: Date;
+  /** False when replies go nowhere: then the mail points to the club group instead. */
+  canReply: boolean;
 }): { subject: string; text: string } {
   const name = greetingName(input.nickname);
   const text = [
@@ -48,7 +50,9 @@ export function welcomeEmail(input: {
     "",
     `· 请用收到这封邮件的邮箱（${input.email}）注册；链接只能用一次，${formatExpiryDay(input.expiresAt)}前有效。`,
     "· 链接是你本人专用的，请不要转发。",
-    "· 打不开或过期了，直接回复这封邮件。",
+    input.canReply
+      ? "· 打不开或过期了，直接回复这封邮件。"
+      : "· 打不开或过期了，在社团群里说一声，我们会重新发一条。",
     "",
     "BuilderSpace 核心团队",
   ].join("\n");

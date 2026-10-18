@@ -24,6 +24,7 @@ describe("welcomeEmail", () => {
     email: "lin@example.test",
     link: "https://hub.example.test/join#token",
     expiresAt: new Date("2026-10-25T06:00:00Z"),
+    canReply: true,
   };
 
   it("greets the person and carries their link, address and expiry", () => {
@@ -38,6 +39,13 @@ describe("welcomeEmail", () => {
     expect(mail.text).toContain("（lin@example.test）注册");
     expect(mail.text).toContain("10 月 25 日前有效");
     expect(mail.text.endsWith("BuilderSpace 核心团队")).toBe(true);
+  });
+
+  it("asks for a reply only when replies reach someone", () => {
+    expect(welcomeEmail(base).text).toContain("直接回复这封邮件");
+    const noReply = welcomeEmail({ ...base, canReply: false }).text;
+    expect(noReply).not.toContain("回复这封邮件");
+    expect(noReply).toContain("在社团群里说一声");
   });
 
   it("drops a trailing full stop from the nickname", () => {

@@ -13,6 +13,8 @@ export interface MailMessage {
 }
 
 export interface Mailer {
+  /** Whether replying to the mail reaches someone (a reply-to address is set). */
+  readonly acceptsReplies: boolean;
   /**
    * Resolves once the provider has accepted the mail, with its id when the
    * reply carried one; rejects with a MailError.
@@ -83,6 +85,7 @@ export function createResendMailer(
     });
 
   return {
+    acceptsReplies: config.replyTo !== null,
     async send(message) {
       for (let attempt = 1; ; attempt++) {
         const last = attempt >= ATTEMPTS;

@@ -84,6 +84,16 @@ describe("createResendMailer", () => {
     });
   });
 
+  it("says whether replies reach anyone", () => {
+    const fetchImpl = (() =>
+      Promise.reject(new Error("unused"))) as typeof fetch;
+    expect(createResendMailer(config, fetchImpl).acceptsReplies).toBe(true);
+    expect(
+      createResendMailer({ ...config, replyTo: null }, fetchImpl)
+        .acceptsReplies,
+    ).toBe(false);
+  });
+
   it("leaves reply_to out when none is set", async () => {
     const fetchImpl = vi.fn(() =>
       Promise.resolve(jsonResponse(200, { id: "mail-1" })),
