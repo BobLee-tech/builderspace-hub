@@ -247,7 +247,7 @@ export const zh = {
       all: "总版",
     },
     overallHint:
-      "技术、活动、宣传的所有任务都在这里。拖到另一列，或者改截止日期，对应的小看板会同步。",
+      "技术、活动、运营的所有任务都在这里。拖到另一列，或者改截止日期，对应的小看板会同步。",
     backHome: "回到首页",
     otherStage: "其他",
     doneLimited: (shown: number, total: number) =>
@@ -545,7 +545,7 @@ export const zh = {
     colors: {
       title: "职能颜色",
       description:
-        "总版、首页和任务卡片用这三种颜色区分技术、活动和宣传。挑柔和一点的颜色，看起来不刺眼。",
+        "总版、首页和任务卡片用这三种颜色区分技术、活动和运营。挑柔和一点的颜色，看起来不刺眼。",
       custom: "自定义",
       preview: "预览",
       save: "保存",

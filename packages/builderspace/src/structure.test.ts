@@ -38,7 +38,7 @@ describe("hubStructure (the real BuilderSpace config)", () => {
     expect(hubStructure.functions.map((f) => f.name)).toEqual([
       "技术",
       "活动",
-      "宣传",
+      "运营",
     ]);
   });
 

@@ -7,7 +7,7 @@ export interface ProjectDef {
   description?: string;
 }
 
-/** A function inside every project (技术 / 活动 / 宣传). Becomes one board per project. */
+/** A function inside every project (技术 / 活动 / 运营). Becomes one board per project. */
 export interface FunctionDef {
   key: string;
   name: string;

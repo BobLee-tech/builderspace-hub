@@ -6,7 +6,7 @@ import { hubStructure } from "@kan/builderspace/structure";
  * Tasks are Kan cards. Which column a card belongs in is read from its list's
  * name and which function it belongs to from its board's name, using the
  * standard names in `@kan/builderspace` (待办 / 进行中 / 待验收 / 已完成 and
- * 技术 / 活动 / 宣传, or a function's former name). A list or board someone
+ * 技术 / 活动 / 运营, or a function's former name). A list or board someone
  * renamed is never dropped: its cards land in "other".
  */
 
