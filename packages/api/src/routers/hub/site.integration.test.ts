@@ -83,7 +83,7 @@ describe("hub.site", () => {
     ).resolves.toMatchObject({ total: 1 });
     await expect(
       caller.site.updateVolunteer({ id: volunteer.id, status: "contacted" }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ onboarding: null });
     await expect(
       caller.site.joins({ supportersOnly: false, page: 1 }),
     ).resolves.toMatchObject({ total: 0 });
@@ -97,6 +97,50 @@ describe("hub.site", () => {
     await expect(
       caller.site.reviewProject({ id: project.id, decision: "approved" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("passes the back-office role on, which decides who may issue links", async () => {
+    // No mail service in tests, whatever the machine's environment says.
+    vi.stubEnv("HUB_RESEND_API_KEY", "");
+    const listsOnly = await userWith("lists@example.test", {
+      siteAccess: "people",
+    });
+    const admin = await userWith("admin@example.test", {
+      role: "admin",
+      siteAccess: "people",
+    });
+    const first = await seedSiteVolunteer(site, { email: "a@example.test" });
+    const second = await seedSiteVolunteer(site, { email: "b@example.test" });
+
+    await expect(
+      createHubCaller(db, listsOnly).site.updateVolunteer({
+        id: first.id,
+        status: "accepted",
+      }),
+    ).resolves.toEqual({ onboarding: { kind: "not_allowed" } });
+    await expect(
+      createHubCaller(db, admin).site.updateVolunteer({
+        id: second.id,
+        status: "accepted",
+      }),
+    ).resolves.toEqual({ onboarding: { kind: "mail_off" } });
+    await expect(
+      createHubCaller(db, admin).site.sendVolunteerLink({ id: second.id }),
+    ).resolves.toEqual({ kind: "mail_off" });
+    vi.unstubAllEnvs();
+  });
+
+  it("sends links only for accepted applications", async () => {
+    const admin = await userWith("admin@example.test", {
+      role: "admin",
+      siteAccess: "people",
+    });
+    const volunteer = await seedSiteVolunteer(site, {
+      email: "a@example.test",
+    });
+    await expect(
+      createHubCaller(db, admin).site.sendVolunteerLink({ id: volunteer.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("lets 管理 review project cards", async () => {

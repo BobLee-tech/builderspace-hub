@@ -209,3 +209,19 @@ export async function countOpenGrants(db: DbOrTx): Promise<number> {
     .where(isOpen);
   return row?.total ?? 0;
 }
+
+/**
+ * Every grant ever issued to these addresses, newest first, for telling what
+ * happened to each address's latest link. Addresses must be normalised.
+ */
+export async function listGrantsByEmails(
+  db: DbOrTx,
+  emails: string[],
+): Promise<GrantRow[]> {
+  if (emails.length === 0) return [];
+  return db
+    .select()
+    .from(hubAccessGrants)
+    .where(inArray(hubAccessGrants.email, emails))
+    .orderBy(desc(hubAccessGrants.createdAt), desc(hubAccessGrants.id));
+}

@@ -8,11 +8,18 @@ export type {
   SiteVolunteerRow,
 } from "./site.repo";
 export type {
+  OnboardingDeps,
+  OnboardingOutcome,
+  VolunteerHubAccess,
+} from "./site.onboarding";
+export { onboardingDeps } from "./site.onboarding";
+export type {
   SiteActor,
   SiteExport,
   SiteExportKind,
   SiteExportRequest,
   SiteSummary,
+  SiteVolunteerItem,
 } from "./site.service";
 export {
   exportSiteList,
@@ -23,6 +30,7 @@ export {
   listSiteVolunteers,
   reviewSiteProject,
   reviewSiteUpdate,
+  sendVolunteerLink,
   SITE_EXPORT_LIMIT,
   SITE_PAGE_SIZE,
   siteExportInput,

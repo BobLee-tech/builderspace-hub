@@ -1,8 +1,13 @@
 import { z } from "zod";
 
-import type { AuditActor } from "../audit";
 import type { Db } from "../db";
 import type { SiteDb } from "./site.db";
+import type {
+  OnboardingActor,
+  OnboardingDeps,
+  OnboardingOutcome,
+  VolunteerHubAccess,
+} from "./site.onboarding";
 import type { SiteAccess, SitePermission } from "./site.policy";
 import type {
   Page,
@@ -15,7 +20,13 @@ import type {
   SiteVolunteerRow,
 } from "./site.repo";
 import { withAudit } from "../audit";
+import { normalizeEmail } from "../shared/email";
 import { HubError, isHubError } from "../shared/errors";
+import {
+  describeHubAccess,
+  onboardApplicant,
+  onboardingDeps,
+} from "./site.onboarding";
 import {
   canOnSite,
   reviewDecisions,
@@ -38,8 +49,11 @@ import * as repo from "./site.repo";
  * committed could leave a change unlogged.
  */
 
-/** Someone using the 官网 section: who they are and their website access. */
-export interface SiteActor extends AuditActor {
+/**
+ * Someone using the 官网 section: who they are, their website access, and
+ * their back-office role (which decides whether they may issue links).
+ */
+export interface SiteActor extends OnboardingActor {
   siteAccess: SiteAccess | null;
 }
 
@@ -56,6 +70,7 @@ export const siteInputs = {
   projects: z.object({ review: z.enum(reviewStatuses), page }),
   review: z.object({ id, decision: z.enum(reviewDecisions) }),
   volunteers: z.object({ status: z.enum(volunteerStatuses).nullable(), page }),
+  sendLink: z.object({ id }),
   volunteer: z
     .object({
       id,
@@ -239,36 +254,67 @@ export async function reviewSiteUpdate(
   );
 }
 
+/** An application with where its address stands in the Hub. */
+export type SiteVolunteerItem = SiteVolunteerRow & {
+  hubAccess: VolunteerHubAccess;
+};
+
 export async function listSiteVolunteers(
+  db: Db,
   site: SiteDb,
   actor: SiteActor,
   input: z.input<typeof siteInputs.volunteers>,
-): Promise<Page<SiteVolunteerRow> & { pageSize: number }> {
+  now: Date = new Date(),
+): Promise<Page<SiteVolunteerItem> & { pageSize: number }> {
   requireAccess(actor, "site.people");
   const { status, page: pageNumber } = parseInput(siteInputs.volunteers, input);
-  return withPageSize(
-    await onSite(() => repo.listVolunteers(site, status, paging(pageNumber))),
+  const result = await onSite(() =>
+    repo.listVolunteers(site, status, paging(pageNumber)),
   );
+  const access = await describeHubAccess(
+    db,
+    result.items.map((item) => item.email),
+    now,
+  );
+  return withPageSize({
+    ...result,
+    items: result.items.map((item) => {
+      const email = normalizeEmail(item.email);
+      return {
+        ...item,
+        hubAccess: (email ? access.get(email) : undefined) ?? {
+          state: "none",
+        },
+      };
+    }),
+  });
 }
 
 /**
  * Moves an application along (新申请 → 已联系 → …) and/or replaces its notes.
  * The log says that the notes changed, never what they say: anyone who reads
  * the log would otherwise read the notes too.
+ *
+ * Moving an application to 已录取 also mails the applicant a registration
+ * link (see `site.onboarding.ts`). That comes after the change is saved and
+ * never undoes it; `onboarding` says how it went, and is null when nothing
+ * was moved to 已录取.
  */
 export async function updateSiteVolunteer(
   db: Db,
   site: SiteDb,
   actor: SiteActor,
   input: z.input<typeof siteInputs.volunteer>,
-): Promise<void> {
+  deps: OnboardingDeps = onboardingDeps(),
+  now: Date = new Date(),
+): Promise<{ onboarding: OnboardingOutcome | null }> {
   requireAccess(actor, "site.people");
   const parsed = parseInput(siteInputs.volunteer, input);
   const { id: applicationId, status } = parsed;
   const notes =
     parsed.notes === undefined ? undefined : blankToNull(parsed.notes);
 
-  await withAudit(
+  const before = await withAudit(
     db,
     async () => {
       const before = await onSite(() =>
@@ -300,6 +346,39 @@ export async function updateSiteVolunteer(
       };
     },
   );
+
+  if (status !== "accepted" || before.status === "accepted") {
+    return { onboarding: null };
+  }
+  return {
+    onboarding: await onboardApplicant(db, actor, before, deps, {
+      replace: false,
+      now,
+    }),
+  };
+}
+
+/**
+ * Mails an accepted applicant a new registration link, replacing any link
+ * they still have: for a mail that never arrived, a link that ran out, or
+ * an applicant accepted before mail was set up.
+ */
+export async function sendVolunteerLink(
+  db: Db,
+  site: SiteDb,
+  actor: SiteActor,
+  input: z.input<typeof siteInputs.sendLink>,
+  deps: OnboardingDeps = onboardingDeps(),
+  now: Date = new Date(),
+): Promise<OnboardingOutcome> {
+  requireAccess(actor, "site.people");
+  const { id: applicationId } = parseInput(siteInputs.sendLink, input);
+  const volunteer = await onSite(() => repo.findVolunteer(site, applicationId));
+  if (!volunteer) throw new HubError("NOT_FOUND", "找不到这份志愿者申请");
+  if (volunteer.status !== "accepted") {
+    throw new HubError("CONFLICT", "先把申请改成「已录取」再发注册链接");
+  }
+  return onboardApplicant(db, actor, volunteer, deps, { replace: true, now });
 }
 
 export async function listSiteJoins(

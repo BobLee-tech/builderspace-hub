@@ -14,6 +14,7 @@ export type AuditAction =
   | "grant.revoked"
   | "grant.role_changed"
   | "grant.consumed"
+  | "grant.mailed"
   | "project.created"
   | "board.created"
   | "account.created"

@@ -107,6 +107,7 @@ export const hubSiteProcedure = (permission: SitePermission) =>
     const siteActor: SiteActor = {
       userId: ctx.actor.userId,
       email: ctx.actor.email,
+      hubRole: ctx.actor.role,
       siteAccess: ctx.siteAccess,
     };
     return next({ ctx: { ...ctx, site, siteActor } });

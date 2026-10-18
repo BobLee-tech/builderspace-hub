@@ -227,6 +227,20 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 6. **重新部署，再授权。** 部署后，所有者在 后台 → 账号 里给需要的人设「官网权限」。没设变量时，有官网权限的人会看到「还没有连接官网数据库」。
 7. **停用。** 在官网 Supabase 执行 `alter role hub_site_admin nologin;`，或删掉 Hub 的这两个环境变量。
 
+### 录取后自动发注册链接
+
+所有者或管理员在 后台 → 官网 → 志愿者申请 里把申请改成「已录取」，Hub 会给申请人的邮箱发一封欢迎邮件，里面是他自己的注册链接（7 天有效，注册后加入「BuilderSpace 社团」项目，成员角色）。卡片上显示这个人的 Hub 状态（还没发 / 已发、几号到期 / 已过期 / 已注册），可以点「发注册链接」「重发注册链接」。设计细节见 [docs/hub/ARCHITECTURE.md](docs/hub/ARCHITECTURE.md) 的「录取后自动发链接」。
+
+发信走 Resend，要在 Hub 的生产环境加：
+
+| 变量                 | 值                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `HUB_RESEND_API_KEY` | Resend 的 API key，sensitive。建议单独建一个只有 Sending access、只限发信域名的 key         |
+| `HUB_MAIL_FROM`      | 可选，发件人，默认 `BuilderSpace 创客社 <hello@builderspace.dev>`，域名要在 Resend 里验证过 |
+| `HUB_MAIL_REPLY_TO`  | 可选，收件人点「回复」时发到哪里；不设就没有回复地址                                        |
+
+**不要用 `SMTP_*`、`EMAIL_FROM`**：那是 Kan 自己的发信配置，设了会打开 Kan 的邀请和魔法链接邮件，绕过注册闸门。没设 `HUB_RESEND_API_KEY` 时，改成「已录取」照常生效，但不发链接，页面会提示。
+
 本地开发时把 `HUB_SITE_DATABASE_URL` 指向一个本机 Postgres 即可（本机地址不走 TLS），里面按官网的迁移建好表，测试用的最小表结构见 `packages/hub/src/testing/site-test-db.ts`。
 
 ## 开发约定

@@ -40,6 +40,7 @@ let site: SiteDb;
 const actor = (siteAccess: SiteActor["siteAccess"]): SiteActor => ({
   userId: null,
   email: `${siteAccess ?? "nobody"}@example.test`,
+  hubRole: null,
   siteAccess,
 });
 const manager = actor("manage");
@@ -58,7 +59,7 @@ describe("who may see the website's data", () => {
       code: "FORBIDDEN",
     });
     await expect(
-      listSiteVolunteers(site, nobody, { status: null, page: 1 }),
+      listSiteVolunteers(db, site, nobody, { status: null, page: 1 }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       listSiteJoins(site, nobody, { supportersOnly: false, page: 1 }),
@@ -257,12 +258,12 @@ describe("following up on volunteers", () => {
       status: "interviewing",
     });
 
-    const all = await listSiteVolunteers(site, lists, {
+    const all = await listSiteVolunteers(db, site, lists, {
       status: null,
       page: 1,
     });
     expect(all.items.map((v) => v.id)).toEqual([newer.id, older.id]);
-    const interviewing = await listSiteVolunteers(site, lists, {
+    const interviewing = await listSiteVolunteers(db, site, lists, {
       status: "interviewing",
       page: 1,
     });
@@ -350,7 +351,7 @@ describe("volunteer email (the website's migration 20261015030000)", () => {
       email: "new@example.test",
     });
 
-    const { items } = await listSiteVolunteers(site, lists, {
+    const { items } = await listSiteVolunteers(db, site, lists, {
       status: null,
       page: 1,
     });
@@ -379,7 +380,7 @@ describe("volunteer email (the website's migration 20261015030000)", () => {
       sql`alter table volunteer_applications drop column email cascade`,
     );
 
-    const { items } = await listSiteVolunteers(site, lists, {
+    const { items } = await listSiteVolunteers(db, site, lists, {
       status: null,
       page: 1,
     });

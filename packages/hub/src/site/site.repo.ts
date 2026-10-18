@@ -278,6 +278,23 @@ export interface VolunteerChange {
   nickname: string;
   status: VolunteerStatus;
   notes: string | null;
+  email: string | null;
+}
+
+/** The parts of one application that sending its registration link needs. */
+export async function findVolunteer(
+  db: SiteDb,
+  applicationId: string,
+): Promise<Omit<VolunteerChange, "notes"> | null> {
+  const [row] = await db
+    .select({
+      nickname: siteVolunteerApplications.nickname,
+      status: siteVolunteerApplications.status,
+      email: volunteerColumns.email,
+    })
+    .from(siteVolunteerApplications)
+    .where(eq(siteVolunteerApplications.id, applicationId));
+  return row ?? null;
 }
 
 /**
@@ -295,6 +312,7 @@ export async function updateVolunteer(
         nickname: siteVolunteerApplications.nickname,
         status: siteVolunteerApplications.status,
         notes: siteVolunteerApplications.opsNotes,
+        email: volunteerColumns.email,
       })
       .from(siteVolunteerApplications)
       .where(eq(siteVolunteerApplications.id, applicationId))
