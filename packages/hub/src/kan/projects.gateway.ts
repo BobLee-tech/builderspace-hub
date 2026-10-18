@@ -1,4 +1,4 @@
-import { asc, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import { workspaces } from "@kan/db/schema";
@@ -43,4 +43,21 @@ export async function listProjects(db: Db): Promise<ProjectRef[]> {
     .from(workspaces)
     .where(isNull(workspaces.deletedAt))
     .orderBy(asc(workspaces.id));
+}
+
+/** The live project with this slug, if any (slugs come from the standard structure). */
+export async function findProjectBySlug(
+  db: Db,
+  slug: string,
+): Promise<ProjectRef | null> {
+  const [row] = await db
+    .select({
+      id: workspaces.id,
+      publicId: workspaces.publicId,
+      name: workspaces.name,
+    })
+    .from(workspaces)
+    .where(and(eq(workspaces.slug, slug), isNull(workspaces.deletedAt)))
+    .limit(1);
+  return row ?? null;
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { VolunteerStatus } from "@kan/hub/public";
 import {
+  can,
   VOLUNTEER_NOTES_MAX,
   volunteerStatuses,
   volunteerStatusLabels,
@@ -35,11 +36,117 @@ import {
 const text = copy.admin.site.volunteers;
 
 type Volunteer = RouterOutputs["hub"]["site"]["volunteers"]["items"][number];
+type Outcome = RouterOutputs["hub"]["site"]["sendVolunteerLink"];
 
 const ALL = "all";
 const filters = [ALL, ...volunteerStatuses] as const;
 
-function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
+function hubAccessText(access: Volunteer["hubAccess"]): string {
+  switch (access.state) {
+    case "registered":
+      return text.hubAccess.registered;
+    case "linked":
+      return text.hubAccess.linked(formatTime(access.expiresAt));
+    case "expired":
+      return text.hubAccess.expired(formatTime(access.expiresAt));
+    case "none":
+      return text.hubAccess.none;
+  }
+}
+
+/** What happened to the registration link, in one sentence; failures are errors. */
+function outcomeText(outcome: Outcome): { message: string; failed: boolean } {
+  const ok = (message: string) => ({ message, failed: false });
+  switch (outcome.kind) {
+    case "sent":
+      return ok(
+        text.outcome.sent(outcome.email, formatTime(outcome.expiresAt)),
+      );
+    case "registered":
+      return ok(text.outcome.registered);
+    case "linked":
+      return ok(text.outcome.linked(formatTime(outcome.expiresAt)));
+    case "no_email":
+      return ok(text.outcome.noEmail);
+    case "not_allowed":
+      return ok(text.outcome.notAllowed);
+    case "mail_off":
+      return { message: text.outcome.mailOff, failed: true };
+    case "uncertain":
+      return {
+        message: text.outcome.uncertain(
+          outcome.message,
+          formatTime(outcome.expiresAt),
+        ),
+        failed: true,
+      };
+    case "failed":
+      return { message: outcome.message, failed: true };
+  }
+}
+
+function OutcomeText({ outcome }: { outcome: Outcome | null | undefined }) {
+  if (!outcome) return null;
+  const { message, failed } = outcomeText(outcome);
+  return failed ? (
+    <ErrorText message={message} />
+  ) : (
+    <p className="text-xs text-light-900 dark:text-dark-900">{message}</p>
+  );
+}
+
+/**
+ * The applicant's Hub account, and for owners and admins a button that mails
+ * them a (new) registration link once they are accepted.
+ */
+function HubAccess({
+  volunteer,
+  canIssue,
+}: {
+  volunteer: Volunteer;
+  canIssue: boolean;
+}) {
+  const utils = api.useUtils();
+  const send = api.hub.site.sendVolunteerLink.useMutation({
+    onSuccess: () => utils.hub.site.volunteers.invalidate(),
+  });
+  const { state } = volunteer.hubAccess;
+  const showButton =
+    canIssue &&
+    volunteer.status === "accepted" &&
+    volunteer.email !== null &&
+    state !== "registered";
+
+  return (
+    <span className="flex flex-col items-start gap-1.5">
+      <span>{hubAccessText(volunteer.hubAccess)}</span>
+      {showButton && (
+        <button
+          type="button"
+          className={buttonClass.ghost}
+          disabled={send.isPending}
+          onClick={() => send.mutate({ id: volunteer.id })}
+        >
+          {send.isPending
+            ? text.sending
+            : state === "linked"
+              ? text.resendLink
+              : text.sendLink}
+        </button>
+      )}
+      <OutcomeText outcome={send.data} />
+      <ErrorText message={send.error?.message} />
+    </span>
+  );
+}
+
+function VolunteerCard({
+  volunteer,
+  canIssue,
+}: {
+  volunteer: Volunteer;
+  canIssue: boolean;
+}) {
   const utils = api.useUtils();
   const [notes, setNotes] = useState(volunteer.opsNotes ?? "");
   const [saved, setSaved] = useState(false);
@@ -85,6 +192,9 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
           </select>
         </label>
       </div>
+      <div className="mt-2 sm:text-right">
+        <OutcomeText outcome={update.data?.onboarding} />
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-3">
@@ -125,6 +235,14 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
                 ),
               ],
               [text.channel, volunteer.channel],
+              [
+                text.hub,
+                <HubAccess
+                  key="hub"
+                  volunteer={volunteer}
+                  canIssue={canIssue}
+                />,
+              ],
             ]}
           />
           {volunteer.about && (
@@ -191,6 +309,8 @@ function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
 function SiteVolunteers() {
   const [filter, setFilter] = useFilterParam("status", filters, ALL);
   const [page, setPage] = usePageParam();
+  const me = api.hub.me.get.useQuery(undefined, { retry: false });
+  const canIssue = can(me.data?.role ?? null, "access.manage");
   const volunteers = api.hub.site.volunteers.useQuery({
     status: filter === ALL ? null : filter,
     page,
@@ -226,7 +346,11 @@ function SiteVolunteers() {
       ) : (
         <div className="space-y-3">
           {volunteers.data?.items.map((volunteer) => (
-            <VolunteerCard key={volunteer.id} volunteer={volunteer} />
+            <VolunteerCard
+              key={volunteer.id}
+              volunteer={volunteer}
+              canIssue={canIssue}
+            />
           ))}
           {volunteers.data?.items.length === 0 && (
             <p className="rounded-xl border border-dashed border-light-400 px-4 py-8 text-center text-sm text-light-900 dark:border-dark-400 dark:text-dark-900">

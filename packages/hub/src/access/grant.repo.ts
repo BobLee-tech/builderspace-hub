@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { workspaces } from "@kan/db/schema";
 import { generateUID } from "@kan/shared/utils";
@@ -153,6 +153,30 @@ export async function markGrantRevoked(
   return updated.length > 0;
 }
 
+/**
+ * Undoes a revocation, so the grant is open again. Returns false when it was
+ * not a revoked, unused grant. Only one grant per address may be open, so the
+ * caller closes any other first.
+ */
+export async function reopenGrant(
+  db: DbOrTx,
+  grantId: number,
+): Promise<boolean> {
+  const updated = await db
+    .update(hubAccessGrants)
+    .set({ revokedAt: null, revokedBy: null })
+    .where(
+      and(
+        eq(hubAccessGrants.id, grantId),
+        isNull(hubAccessGrants.consumedAt),
+        isNotNull(hubAccessGrants.revokedAt),
+      ),
+    )
+    .returning({ id: hubAccessGrants.id });
+
+  return updated.length > 0;
+}
+
 export async function listGrantsPage(
   db: DbOrTx,
   page: { limit: number; offset: number },
@@ -208,4 +232,20 @@ export async function countOpenGrants(db: DbOrTx): Promise<number> {
     .from(hubAccessGrants)
     .where(isOpen);
   return row?.total ?? 0;
+}
+
+/**
+ * Every grant ever issued to these addresses, newest first, for telling what
+ * happened to each address's latest link. Addresses must be normalised.
+ */
+export async function listGrantsByEmails(
+  db: DbOrTx,
+  emails: string[],
+): Promise<GrantRow[]> {
+  if (emails.length === 0) return [];
+  return db
+    .select()
+    .from(hubAccessGrants)
+    .where(inArray(hubAccessGrants.email, emails))
+    .orderBy(desc(hubAccessGrants.createdAt), desc(hubAccessGrants.id));
 }

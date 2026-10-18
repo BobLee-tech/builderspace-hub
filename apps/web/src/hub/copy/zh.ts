@@ -636,7 +636,7 @@ export const zh = {
       volunteers: {
         title: "志愿者申请",
         description:
-          "想加入核心团队的人。状态和备注会直接写回官网的数据库；备注只有有官网权限的人能看到，不要写证件号这类信息。",
+          "想加入核心团队的人。状态和备注会直接写回官网的数据库；备注只有有官网权限的人能看到，不要写证件号这类信息。后台所有者或管理员把申请改成「已录取」时，Hub 会自动给申请人的邮箱发欢迎邮件和注册链接。",
         all: "全部",
         email: "邮箱",
         contact: "联系方式",
@@ -652,6 +652,29 @@ export const zh = {
         saveNotes: "保存备注",
         saved: "已保存",
         empty: "还没有志愿者申请",
+        hub: "Hub 账号",
+        hubAccess: {
+          registered: "已注册",
+          linked: (expires: string) => `注册链接已发，${expires} 到期`,
+          expired: (expires: string) => `注册链接 ${expires} 已过期`,
+          none: "还没发注册链接",
+        },
+        sendLink: "发注册链接",
+        resendLink: "重发注册链接",
+        sending: "正在发…",
+        outcome: {
+          sent: (email: string, expires: string) =>
+            `已把注册链接发到 ${email}，${expires} 前有效`,
+          registered: "这个邮箱已经注册过 Hub，没有再发",
+          linked: (expires: string) =>
+            `这个邮箱还有一条没过期的注册链接（${expires} 到期），没有重复发；需要的话点「重发注册链接」`,
+          noEmail: "申请里没有邮箱，发不了注册链接",
+          notAllowed: "已录取。注册链接要由后台所有者或管理员来发",
+          uncertain: (reason: string, expires: string) =>
+            `${reason}，邮件可能已经发出。链接保留到 ${expires}；对方没收到的话，点「重发注册链接」`,
+          mailOff:
+            "已录取，但 Hub 还没有配置发信（HUB_RESEND_API_KEY），注册链接没有发出",
+        },
       },
       joins: {
         title: "加入登记",

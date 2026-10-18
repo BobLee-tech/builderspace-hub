@@ -14,6 +14,7 @@ export {
   GRANTS_PAGE_SIZE,
   issueGrant,
   listGrants,
+  restoreGrant,
   revokeGrant,
 } from "./grant.service";
 export type { ProvisionResult } from "./registration";

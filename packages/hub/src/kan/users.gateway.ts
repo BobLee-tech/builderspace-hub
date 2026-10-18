@@ -1,4 +1,7 @@
+import { inArray } from "drizzle-orm";
+
 import * as userRepo from "@kan/db/repository/user.repo";
+import { users } from "@kan/db/schema";
 
 import type { Db } from "../db";
 
@@ -15,4 +18,17 @@ export async function findUserByEmail(
 ): Promise<{ id: string; email: string } | null> {
   const user = await userRepo.getByEmail(db, email);
   return user ? { id: user.id, email: user.email } : null;
+}
+
+/** Which of these already-normalised addresses belong to an account. */
+export async function findRegisteredEmails(
+  db: Db,
+  emails: string[],
+): Promise<Set<string>> {
+  if (emails.length === 0) return new Set();
+  const rows = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(inArray(users.email, emails));
+  return new Set(rows.map((row) => row.email.toLowerCase()));
 }

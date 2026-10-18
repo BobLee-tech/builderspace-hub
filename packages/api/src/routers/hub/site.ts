@@ -8,6 +8,7 @@ import {
   listSiteVolunteers,
   reviewSiteProject,
   reviewSiteUpdate,
+  sendVolunteerLink,
   siteExportInput,
   siteInputs,
   updateSiteVolunteer,
@@ -59,13 +60,21 @@ export const siteRouter = createTRPCRouter({
   volunteers: hubSiteProcedure("site.people")
     .input(siteInputs.volunteers)
     .query(({ ctx, input }) =>
-      runHub(() => listSiteVolunteers(ctx.site, ctx.siteActor, input)),
+      runHub(() => listSiteVolunteers(ctx.db, ctx.site, ctx.siteActor, input)),
     ),
 
+  /** Moving an application to 已录取 also mails a registration link; the result says how that went. */
   updateVolunteer: hubSiteProcedure("site.people")
     .input(siteInputs.volunteer)
     .mutation(({ ctx, input }) =>
       runHub(() => updateSiteVolunteer(ctx.db, ctx.site, ctx.siteActor, input)),
+    ),
+
+  /** Mails an accepted applicant a new registration link (owners and admins only). */
+  sendVolunteerLink: hubSiteProcedure("site.people")
+    .input(siteInputs.sendLink)
+    .mutation(({ ctx, input }) =>
+      runHub(() => sendVolunteerLink(ctx.db, ctx.site, ctx.siteActor, input)),
     ),
 
   joins: hubSiteProcedure("site.people")
