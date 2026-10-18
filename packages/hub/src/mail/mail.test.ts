@@ -99,39 +99,99 @@ describe("createResendMailer", () => {
     expect(JSON.parse(init.body as string)).not.toHaveProperty("reply_to");
   });
 
-  it("passes on Resend's reason for a refusal, never the mail's text", async () => {
-    const mailer = createResendMailer(config, (() =>
+  it("passes on Resend's reason for a refusal, never the mail's text, without retrying", async () => {
+    const fetchImpl = vi.fn(() =>
       Promise.resolve(
         jsonResponse(403, { message: "The domain is not verified" }),
-      )) as typeof fetch);
+      ),
+    );
+    const mailer = createResendMailer(config, fetchImpl as typeof fetch);
 
     const error = await mailer.send(message).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(MailError);
+    expect((error as MailError).uncertain).toBe(false);
     expect((error as Error).message).toBe(
       "发信服务拒绝了：The domain is not verified",
     );
     expect((error as Error).message).not.toContain("secret");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to the status code when the refusal is not JSON", async () => {
     const mailer = createResendMailer(config, (() =>
-      Promise.resolve(
-        new Response("bad gateway", { status: 502 }),
-      )) as typeof fetch);
+      Promise.resolve(new Response("nope", { status: 422 }))) as typeof fetch);
     await expect(mailer.send(message)).rejects.toThrow(
-      "发信服务拒绝了：HTTP 502",
+      "发信服务拒绝了：HTTP 422",
     );
   });
 
-  it("reports a network failure in one sentence", async () => {
-    const mailer = createResendMailer(config, (() =>
-      Promise.reject(new TypeError("fetch failed"))) as typeof fetch);
-    await expect(mailer.send(message)).rejects.toThrow("连不上发信服务");
+  it("retries a request that got no answer, with the same idempotency key", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(jsonResponse(200, { id: "mail-1" }));
+    const mailer = createResendMailer(config, fetchImpl as typeof fetch);
+
+    await expect(mailer.send(message)).resolves.toEqual({ id: "mail-1" });
+    const keys = fetchImpl.mock.calls.map(
+      ([, init]) =>
+        (init as RequestInit & { headers: Record<string, string> }).headers[
+          "Idempotency-Key"
+        ],
+    );
+    expect(keys).toEqual(["hub-welcome-abc", "hub-welcome-abc"]);
   });
 
-  it("refuses a success without an id", async () => {
+  it("calls a mail uncertain when no answer ever comes back", async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.reject(new TypeError("fetch failed")),
+    );
+    const mailer = createResendMailer(config, fetchImpl as typeof fetch);
+
+    const error = await mailer.send(message).catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      name: "MailError",
+      message: "发信服务没有回应",
+      uncertain: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries Resend's own errors and calls them uncertain if they persist", async () => {
+    const recovered = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("bad gateway", { status: 502 }))
+      .mockResolvedValueOnce(jsonResponse(200, { id: "mail-2" }));
+    await expect(
+      createResendMailer(config, recovered as typeof fetch).send(message),
+    ).resolves.toEqual({ id: "mail-2" });
+
+    const broken = vi.fn(() =>
+      Promise.resolve(jsonResponse(500, { message: "internal" })),
+    );
+    await expect(
+      createResendMailer(config, broken as typeof fetch).send(message),
+    ).rejects.toMatchObject({
+      message: "发信服务出错：internal",
+      uncertain: true,
+    });
+  });
+
+  it("treats a 409 on the retry as the first request still going out", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(
+        jsonResponse(409, { message: "concurrent_idempotent_requests" }),
+      );
+    await expect(
+      createResendMailer(config, fetchImpl as typeof fetch).send(message),
+    ).rejects.toMatchObject({ uncertain: true });
+  });
+
+  it("counts an accepted mail as sent even without an id in the reply", async () => {
     const mailer = createResendMailer(config, (() =>
-      Promise.resolve(jsonResponse(200, {}))) as typeof fetch);
-    await expect(mailer.send(message)).rejects.toThrow("发信服务的回复看不懂");
+      Promise.resolve(new Response("ok", { status: 200 }))) as typeof fetch);
+    await expect(mailer.send(message)).resolves.toEqual({ id: null });
   });
 });

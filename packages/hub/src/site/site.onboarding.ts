@@ -22,8 +22,11 @@ import { welcomeEmail } from "./welcome-email";
  * application in 官网 → 志愿者申请 does this on its own; the card's button does
  * it again on request.
  *
- * The link exists only inside the mail. If the mail does not go out, the link
- * is revoked straight away, so no usable link is ever left that nobody has.
+ * The link exists only inside the mail. If the mail service refuses the mail,
+ * the link is revoked straight away, so no usable link is ever left that
+ * nobody has. If no clear answer comes back (a timeout, a dropped
+ * connection), the mail may have gone out, so the link is kept and the page
+ * says to send a new one if it never arrived.
  */
 
 /** What a new member gets: a member of the club's own project, nothing more. */
@@ -72,6 +75,11 @@ export type OnboardingOutcome =
   | { kind: "not_allowed" }
   /** No mail service or no Hub address configured. */
   | { kind: "mail_off" }
+  /**
+   * No clear answer from the mail service: the mail may have gone out, so
+   * the link is kept rather than revoked under a delivered mail.
+   */
+  | { kind: "uncertain"; message: string; expiresAt: Date }
   | { kind: "failed"; message: string };
 
 /** Each address's standing, keyed by the normalised address. */
@@ -188,7 +196,7 @@ export async function onboardApplicant(
     expiresAt: issued.expiresAt,
   });
 
-  let mailId: string;
+  let mailId: string | null;
   try {
     ({ id: mailId } = await deps.mailer.send({
       to: email,
@@ -196,6 +204,20 @@ export async function onboardApplicant(
       idempotencyKey: `hub-welcome-${issued.publicId}`,
     }));
   } catch (error) {
+    if (error instanceof MailError && error.uncertain) {
+      await recordAudit(db, {
+        actor,
+        action: "grant.mail_unconfirmed",
+        entityType: "grant",
+        entityId: issued.publicId,
+        summary: `给 ${email} 发注册链接时发信服务没有给出结果，链接保留`,
+      });
+      return {
+        kind: "uncertain",
+        message: error.message,
+        expiresAt: issued.expiresAt,
+      };
+    }
     await revokeGrant(db, actor, issued.publicId, now);
     if (!(error instanceof MailError)) {
       console.error("[hub/site] welcome mail failed unexpectedly", error);

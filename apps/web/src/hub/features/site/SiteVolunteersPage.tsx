@@ -72,6 +72,14 @@ function outcomeText(outcome: Outcome): { message: string; failed: boolean } {
       return ok(text.outcome.notAllowed);
     case "mail_off":
       return { message: text.outcome.mailOff, failed: true };
+    case "uncertain":
+      return {
+        message: text.outcome.uncertain(
+          outcome.message,
+          formatTime(outcome.expiresAt),
+        ),
+        failed: true,
+      };
     case "failed":
       return { message: outcome.message, failed: true };
   }

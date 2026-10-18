@@ -670,6 +670,8 @@ export const zh = {
             `这个邮箱还有一条没过期的注册链接（${expires} 到期），没有重复发；需要的话点「重发注册链接」`,
           noEmail: "申请里没有邮箱，发不了注册链接",
           notAllowed: "已录取。注册链接要由后台所有者或管理员来发",
+          uncertain: (reason: string, expires: string) =>
+            `${reason}，邮件可能已经发出。链接保留到 ${expires}；对方没收到的话，点「重发注册链接」`,
           mailOff:
             "已录取，但 Hub 还没有配置发信（HUB_RESEND_API_KEY），注册链接没有发出",
         },

@@ -246,6 +246,35 @@ describe("accepting an application", () => {
     expect(await auditActions()).not.toContain("grant.mailed");
   });
 
+  it("keeps the link when the mail service gives no clear answer", async () => {
+    mailer.send.mockRejectedValueOnce(
+      new MailError("发信服务没有回应", { uncertain: true }),
+    );
+    const volunteer = await seedSiteVolunteer(site, {
+      nickname: "uncertain",
+      email: "a@example.test",
+    });
+
+    expect((await accept(volunteer.id)).onboarding).toEqual({
+      kind: "uncertain",
+      message: "发信服务没有回应",
+      expiresAt: later(7),
+    });
+    const [grant] = await db.select().from(hubAccessGrants);
+    expect(grant?.revokedAt).toBeNull();
+    expect(await auditActions()).toContain("grant.mail_unconfirmed");
+    expect(await auditActions()).not.toContain("grant.revoked");
+
+    const { items } = await listSiteVolunteers(
+      db,
+      site,
+      admin,
+      { status: null, page: 1 },
+      now,
+    );
+    expect(items[0]?.hubAccess).toMatchObject({ state: "linked" });
+  });
+
   it("hides an unexpected mail failure's details but still revokes the link", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     mailer.send.mockRejectedValueOnce(new Error("socket hang up"));
