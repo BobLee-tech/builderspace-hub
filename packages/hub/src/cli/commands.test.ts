@@ -392,7 +392,7 @@ describe("mail-links", () => {
     ]);
     const text = (await mailLinks()).join("\n");
     expect(text).toContain(
-      "! old <old@example.test>：10 月 12 日到期的链接已过期，没有自动重发。要重发：pnpm --filter @kan/hub cli mail-links --email old@example.test",
+      "! old <old@example.test>：10 月 12 日到期的链接已过期，没有自动重发。要重发，用这次同样的方式运行 mail-links --email old@example.test",
     );
     expect(text).toContain("! 微信联系：申请里没有能用的邮箱，发不了");
     expect(sent).toHaveLength(0);

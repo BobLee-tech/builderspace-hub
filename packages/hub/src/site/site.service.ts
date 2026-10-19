@@ -433,12 +433,21 @@ export async function mailAcceptedApplicants(
     throw new HubError("INVALID_INPUT", `邮箱格式不对：${rawTarget}`);
   }
 
-  const { items } = await onSite(() =>
-    repo.listVolunteers(site, "accepted", {
-      limit: SITE_EXPORT_LIMIT,
-      offset: 0,
-    }),
-  );
+  // Every accepted application, a page at a time: a run that stopped at the
+  // first page would never reach the older ones.
+  const items: SiteVolunteerRow[] = [];
+  for (let offset = 0; ; offset += SITE_EXPORT_LIMIT) {
+    const page = await onSite(() =>
+      repo.listVolunteers(site, "accepted", {
+        limit: SITE_EXPORT_LIMIT,
+        offset,
+      }),
+    );
+    items.push(...page.items);
+    if (page.items.length < SITE_EXPORT_LIMIT || items.length >= page.total) {
+      break;
+    }
+  }
   // Newest first, so the first application seen for an address is the latest.
   const seen = new Set<string>();
   const applicants = items.flatMap((item) => {

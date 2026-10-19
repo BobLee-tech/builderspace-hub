@@ -139,7 +139,9 @@ function describeApplicant(
 ): string | null {
   const name = nameOf(applicant);
   const { before, outcome } = applicant;
-  const resend = `pnpm --filter @kan/hub cli mail-links --email ${applicant.email}`;
+  // The launcher is left out: `cli` and `cli:prod` read different databases,
+  // and the right one is whichever this run used.
+  const resend = `用这次同样的方式运行 mail-links --email ${applicant.email}`;
 
   if (before === null) return `! ${name}：申请里没有能用的邮箱，发不了`;
   if (applicant.due && options.dryRun) {
@@ -149,7 +151,7 @@ function describeApplicant(
   }
   if (outcome === null) {
     if (before.state === "expired") {
-      return `! ${name}：${formatExpiryDay(before.expiresAt)}到期的链接已过期，没有自动重发。要重发：${resend}`;
+      return `! ${name}：${formatExpiryDay(before.expiresAt)}到期的链接已过期，没有自动重发。要重发，${resend}`;
     }
     // Asked for by address, the one thing left undone is an account that
     // exists; a sweep only counts those.
@@ -160,7 +162,7 @@ function describeApplicant(
     case "sent":
       return `✓ ${name}：已发，${formatExpiryDay(outcome.expiresAt)}前有效`;
     case "uncertain":
-      return `? ${name}：发信服务没给出结果（${outcome.message}），链接保留。对方没收到就重发：${resend}`;
+      return `? ${name}：发信服务没给出结果（${outcome.message}），链接保留。对方没收到就${resend}`;
     case "failed":
       return `✗ ${name}：${outcome.message}`;
     case "registered":

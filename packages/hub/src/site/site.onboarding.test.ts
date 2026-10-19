@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Db } from "../db";
@@ -22,6 +22,7 @@ import {
   listSiteVolunteers,
   mailAcceptedApplicants,
   sendVolunteerLink,
+  SITE_EXPORT_LIMIT,
   updateSiteVolunteer,
 } from "./site.service";
 import { siteVolunteerApplications } from "./site.tables";
@@ -671,6 +672,26 @@ describe("mailing everyone accepted who has no link yet", () => {
     });
     expect(sent.map((mail) => mail.to)).toEqual(["old@example.test"]);
   });
+
+  it("reaches applications past the first page", async () => {
+    const count = SITE_EXPORT_LIMIT + 1;
+    await site.execute(sql`
+      insert into volunteer_applications (nickname, positions, email, status, created_at)
+      select 'bulk ' || n, '{events}', 'bulk' || n || '@example.test', 'accepted',
+        now() - n * interval '1 minute'
+      from generate_series(1, ${count}::int) as n
+    `);
+
+    const results = await sweep({ dryRun: true });
+    const [oldest] = await sweep({
+      email: `bulk${count}@example.test`,
+      dryRun: true,
+    });
+
+    expect(results).toHaveLength(count);
+    expect(results.at(-1)?.nickname).toBe(`bulk ${count}`);
+    expect(oldest).toMatchObject({ nickname: `bulk ${count}`, due: true });
+  }, 60_000);
 
   it("refuses an address with no accepted application, a malformed one and someone without 名单", async () => {
     await seedSiteVolunteer(site, { email: "new@example.test" });
