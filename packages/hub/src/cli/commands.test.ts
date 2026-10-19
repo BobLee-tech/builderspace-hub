@@ -18,7 +18,7 @@ import {
   seedSiteVolunteer,
   seedUser,
 } from "../testing/test-db";
-import { runCommand } from "./commands";
+import { isLocalUrl, runCommand } from "./commands";
 
 const now = new Date("2026-10-13T12:00:00Z");
 const env = { baseUrl: "https://hub.example.test/", now };
@@ -448,6 +448,40 @@ describe("mail-links", () => {
     await expect(refusal).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(sent).toHaveLength(0);
     expect(await listAudit(db, { limit: 5, offset: 0 })).toEqual([]);
+  });
+});
+
+describe("isLocalUrl", () => {
+  it.each([
+    "http://localhost:3000",
+    "http://app.localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://127.1:3000",
+    "postgres://hub:pw@127.0.0.2:54329/hub",
+    "postgres://hub:pw@127.1/hub",
+    "http://0.0.0.0:3000",
+    "http://[::1]:3000",
+    "http://[0:0:0:0:0:0:0:1]/",
+    "http://[::]/",
+    "http://[::ffff:127.0.0.1]/",
+    "postgres:///hub?host=/var/run/postgresql",
+    "postgresql://hub@%2Fvar%2Frun%2Fpostgresql/hub",
+    "postgres://hub@db.example.com/hub?host=/tmp",
+    "postgres://hub:pw@/hub?host=/tmp",
+    "not a url",
+    null,
+  ])("treats %j as this machine", (url) => {
+    expect(isLocalUrl(url)).toBe(true);
+  });
+
+  it.each([
+    "https://builderspace-hub.vercel.app",
+    "https://127.example.com",
+    "postgres://hub:pw@ep-cool-name.ap-southeast-2.aws.neon.tech/hub?sslmode=require",
+    "postgresql://hub_site_admin.abc:pw@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres",
+    "postgres://hub:pw@10.0.0.5/hub",
+  ])("treats %j as elsewhere", (url) => {
+    expect(isLocalUrl(url)).toBe(false);
   });
 });
 

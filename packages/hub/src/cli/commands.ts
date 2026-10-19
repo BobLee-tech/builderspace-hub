@@ -83,15 +83,33 @@ function joinLink(baseUrl: string | null, token: string): string {
   return buildJoinLink(url.origin, token);
 }
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/** Whether a URL points at this machine. */
+/**
+ * Whether a URL points at this machine: loopback (`localhost`, `*.localhost`,
+ * 127.x, ::1), the any-address (0.0.0.0, ::), or a Postgres Unix socket (no
+ * host, a path as the host, or `?host=/…`). A URL that does not parse counts
+ * too: socket forms such as `postgres://u@/db?host=/tmp` do not, and refusing
+ * is safer than guessing.
+ */
 export function isLocalUrl(url: string | null | undefined): boolean {
+  let parsed: URL;
   try {
-    return LOCAL_HOSTS.has(new URL(url ?? "").hostname);
+    parsed = new URL(url ?? "");
   } catch {
-    return false;
+    return true;
   }
+  const host = parsed.hostname.toLowerCase();
+  const socket =
+    host === "" ||
+    host.startsWith("%2f") ||
+    (parsed.searchParams.get("host")?.startsWith("/") ?? false);
+  const loopback =
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    /^127\.\d+(\.\d+){0,2}$/.test(host) ||
+    host === "[::1]" ||
+    host.startsWith("[::ffff:7f");
+  const anyAddress = host === "0.0.0.0" || host === "[::]";
+  return socket || loopback || anyAddress;
 }
 
 /**
