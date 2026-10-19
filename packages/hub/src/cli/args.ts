@@ -12,6 +12,7 @@ export type CliCommand =
   | { name: "provision"; email: string }
   | { name: "setup-projects"; ownerEmail: string }
   | { name: "set-role"; email: string; role: HubRole | null }
+  | { name: "mail-links"; email: string | null; dryRun: boolean }
   | { name: "projects" }
   | { name: "doctor" }
   | { name: "help" };
@@ -75,11 +76,35 @@ function parseGrant(args: string[]): ParsedCli {
   };
 }
 
+function parseMailLinks(args: string[]): ParsedCli {
+  let email: string | null = null;
+  let dryRun = false;
+
+  for (let i = 0; i < args.length; i += 1) {
+    const flag = args[i];
+    if (flag === "--dry-run") {
+      dryRun = true;
+    } else if (flag === "--email") {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return fail("--email 后面缺少值");
+      }
+      email = value;
+      i += 1;
+    } else {
+      return fail("mail-links 只接受 --email 和 --dry-run");
+    }
+  }
+
+  return { ok: true, command: { name: "mail-links", email, dryRun } };
+}
+
 /** Turns `process.argv.slice(2)` into a command, or a message saying why not. */
 export function parseCli(argv: string[]): ParsedCli {
   const [name = "help", ...rest] = argv;
 
   if (name === "grant") return parseGrant(rest);
+  if (name === "mail-links") return parseMailLinks(rest);
 
   if (name === "set-role") {
     const flags = new Map<string, string>();

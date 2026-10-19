@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { hubStructure } from "@kan/builderspace/structure";
 
 import type { Db } from "../db";
+import type { Mailer } from "../mail";
+import type { AcceptedApplicant, SiteActor, SiteDb } from "../site";
 import type { CliCommand } from "./args";
 import {
   changeGrantHubRole,
@@ -25,12 +27,20 @@ import { hubMigrationsFolder } from "../migrations-path";
 import { buildJoinLink } from "../public";
 import { normalizeEmail } from "../shared/email";
 import { HubError } from "../shared/errors";
+import { mailAcceptedApplicants } from "../site";
+import { formatExpiryDay } from "../site/welcome-email";
 import { ensureStandardProjects } from "../structure";
 
 export interface CliEnv {
   /** Where the Hub is served, e.g. `https://hub.example.com`. */
   baseUrl: string | null;
   now: Date;
+  /** The website's database; only `mail-links` reads it. */
+  site?: SiteDb | null;
+  /** Resend; only `mail-links` sends with it. */
+  mailer?: Mailer | null;
+  /** Whether `POSTGRES_URL` is this machine's database. */
+  databaseIsLocal?: boolean;
 }
 
 export const USAGE = [
@@ -45,6 +55,9 @@ export const USAGE = [
   "            按标准结构建好项目和看板，该邮箱成为项目管理员（可重复执行）",
   "  set-role --email <邮箱> --role owner|admin|viewer|none",
   "            直接设置后台角色（补救用：例如没有人能进后台时）",
+  "  mail-links [--email <邮箱>] [--dry-run]",
+  "            给官网「已录取」但还没发过链接的人发注册链接（Resend，可重复执行）；",
+  "            --email 只发这一个人并替换对方手上的旧链接，--dry-run 只列出会发给谁",
   "  projects  列出所有项目的 ID 和名称",
   "  doctor    检查 Hub 的数据库迁移是否已是最新",
   "  help      显示这段说明",
@@ -68,6 +81,154 @@ function joinLink(baseUrl: string | null, token: string): string {
   }
 
   return buildJoinLink(url.origin, token);
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Whether a URL points at this machine. */
+export function isLocalUrl(url: string | null | undefined): boolean {
+  try {
+    return LOCAL_HOSTS.has(new URL(url ?? "").hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The command line is the break-glass path, so it may issue links as an owner
+ * would. Everything it sends is still logged, as `cli`.
+ */
+const CLI_SITE_ACTOR: SiteActor = {
+  ...CLI_ACTOR,
+  hubRole: "owner",
+  siteAccess: "people",
+};
+
+const SENT_OR_SETTLED = new Set(["sent", "registered", "linked"]);
+
+const failed = (applicant: AcceptedApplicant) =>
+  applicant.outcome !== null && !SENT_OR_SETTLED.has(applicant.outcome.kind);
+
+const nameOf = (applicant: AcceptedApplicant) =>
+  applicant.email
+    ? `${applicant.nickname} <${applicant.email}>`
+    : applicant.nickname;
+
+/** What happened to one applicant, or null when there is nothing to say. */
+function describeApplicant(
+  applicant: AcceptedApplicant,
+  options: { dryRun: boolean; byAddress: boolean },
+): string | null {
+  const name = nameOf(applicant);
+  const { before, outcome } = applicant;
+  const resend = `pnpm --filter @kan/hub cli mail-links --email ${applicant.email}`;
+
+  if (before === null) return `! ${name}：申请里没有能用的邮箱，发不了`;
+  if (applicant.due && options.dryRun) {
+    return before.state === "linked"
+      ? `· 会发给 ${name}（替换对方手上还能用的链接）`
+      : `· 会发给 ${name}`;
+  }
+  if (outcome === null) {
+    if (before.state === "expired") {
+      return `! ${name}：${formatExpiryDay(before.expiresAt)}到期的链接已过期，没有自动重发。要重发：${resend}`;
+    }
+    // Asked for by address, the one thing left undone is an account that
+    // exists; a sweep only counts those.
+    return options.byAddress ? `· ${name}：已经注册，不用发` : null;
+  }
+
+  switch (outcome.kind) {
+    case "sent":
+      return `✓ ${name}：已发，${formatExpiryDay(outcome.expiresAt)}前有效`;
+    case "uncertain":
+      return `? ${name}：发信服务没给出结果（${outcome.message}），链接保留。对方没收到就重发：${resend}`;
+    case "failed":
+      return `✗ ${name}：${outcome.message}`;
+    case "registered":
+      return `· ${name}：已经注册，不用发`;
+    case "linked":
+      return `· ${name}：已有还能用的链接，没发`;
+    case "no_email":
+      return `✗ ${name}：没有邮箱`;
+    case "not_allowed":
+      return `✗ ${name}：没有发链接的权限`;
+    case "mail_off":
+      return `✗ ${name}：没有配置发信`;
+  }
+}
+
+async function mailLinks(
+  db: Db,
+  command: Extract<CliCommand, { name: "mail-links" }>,
+  env: CliEnv,
+): Promise<string[]> {
+  if (!env.site) {
+    throw new HubError(
+      "INVALID_INPUT",
+      "需要 HUB_SITE_DATABASE_URL（官网数据库）才能找到已录取的申请",
+    );
+  }
+  if (!command.dryRun) {
+    if (!env.mailer) {
+      throw new HubError(
+        "INVALID_INPUT",
+        "需要 HUB_RESEND_API_KEY 才能发信；只想看会发给谁，加 --dry-run",
+      );
+    }
+    // Fail before issuing anything, as `grant` does.
+    joinLink(env.baseUrl, "check");
+    // A link into a local Hub reaches nobody, and the applicant would then
+    // count as mailed: `.env` quietly fills in local values.
+    if (isLocalUrl(env.baseUrl) || env.databaseIsLocal) {
+      throw new HubError(
+        "INVALID_INPUT",
+        "NEXT_PUBLIC_BASE_URL 和 POSTGRES_URL 都要是线上的，不能是本机地址，否则寄出去的链接打不开",
+      );
+    }
+  }
+
+  const applicants = await mailAcceptedApplicants(
+    db,
+    env.site,
+    CLI_SITE_ACTOR,
+    { email: command.email, dryRun: command.dryRun },
+    { mailer: env.mailer ?? null, baseUrl: env.baseUrl },
+    env.now,
+  );
+
+  const due = applicants.filter((applicant) => applicant.due).length;
+  const sent = applicants.filter(
+    (applicant) => applicant.outcome?.kind === "sent",
+  ).length;
+  const failures = applicants.filter(failed).length;
+  const summary =
+    failures > 0
+      ? `✗ 已发 ${sent} 封，${failures} 人没发成，见下面。`
+      : command.dryRun
+        ? `--dry-run：会发给 ${due} 人，什么都没发。`
+        : sent > 0
+          ? `已发 ${sent} 封。`
+          : "没有要发的。";
+
+  const lines = [summary];
+  if (command.email === null) {
+    const count = (state: string | null) =>
+      applicants.filter(
+        (applicant) => (applicant.before?.state ?? null) === state,
+      ).length;
+    lines.push(
+      `已录取 ${applicants.length} 人：已注册 ${count("registered")}，链接还有效 ${count("linked")}，链接已过期 ${count("expired")}，没有邮箱 ${count(null)}，还没发过 ${count("none")}`,
+    );
+  }
+  for (const applicant of applicants) {
+    const line = describeApplicant(applicant, {
+      dryRun: command.dryRun,
+      byAddress: command.email !== null,
+    });
+    if (line) lines.push(line);
+  }
+  return lines;
 }
 
 async function appliedHubMigrations(db: Db): Promise<number> {
@@ -196,6 +357,9 @@ export async function runCommand(
         `新建看板 ${report.boardsCreated.length} 块`,
       ];
     }
+
+    case "mail-links":
+      return mailLinks(db, command, env);
 
     case "provision": {
       const email = normalizeEmail(command.email);

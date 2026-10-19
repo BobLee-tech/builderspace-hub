@@ -87,6 +87,7 @@
     "check-web-types": "tsx src/dev/check-web-types.ts",
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "cli": "pnpm with-env tsx src/cli/main.ts",
+    "cli:prod": "dotenv -e ../../.env.production.local -- tsx src/cli/main.ts",
     "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .gitignore",
     "generate": "drizzle-kit generate",
     "lint": "eslint",

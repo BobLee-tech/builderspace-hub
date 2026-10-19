@@ -3,13 +3,17 @@
  *
  * Reads `POSTGRES_URL` and `NEXT_PUBLIC_BASE_URL` from the environment (the
  * `cli` script also loads the repository's `.env`). To act on production, set
- * both inline; values already in the environment win over `.env`.
+ * both inline; values already in the environment win over `.env`. The
+ * `cli:prod` script loads `.env.production.local` instead. `mail-links` also
+ * reads `HUB_SITE_DATABASE_URL` / `HUB_SITE_DATABASE_CA` and
+ * `HUB_RESEND_API_KEY` / `HUB_MAIL_FROM` / `HUB_MAIL_REPLY_TO`.
  */
 import { createDrizzleClient } from "@kan/db/client";
 
 import { isHubError } from "../shared/errors";
+import { closeSiteDb, connectSiteDb, onboardingDeps } from "../site";
 import { parseCli } from "./args";
-import { runCommand, USAGE } from "./commands";
+import { isLocalUrl, runCommand, USAGE } from "./commands";
 
 const main = async (): Promise<number> => {
   const parsed = parseCli(process.argv.slice(2));
@@ -31,14 +35,16 @@ const main = async (): Promise<number> => {
   }
 
   const db = createDrizzleClient();
+  const mailing = parsed.command.name === "mail-links";
   try {
     const lines = await runCommand(db, parsed.command, {
       // Not a turbo task input: the CLI is run by hand, never cached.
       // eslint-disable-next-line turbo/no-undeclared-env-vars
       baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? null,
       now: new Date(),
-      // The bucket or folder only: bulk imports take every format, and the
-      // database holds text documents, not PDFs and decks.
+      site: mailing ? connectSiteDb() : null,
+      mailer: mailing ? onboardingDeps().mailer : null,
+      databaseIsLocal: isLocalUrl(process.env.POSTGRES_URL),
     });
     console.log(lines.join("\n"));
     return lines[0]?.startsWith("✗") ? 1 : 0;
@@ -47,7 +53,7 @@ const main = async (): Promise<number> => {
     console.error(`✗ ${error.message}`);
     return 1;
   } finally {
-    await db.$client.end();
+    await Promise.all([db.$client.end(), closeSiteDb()]);
   }
 };
 

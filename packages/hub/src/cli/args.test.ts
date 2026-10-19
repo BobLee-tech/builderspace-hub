@@ -98,6 +98,24 @@ describe("parseCli", () => {
     },
   );
 
+  it.each([
+    [["mail-links"], { email: null, dryRun: false }],
+    [["mail-links", "--dry-run"], { email: null, dryRun: true }],
+    [
+      ["mail-links", "--email", "a@b.co", "--dry-run"],
+      { email: "a@b.co", dryRun: true },
+    ],
+    [
+      ["mail-links", "--dry-run", "--email", "a@b.co"],
+      { email: "a@b.co", dryRun: true },
+    ],
+  ])("parses %j", (argv, options) => {
+    expect(parseCli(argv)).toEqual({
+      ok: true,
+      command: { name: "mail-links", ...options },
+    });
+  });
+
   it("shows help when called with nothing", () => {
     expect(parseCli([])).toEqual({ ok: true, command: { name: "help" } });
   });
@@ -129,6 +147,9 @@ describe("parseCli", () => {
     ],
     [["setup-projects", "--email", "x"], "setup-projects 只接受 --owner"],
     [["provision", "--user", "x"], "provision 只接受 --email"],
+    [["mail-links", "--email"], "--email 后面缺少值"],
+    [["mail-links", "--email", "--dry-run"], "--email 后面缺少值"],
+    [["mail-links", "--all"], "mail-links 只接受 --email 和 --dry-run"],
   ])("rejects %j", (argv, error) => {
     expect(parseCli(argv)).toEqual({ ok: false, error });
   });

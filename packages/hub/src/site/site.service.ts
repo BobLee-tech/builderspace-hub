@@ -71,6 +71,10 @@ export const siteInputs = {
   review: z.object({ id, decision: z.enum(reviewDecisions) }),
   volunteers: z.object({ status: z.enum(volunteerStatuses).nullable(), page }),
   sendLink: z.object({ id }),
+  mailAccepted: z.object({
+    email: z.string().max(320).nullable(),
+    dryRun: z.boolean(),
+  }),
   volunteer: z
     .object({
       id,
@@ -379,6 +383,105 @@ export async function sendVolunteerLink(
     throw new HubError("CONFLICT", "先把申请改成「已录取」再发注册链接");
   }
   return onboardApplicant(db, actor, volunteer, deps, { replace: true, now });
+}
+
+/** Resend takes two mails a second per team; a run of many stays under that. */
+export const MAIL_GAP_MS = 600;
+
+const pause = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** One accepted applicant, where their address stood, and what was sent. */
+export interface AcceptedApplicant {
+  nickname: string;
+  /** Normalised; null when the application has no usable address. */
+  email: string | null;
+  /** Where the address stood in the Hub before this run; null without one. */
+  before: VolunteerHubAccess | null;
+  /** Whether this run mails them a link (or, on a dry run, would). */
+  due: boolean;
+  /** What mailing came to; null when nothing was sent. */
+  outcome: OnboardingOutcome | null;
+}
+
+/**
+ * Mails a registration link to everyone accepted who never got one: accepted
+ * by someone with 名单 alone, straight in the website's database, or before
+ * mail was set up. Someone whose link ran out is listed, not mailed again:
+ * they had their mail, and another is a decision. With `email`, only that
+ * applicant, replacing any link they still have (the card's button).
+ *
+ * One mail per address, greeting them by their latest application. A mail
+ * that is refused leaves them as they were, so the next run tries again.
+ */
+export async function mailAcceptedApplicants(
+  db: Db,
+  site: SiteDb,
+  actor: SiteActor,
+  input: z.input<typeof siteInputs.mailAccepted>,
+  deps: OnboardingDeps = onboardingDeps(),
+  now: Date = new Date(),
+  gapMs: number = MAIL_GAP_MS,
+): Promise<AcceptedApplicant[]> {
+  requireAccess(actor, "site.people");
+  const { email: rawTarget, dryRun } = parseInput(
+    siteInputs.mailAccepted,
+    input,
+  );
+  const target = rawTarget === null ? null : normalizeEmail(rawTarget);
+  if (rawTarget !== null && target === null) {
+    throw new HubError("INVALID_INPUT", `邮箱格式不对：${rawTarget}`);
+  }
+
+  const { items } = await onSite(() =>
+    repo.listVolunteers(site, "accepted", {
+      limit: SITE_EXPORT_LIMIT,
+      offset: 0,
+    }),
+  );
+  // Newest first, so the first application seen for an address is the latest.
+  const seen = new Set<string>();
+  const applicants = items.flatMap((item) => {
+    const email = normalizeEmail(item.email);
+    if (target !== null && email !== target) return [];
+    if (email !== null) {
+      if (seen.has(email)) return [];
+      seen.add(email);
+    }
+    return [{ nickname: item.nickname, email }];
+  });
+  if (target !== null && applicants.length === 0) {
+    throw new HubError("NOT_FOUND", `没有 ${target} 的已录取申请`);
+  }
+
+  const access = await describeHubAccess(
+    db,
+    applicants.map((applicant) => applicant.email),
+    now,
+  );
+  const results: AcceptedApplicant[] = [];
+  let mailed = 0;
+  for (const applicant of applicants) {
+    const before = applicant.email
+      ? (access.get(applicant.email) ?? { state: "none" })
+      : null;
+    const due =
+      before !== null &&
+      (target !== null
+        ? before.state !== "registered"
+        : before.state === "none");
+    let outcome: OnboardingOutcome | null = null;
+    if (due && !dryRun) {
+      if (mailed > 0 && gapMs > 0) await pause(gapMs);
+      mailed += 1;
+      outcome = await onboardApplicant(db, actor, applicant, deps, {
+        replace: target !== null,
+        now,
+      });
+    }
+    results.push({ ...applicant, before, due, outcome });
+  }
+  return results;
 }
 
 export async function listSiteJoins(

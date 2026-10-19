@@ -1,13 +1,21 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Db } from "../db";
-import { describeGrantForJoin } from "../access";
+import type { Mailer, MailMessage } from "../mail";
+import type { SiteDb } from "../site";
+import type { CliEnv } from "./commands";
+import { describeGrantForJoin, issueGrant } from "../access";
 import { getAccessFacts } from "../accounts";
-import { listAudit } from "../audit";
+import { CLI_ACTOR, listAudit } from "../audit";
+import { MailError } from "../mail";
+import { siteVolunteerApplications } from "../site/site.tables";
 import {
   createHubTestDb,
   createKanOnlyTestDb,
+  createSiteTestDb,
   seedProject,
+  seedSiteVolunteer,
   seedUser,
 } from "../testing/test-db";
 import { runCommand } from "./commands";
@@ -288,6 +296,161 @@ describe("doctor", () => {
   });
 });
 
+describe("mail-links", () => {
+  let site: SiteDb;
+  let sent: MailMessage[];
+  let mailer: Mailer & { send: ReturnType<typeof vi.fn> };
+  let mailEnv: CliEnv;
+
+  /** An application accepted without a mail, as 名单 alone or the website's own database leaves it. */
+  const acceptedApplicant = async (nickname: string, email?: string) => {
+    const row = await seedSiteVolunteer(site, {
+      nickname,
+      ...(email !== undefined && { email }),
+    });
+    await site
+      .update(siteVolunteerApplications)
+      .set({ status: "accepted" })
+      .where(eq(siteVolunteerApplications.id, row.id));
+  };
+
+  const mailLinks = (
+    options: { email?: string; dryRun?: boolean } = {},
+    overrides: Partial<CliEnv> = {},
+  ) =>
+    runCommand(
+      db,
+      {
+        name: "mail-links",
+        email: options.email ?? null,
+        dryRun: options.dryRun ?? false,
+      },
+      { ...mailEnv, ...overrides },
+    );
+
+  beforeEach(async () => {
+    site = await createSiteTestDb();
+    const owner = await seedUser(db, { email: "owner@example.test" });
+    await seedProject(db, owner, {
+      name: "BuilderSpace 社团",
+      slug: "bss-community",
+    });
+    sent = [];
+    mailer = {
+      acceptsReplies: true,
+      send: vi.fn((message: MailMessage) => {
+        sent.push(message);
+        return Promise.resolve({ id: `mail-${sent.length}` });
+      }),
+    };
+    mailEnv = { ...env, site, mailer, databaseIsLocal: false };
+  });
+
+  it("mails accepted applicants who have no link yet, logged as the command line", async () => {
+    await acceptedApplicant("李燊", "Muziss@Example.test");
+
+    expect(await mailLinks()).toEqual([
+      "已发 1 封。",
+      "已录取 1 人：已注册 0，链接还有效 0，链接已过期 0，没有邮箱 0，还没发过 1",
+      "✓ 李燊 <muziss@example.test>：已发，10 月 20 日前有效",
+    ]);
+    expect(sent.map((mail) => mail.to)).toEqual(["muziss@example.test"]);
+    expect(sent[0]?.text).toContain("https://hub.example.test/join#");
+
+    const entries = await listAudit(db, { limit: 10, offset: 0 });
+    expect(entries).toContainEqual(
+      expect.objectContaining({ action: "grant.mailed", actorEmail: "cli" }),
+    );
+  });
+
+  it("lists who would get a link on a dry run, without a mail service", async () => {
+    await acceptedApplicant("李燊", "muziss@example.test");
+
+    expect(await mailLinks({ dryRun: true }, { mailer: null })).toEqual([
+      "--dry-run：会发给 1 人，什么都没发。",
+      "已录取 1 人：已注册 0，链接还有效 0，链接已过期 0，没有邮箱 0，还没发过 1",
+      "· 会发给 李燊 <muziss@example.test>",
+    ]);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("points out a link that ran out and an application without an address", async () => {
+    await issueGrant(db, CLI_ACTOR, {
+      email: "old@example.test",
+      source: "application",
+      projects: [],
+      now: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000),
+    });
+    await acceptedApplicant("old", "old@example.test");
+    await acceptedApplicant("微信联系");
+
+    expect(await mailLinks()).toEqual([
+      "没有要发的。",
+      "已录取 2 人：已注册 0，链接还有效 0，链接已过期 1，没有邮箱 1，还没发过 0",
+      expect.stringMatching(/^! (old|微信联系)/),
+      expect.stringMatching(/^! (old|微信联系)/),
+    ]);
+    const text = (await mailLinks()).join("\n");
+    expect(text).toContain(
+      "! old <old@example.test>：10 月 12 日到期的链接已过期，没有自动重发。要重发：pnpm --filter @kan/hub cli mail-links --email old@example.test",
+    );
+    expect(text).toContain("! 微信联系：申请里没有能用的邮箱，发不了");
+    expect(sent).toHaveLength(0);
+  });
+
+  it("fails the run when a mail is refused", async () => {
+    mailer.send.mockRejectedValueOnce(
+      new MailError("发信服务拒绝了：HTTP 403"),
+    );
+    await acceptedApplicant("李燊", "muziss@example.test");
+
+    const lines = await mailLinks();
+
+    expect(lines[0]).toBe("✗ 已发 0 封，1 人没发成，见下面。");
+    expect(lines).toContain(
+      "✗ 李燊 <muziss@example.test>：邮件没发出去（发信服务拒绝了：HTTP 403），链接已作废",
+    );
+  });
+
+  it("with --email, mails that applicant a new link", async () => {
+    await acceptedApplicant("李燊", "muziss@example.test");
+    await acceptedApplicant("Nina", "nina@example.test");
+    await mailLinks();
+    const first = sent.find((mail) => mail.to === "muziss@example.test");
+
+    expect(await mailLinks({ email: "Muziss@Example.test" })).toEqual([
+      "已发 1 封。",
+      "✓ 李燊 <muziss@example.test>：已发，10 月 20 日前有效",
+    ]);
+    expect(sent).toHaveLength(3);
+    const token = /\/join#(\S+)/.exec(first?.text ?? "")?.[1];
+    expect(await describeGrantForJoin(db, token, now)).toEqual({
+      state: "revoked",
+    });
+  });
+
+  it("refuses to run without the website's database", async () => {
+    const refusal = mailLinks({ dryRun: true }, { site: null });
+    await expect(refusal).rejects.toThrow("HUB_SITE_DATABASE_URL");
+    await expect(refusal).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
+  it.each<[string, Partial<CliEnv>, string]>([
+    ["no mail service", { mailer: null }, "HUB_RESEND_API_KEY"],
+    ["no base URL", { baseUrl: null }, "NEXT_PUBLIC_BASE_URL"],
+    ["a local base URL", { baseUrl: "http://localhost:3000" }, "本机"],
+    ["a local Hub database", { databaseIsLocal: true }, "本机"],
+  ])("refuses to send with %s", async (_, overrides, hint) => {
+    await acceptedApplicant("李燊", "muziss@example.test");
+
+    const refusal = mailLinks({}, overrides);
+    await expect(refusal).rejects.toThrow(hint);
+    await expect(refusal).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(sent).toHaveLength(0);
+    expect(await listAudit(db, { limit: 5, offset: 0 })).toEqual([]);
+  });
+});
+
 describe("help", () => {
   it("lists the commands", async () => {
     const text = (await runCommand(db, { name: "help" }, env)).join("\n");
@@ -299,6 +462,7 @@ describe("help", () => {
       "set-role",
       "projects",
       "doctor",
+      "mail-links",
     ]) {
       expect(text).toContain(command);
     }

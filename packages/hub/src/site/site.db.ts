@@ -90,6 +90,13 @@ export function connectSiteDb(
   return cached.db;
 }
 
+/** Closes the pool, for a process about to exit (the command line). */
+export async function closeSiteDb(): Promise<void> {
+  const open = cached;
+  cached = null;
+  await open?.pool.end();
+}
+
 /** Tests only: answer every `connectSiteDb()` with this database (null undoes it). */
 export function overrideSiteDbForTests(db: SiteDb | null): void {
   override = db;
