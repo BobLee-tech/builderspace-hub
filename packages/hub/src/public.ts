@@ -76,3 +76,77 @@ export {
 } from "./site/site.policy";
 
 export { IMPORT_ACCEPT, importSizeProblem } from "./documents/document.policy";
+
+export type {
+  AnswerInput,
+  ChoiceField,
+  ChoiceOption,
+  FieldType,
+  FormAccess,
+  FormDefinition,
+  FormDefinitionInput,
+  FormField,
+  FormPhase,
+  FormSettings,
+  FormStatus,
+  LikeMode,
+  Problem,
+  QuestionField,
+  StoredAnswer,
+  TextFormat,
+  WallMode,
+} from "./forms/form.model";
+export {
+  answerText,
+  checkAnswers,
+  checkDefinition,
+  closedReasonText,
+  DEFAULT_SETTINGS,
+  FORM_LIMITS,
+  fieldLabel,
+  fieldTypes,
+  formAccessLevels,
+  formStatuses,
+  isQuestion,
+  likeModes,
+  newFieldId,
+  normaliseUrl,
+  textFormats,
+  wallModes,
+} from "./forms/form.model";
+export {
+  IMAGE_ACCEPT,
+  IMAGE_MAX_BYTES,
+  IMAGE_MAX_SIDE,
+  imageSizeProblem,
+} from "./forms/image.policy";
+export type {
+  FillView,
+  ManagedResponse,
+  QuestionSummary,
+  SubmitResult,
+  Wall,
+  WallEntry,
+} from "./forms/response.service";
+
+/** Request header carrying the secret that lets a browser change its anonymous answer. */
+export const FORM_TOKEN_HEADER = "x-hub-form-token";
+/** Request header carrying a browser's random key, so its anonymous 👍 counts once. */
+export const FORM_VOTER_HEADER = "x-hub-form-voter";
+
+export function formHref(publicId: string): string {
+  return `/forms/${publicId}`;
+}
+
+export function formImageSrc(imagePublicId: string): string {
+  return `/api/hub/forms/images/${imagePublicId}`;
+}
+
+/** A value as it arrives through JSON: every Date becomes an ISO string. */
+export type Jsonified<T> = T extends Date
+  ? string
+  : T extends (infer U)[]
+    ? Jsonified<U>[]
+    : T extends object
+      ? { [K in keyof T]: Jsonified<T[K]> }
+      : T;
