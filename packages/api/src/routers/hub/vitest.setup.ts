@@ -2,6 +2,13 @@ import { vi } from "vitest";
 
 import type * as PrivateBoards from "./private-boards";
 
+// Kan's integration tests boot an in-memory Postgres in each `beforeEach`
+// under vitest's 10-second default. The Hub's integration tests here boot one
+// per test too, and `pnpm test` runs every package at once, so on a busy CI
+// runner Kan's hooks ran out of time. Every file gets the Hub's allowance;
+// files that set their own keep it.
+vi.setConfig({ hookTimeout: 60_000 });
+
 /**
  * Kan's own router tests hand the procedures a stand-in database (no
  * `select`), and some mock modules such as `@kan/shared/utils` that the Hub's
