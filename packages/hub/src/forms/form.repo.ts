@@ -710,6 +710,27 @@ export async function attachImages(
   return rows.map((row) => row.id);
 }
 
+/** How long a picture taken out of a form is kept, so an unsaved or undone edit still has it. */
+export const UNUSED_ASSET_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/** Deletes a form's own pictures that it no longer uses, once past the grace period. */
+export async function deleteUnusedAssets(
+  db: DbOrTx,
+  formId: number,
+  used: readonly string[],
+  now: Date,
+): Promise<void> {
+  const keep = new Set(used);
+  const cutoff = now.getTime() - UNUSED_ASSET_GRACE_MS;
+  const unused = (await listImagesOfKind(db, formId, "asset")).filter(
+    (image) => !keep.has(image.publicId) && image.createdAt.getTime() < cutoff,
+  );
+  await deleteImages(
+    db,
+    unused.map((image) => image.id),
+  );
+}
+
 export async function deleteImages(db: DbOrTx, ids: number[]): Promise<void> {
   if (ids.length === 0) return;
   await db.delete(hubFormImages).where(inArray(hubFormImages.id, ids));

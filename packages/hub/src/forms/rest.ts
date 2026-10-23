@@ -155,6 +155,7 @@ async function route(
         purpose,
         fieldId: request.query.field ?? null,
         bytes: request.bytes ?? new Uint8Array(),
+        secrets,
       },
       now,
     );

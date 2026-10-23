@@ -35,12 +35,11 @@ import {
   copyImages,
   countResponses,
   deleteForm as deleteFormRow,
-  deleteImages,
+  deleteUnusedAssets,
   findUserName,
   insertForm,
   listFormsToFill,
   listImagesOf,
-  listImagesOfKind,
   listManagedForms,
   listManagers,
   lockForm,
@@ -212,7 +211,6 @@ const saveSchema = z.object({
 });
 
 /** Pictures uploaded for a form but not kept in it are removed after this long. */
-const UNUSED_ASSET_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Saves the title, questions and settings in one go. The builder always
@@ -307,16 +305,7 @@ export async function saveForm(
       );
       if (!written) throw new HubError("CONFLICT", STALE);
 
-      const kept = new Set(wanted);
-      const cutoff = now.getTime() - UNUSED_ASSET_GRACE_MS;
-      const unused = (await listImagesOfKind(tx, row.id, "asset")).filter(
-        (image) =>
-          !kept.has(image.publicId) && image.createdAt.getTime() < cutoff,
-      );
-      await deleteImages(
-        tx,
-        unused.map((image) => image.id),
-      );
+      await deleteUnusedAssets(tx, row.id, wanted, now);
     },
     () => ({
       actor,

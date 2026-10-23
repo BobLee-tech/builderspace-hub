@@ -18,6 +18,7 @@ import {
 } from "./form.service";
 import { IMAGE_MAX_BYTES } from "./image.policy";
 import { readFormImage, uploadFormImage } from "./image.service";
+import { submitResponse } from "./response.service";
 
 let db: Db;
 let admin: AdminActor;
@@ -112,6 +113,32 @@ const answerUpload = (
     at,
   );
 
+/** Saves a form again with some of its fields changed, as the builder would. */
+async function resave(
+  publicId: string,
+  change: (
+    detail: Awaited<ReturnType<typeof getFormDetail>>,
+  ) => Partial<Parameters<typeof saveForm>[2]>,
+) {
+  const detail = await getFormDetail(db, admin, publicId, now);
+  await saveForm(
+    db,
+    admin,
+    {
+      formPublicId: publicId,
+      title: detail.title,
+      access: detail.access,
+      definition: detail.definition,
+      settings: detail.settings,
+      closesAt: null,
+      maxResponses: detail.maxResponses,
+      expectedUpdatedAt: detail.updatedAt.toISOString(),
+      ...change(detail),
+    },
+    now,
+  );
+}
+
 describe("uploading", () => {
   it("stores the picture's real type and size", async () => {
     const { publicId } = await makeForm("public");
@@ -182,6 +209,46 @@ describe("uploading", () => {
     });
   });
 
+  it("takes pictures for a full form only from people changing their answer", async () => {
+    const { publicId } = await makeForm("public");
+    await resave(publicId, (detail) => ({
+      settings: { ...detail.settings, allowEdit: true },
+      maxResponses: 1,
+    }));
+    const sent = await submitResponse(
+      db,
+      anonymous,
+      publicId,
+      { answers: { name01: "A" }, submissionKey: crypto.randomUUID() },
+      {},
+      now,
+    );
+    await expect(answerUpload(anonymous, publicId)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    await expect(
+      answerUpload(anonymous, publicId, {
+        secrets: { editToken: sent.editToken },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("frees a removed form picture's room on a later upload, after a day", async () => {
+    const { publicId, cover } = await makeForm("public");
+    await resave(publicId, (detail) => ({
+      definition: { ...detail.definition, coverImage: null },
+    }));
+    await uploadFormImage(
+      db,
+      adminViewer(),
+      { formPublicId: publicId, purpose: "asset", bytes: PNG_1X1 },
+      new Date(now.getTime() + 2 * DAY),
+    );
+    await expect(readFormImage(db, adminViewer(), cover)).rejects.toMatchObject(
+      { code: "NOT_FOUND" },
+    );
+  });
+
   it("clears out answer pictures nobody sent, after a day", async () => {
     const { publicId } = await makeForm("public");
     const stale = await answerUpload(mia, publicId);
@@ -202,22 +269,9 @@ describe("reading", () => {
 
   it("stops showing a picture once the form no longer uses it, except to managers", async () => {
     const { publicId, cover } = await makeForm("public");
-    const detail = await getFormDetail(db, admin, publicId, now);
-    await saveForm(
-      db,
-      admin,
-      {
-        formPublicId: publicId,
-        title: detail.title,
-        access: "public",
-        definition: { ...detail.definition, coverImage: null },
-        settings: detail.settings,
-        closesAt: null,
-        maxResponses: null,
-        expectedUpdatedAt: detail.updatedAt.toISOString(),
-      },
-      now,
-    );
+    await resave(publicId, (detail) => ({
+      definition: { ...detail.definition, coverImage: null },
+    }));
     await expect(readFormImage(db, anonymous, cover)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });

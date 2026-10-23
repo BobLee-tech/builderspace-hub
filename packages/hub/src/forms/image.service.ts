@@ -17,6 +17,7 @@ import { canFill, canSeeWall } from "./form.policy";
 import {
   countResponses,
   deleteAbandonedUploads,
+  deleteUnusedAssets,
   findByTokenHash,
   findForm,
   findFormById,
@@ -29,6 +30,7 @@ import {
   readImageBody,
 } from "./form.repo";
 import { imageSizeProblem, sniffImage } from "./image.policy";
+import { findMine } from "./response.service";
 
 /**
  * Pictures in forms: the ones managers put in (cover, question and option
@@ -57,6 +59,8 @@ export async function uploadFormImage(
     purpose: FormImageKind;
     /** For an answer picture: the question it is for. */
     fieldId?: string | null;
+    /** This browser's secrets: someone changing their answer to a full form. */
+    secrets?: BrowserSecrets;
     bytes: Uint8Array;
   },
   now: Date = new Date(),
@@ -80,8 +84,15 @@ export async function uploadFormImage(
       throw new HubError("FORBIDDEN", "你不能填写这份表单");
     }
     const phase = formPhase(form, await countResponses(db, form.id), now);
-    if (phase.phase === "closed" && phase.reason !== "full") {
-      throw new HubError("CONFLICT", closedReasonText[phase.reason]);
+    if (phase.phase === "closed") {
+      // A full form still takes pictures from people changing their answer.
+      const changing =
+        phase.reason === "full" &&
+        form.settings.allowEdit &&
+        (await findMine(db, form.id, viewer, input.secrets ?? {})) !== null;
+      if (!changing) {
+        throw new HubError("CONFLICT", closedReasonText[phase.reason]);
+      }
     }
     const field = form.definition.fields.find(
       (item) => item.id === input.fieldId,
@@ -104,7 +115,18 @@ export async function uploadFormImage(
   // Uploads to one form take turns on its row, so two arriving together
   // cannot both fit under the limits by reading the same usage.
   const created = await db.transaction(async (tx) => {
-    await lockForm(tx, form.id);
+    const locked = await lockForm(tx, form.id);
+    if (!locked) throw new HubError("NOT_FOUND", "找不到这份表单");
+    // Pictures taken out of the form free their room here too, not only
+    // when the form is saved again.
+    if (input.purpose === "asset") {
+      await deleteUnusedAssets(
+        tx,
+        form.id,
+        referencedImages(locked.definition),
+        now,
+      );
+    }
     const usage = await imageUsage(
       tx,
       form.id,

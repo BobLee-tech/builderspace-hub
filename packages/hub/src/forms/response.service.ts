@@ -141,7 +141,8 @@ async function contextFor(
   };
 }
 
-async function findMine(
+/** One's own answer: by account, or by the token this browser kept. */
+export async function findMine(
   db: DbOrTx,
   formId: number,
   viewer: FormViewer,
