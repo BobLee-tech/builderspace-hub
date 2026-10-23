@@ -1,8 +1,9 @@
 import { generateUID } from "@kan/shared/utils";
 
-import type { Db } from "../db";
+import type { Db, DbOrTx } from "../db";
 import type { FormImageKind } from "../schema";
 import type { FormViewer } from "./form.policy";
+import type { FormRow } from "./form.repo";
 import type { BrowserSecrets } from "./response.service";
 import { HubError } from "../shared/errors";
 import { hashGrantToken, isGrantTokenShape } from "../shared/token";
@@ -72,35 +73,10 @@ export async function uploadFormImage(
   if (!form) throw new HubError("NOT_FOUND", "找不到这份表单");
   const isManager = await viewerManages(db, viewer, form.id);
 
-  let fieldId: string | null = null;
   if (input.purpose === "asset") {
     if (!isManager) throw new HubError("NOT_FOUND", "找不到这份表单");
   } else {
-    if (form.status === "draft" && !isManager) {
-      throw new HubError("NOT_FOUND", "找不到这份表单");
-    }
-    const decision = isManager ? { allowed: true } : canFill(form, viewer);
-    if (!decision.allowed) {
-      throw new HubError("FORBIDDEN", "你不能填写这份表单");
-    }
-    const phase = formPhase(form, await countResponses(db, form.id), now);
-    if (phase.phase === "closed") {
-      // A full form still takes pictures from people changing their answer.
-      const changing =
-        phase.reason === "full" &&
-        form.settings.allowEdit &&
-        (await findMine(db, form.id, viewer, input.secrets ?? {})) !== null;
-      if (!changing) {
-        throw new HubError("CONFLICT", closedReasonText[phase.reason]);
-      }
-    }
-    const field = form.definition.fields.find(
-      (item) => item.id === input.fieldId,
-    );
-    if (!field || field.type !== "image") {
-      throw new HubError("INVALID_INPUT", "这道题不能传图片，请刷新页面");
-    }
-    fieldId = field.id;
+    await answerFieldFor(db, form, viewer, isManager, input, now);
     await deleteAbandonedUploads(db, form.id, new Date(now.getTime() - DAY_MS));
   }
 
@@ -117,6 +93,12 @@ export async function uploadFormImage(
   const created = await db.transaction(async (tx) => {
     const locked = await lockForm(tx, form.id);
     if (!locked) throw new HubError("NOT_FOUND", "找不到这份表单");
+    // Checked again on the form as it is now: a manager may have closed it
+    // or changed its questions since.
+    const fieldId =
+      input.purpose === "answer"
+        ? await answerFieldFor(tx, locked, viewer, isManager, input, now)
+        : null;
     // Pictures taken out of the form free their room here too, not only
     // when the form is saved again.
     if (input.purpose === "asset") {
@@ -161,6 +143,45 @@ export async function uploadFormImage(
     width: created.width,
     height: created.height,
   };
+}
+
+/**
+ * The picture question an answer upload is for, if this person may answer
+ * the form now: published, theirs to fill, open (or full, when they are
+ * changing their own answer), and the question takes pictures.
+ */
+async function answerFieldFor(
+  db: DbOrTx,
+  form: FormRow,
+  viewer: FormViewer,
+  isManager: boolean,
+  input: { fieldId?: string | null; secrets?: BrowserSecrets },
+  now: Date,
+): Promise<string> {
+  if (form.status === "draft" && !isManager) {
+    throw new HubError("NOT_FOUND", "找不到这份表单");
+  }
+  const decision = isManager ? { allowed: true } : canFill(form, viewer);
+  if (!decision.allowed) {
+    throw new HubError("FORBIDDEN", "你不能填写这份表单");
+  }
+  const phase = formPhase(form, await countResponses(db, form.id), now);
+  if (phase.phase === "closed") {
+    const changing =
+      phase.reason === "full" &&
+      form.settings.allowEdit &&
+      (await findMine(db, form.id, viewer, input.secrets ?? {})) !== null;
+    if (!changing) {
+      throw new HubError("CONFLICT", closedReasonText[phase.reason]);
+    }
+  }
+  const field = form.definition.fields.find(
+    (item) => item.id === input.fieldId,
+  );
+  if (!field || field.type !== "image") {
+    throw new HubError("INVALID_INPUT", "这道题不能传图片，请刷新页面");
+  }
+  return field.id;
 }
 
 export interface ImageFile {

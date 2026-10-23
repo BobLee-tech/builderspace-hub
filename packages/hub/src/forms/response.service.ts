@@ -52,6 +52,7 @@ import {
   findForm,
   findLatestByUser,
   findResponse,
+  findResponseById,
   findUserName,
   insertResponse,
   likedBy,
@@ -517,6 +518,15 @@ export async function updateMyResponse(
     const locked = await lockForm(tx, form.id);
     if (!locked) throw new HubError("NOT_FOUND", NOT_FOUND);
     if (changedSince(form, locked)) throw formChangedError();
+    // Changes to answers take the form lock too, so this sees any change
+    // another tab made to the same answer after it was read.
+    const current = await findResponseById(tx, mine.id);
+    if (current?.updatedAt.getTime() !== mine.updatedAt.getTime()) {
+      throw new HubError(
+        "CONFLICT",
+        "这份回答刚刚在别处改过，请刷新页面后再改",
+      );
+    }
     // A full form still lets people fix what they sent; a closed one does not.
     const phase = formPhase(locked, 0, now);
     if (phase.phase !== "open") throw closedError(phase);
