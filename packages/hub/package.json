@@ -44,6 +44,10 @@
       "types": "./src/github/index.ts",
       "default": "./src/github/index.ts"
     },
+    "./private-boards": {
+      "types": "./src/private-boards/index.ts",
+      "default": "./src/private-boards/index.ts"
+    },
     "./public": {
       "types": "./src/public.ts",
       "default": "./src/public.ts"

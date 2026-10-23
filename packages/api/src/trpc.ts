@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { createLogger } from "@kan/logger";
 
 import type { createTRPCContext } from "./trpc-context";
+import { guardPrivateBoards } from "./routers/hub/private-boards"; // hub-seam
 
 const log = createLogger("api");
 
@@ -95,7 +96,18 @@ const loggingMiddleware = t.middleware(
   },
 );
 
-export const publicProcedure = t.procedure.use(loggingMiddleware);
+// hub-seam: 仅自己可见 boards are refused before any procedure runs (docs/hub/UPSTREAM_SEAMS.md)
+const hubPrivateBoards = t.middleware(
+  async ({ ctx, path, getRawInput, next }) => {
+    const input = await getRawInput().catch(() => undefined);
+    await guardPrivateBoards(ctx.db, ctx.user?.id ?? null, path, input);
+    return next();
+  },
+);
+
+export const publicProcedure = t.procedure
+  .use(loggingMiddleware)
+  .use(hubPrivateBoards); // hub-seam
 
 const enforceUserIsAuthed = t.middleware(async ({ ctx, next }) => {
   if (!ctx.user) {
@@ -119,7 +131,8 @@ const enforceUserIsAdmin = t.middleware(async ({ ctx, next }) => {
 
 export const protectedProcedure = t.procedure
   .use(loggingMiddleware)
-  .use(enforceUserIsAuthed);
+  .use(enforceUserIsAuthed)
+  .use(hubPrivateBoards); // hub-seam
 
 export const adminProtectedProcedure = t.procedure
   .use(loggingMiddleware)

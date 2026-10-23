@@ -576,6 +576,26 @@ export const zh = {
     },
   },
 
+  boardVisibility: {
+    button: "可见范围",
+    options: {
+      public: "公开链接",
+      members: "社团成员可见",
+      onlyMe: "仅自己可见",
+    },
+    explain: {
+      public: "项目里的成员都能看；不登录的人拿到链接也能看。",
+      members: "项目里的成员都能看，链接对外不公开。",
+      onlyMe:
+        "只有你能看到这个看板和里面的卡片，管理员也看不到；它不会出现在别人的看板列表、搜索和首页里。",
+    },
+    noPermission: "你没有修改这个看板的权限",
+    saved: "可见范围已更新",
+    savedAs: (label: string) => `这个看板现在是「${label}」。`,
+    failed: "没有改成功",
+    tryAgain: "请稍后再试。",
+  },
+
   personal: {
     tabs: {
       schedule: "日程",

@@ -70,12 +70,27 @@
     {
       "file": "packages/api/src/routers/workspace.ts",
       "marker": "hub-seam",
-      "why": "Only back-office admins may create projects (workspaces)."
+      "why": "Only back-office admins may create projects (workspaces); search passes a condition that leaves out other people's 仅自己可见 boards and their cards."
+    },
+    {
+      "file": "packages/db/src/repository/workspace.repo.ts",
+      "marker": "hub-seam",
+      "why": "Search takes an optional extra board condition, so hidden boards are left out before its limits apply, not after."
     },
     {
       "file": "packages/api/src/routers/board.ts",
       "marker": "hub-seam",
-      "why": "Only project admins may create templates."
+      "why": "Only project admins may create templates; a project's board list leaves out other people's 仅自己可见 boards."
+    },
+    {
+      "file": "packages/api/src/trpc.ts",
+      "marker": "hub-seam",
+      "why": "Every procedure first refuses requests that name anything inside someone else's 仅自己可见 board."
+    },
+    {
+      "file": "packages/api/vitest.config.ts",
+      "marker": "hub-seam",
+      "why": "Kan's router tests use stand-in databases; a setup file lets them skip the private-board guard."
     },
     {
       "file": "apps/web/src/components/Dashboard.tsx",
@@ -115,7 +130,7 @@
     {
       "file": "apps/web/src/views/board/index.tsx",
       "marker": "hub-seam",
-      "why": "Hides an action the person has no permission for instead of showing it disabled."
+      "why": "Hides an action the person has no permission for instead of showing it disabled; renders the Hub's visibility menu, which adds 仅自己可见."
     },
     {
       "file": "pnpm-lock.yaml",
@@ -138,6 +153,11 @@
       "file": "apps/web/src/components/WorkspaceMenu.tsx",
       "replacedBy": "apps/web/src/hub/layout/HubSidebarTop.tsx",
       "upstreamSha": "b227e4f0a62dd5a9f130e63650ef331fb85535f8"
+    },
+    {
+      "file": "apps/web/src/views/board/components/VisibilityButton.tsx",
+      "replacedBy": "apps/web/src/hub/features/boards/BoardVisibilityButton.tsx",
+      "upstreamSha": "b40dbcc90b8b6bdea4df3e56846703d6b8aa8889"
     }
   ]
 }

@@ -9,7 +9,16 @@ export function createHubCaller(
   user: { id: string; email: string } | null,
   headers: Record<string, string> = {},
 ) {
-  return hubRouter.createCaller({
+  return hubRouter.createCaller(callerContext(db, user, headers));
+}
+
+/** What a caller of any router sees as `ctx`, for the given user or a signed-out visitor. */
+export function callerContext(
+  db: dbClient,
+  user: { id: string; email: string } | null,
+  headers: Record<string, string> = {},
+) {
+  return {
     user: user
       ? {
           id: user.id,
@@ -23,9 +32,9 @@ export function createHubCaller(
     db,
     auth: {} as never,
     headers: new Headers(headers),
-    transport: "trpc",
+    transport: "trpc" as const,
     requestId: crypto.randomUUID(),
-  });
+  };
 }
 
 /** Adds an active membership directly, for tests. */

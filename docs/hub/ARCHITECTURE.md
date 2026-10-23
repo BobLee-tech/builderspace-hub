@@ -102,6 +102,19 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **Kan 不知道的规则**由 Hub 固定：新建项目只有后台管理员（`guards.ts` 的 `assertCanCreateProject`），新建模板只有项目管理员（`assertCanCreateTemplate`）。
 - **界面上没权限就不显示**：Kan 的视图通过 `useHubPermissions()`（Kan 的 `usePermissions` 加上 Hub 的规则）拿权限；原来没权限时灰掉的按钮加了 `hidden`，全局样式保证 `hidden` 一定生效；侧栏链接先经 `useHubNavFilter()` 过滤。服务端照样各自校验，界面只是不再展示做不了的事。
 
+## 仅自己可见的看板
+
+Kan 的看板只有两种可见性：`public`（不登录拿到链接也能看）和 `private`（项目成员都能看）。`packages/hub/src/private-boards/` 加了第三种：**仅自己可见**，只有看板的主人能看到这个看板、它的列表和卡片，项目管理员也看不到。
+
+- **一张表**：`hub_private_board`，有一行就是仅自己可见，`ownerUserId` 是主人。主人删号后这一列变成空，看板从此谁都看不到，而不是退回给整个项目看：设成仅自己可见的人不想让别人读到。
+- **谁能设**：只有看板的创建者能打开，只有主人能关掉（`private-board.policy.ts`）。打开时同时把 Kan 的可见性改成 `private`，公开链接立即失效；关掉后看板回到「社团成员可见」，要公开得再单独改一次。仅自己可见的看板不能直接改成公开（接口回 `CONFLICT`）。
+- **一个入口挡住 Kan 的所有接口**：`packages/api/src/trpc.ts` 里给 `publicProcedure` 和 `protectedProcedure` 都加了一个中间件（接缝）。它读请求的入参，凡是字段名以 `boardPublicId`、`listPublicId`、`cardPublicId`、`labelPublicId`、`checklistPublicId`、`checklistItemPublicId`、`commentPublicId`、`attachmentPublicId`（以及复数形式）结尾的，都查一下属于哪个看板；有一个属于别人的仅自己可见看板，整个请求回 `NOT_FOUND`，和看板不存在一样。按字段名结尾匹配，所以 `sourceBoardPublicId` 这类带前缀的字段，以及上游以后新加的同类字段，不用登记也会被检查。入参里没有这些字段的请求不查库。浏览器、REST（`/api/v1`）、MCP 都经过 tRPC，所以都被挡住；`hub.*` 也一样。
+- **中间件读的是还没校验的入参**（在接口自己的 zod 之前），所以先设了上限：超过 12 个字符的 ID 不查（这些表的 `publicId` 都是 `varchar(12)`，不可能对得上），同一个 ID 只算一次，一个请求最多 200 个，超过就直接回 `BAD_REQUEST`，一条 SQL 都不跑。不设上限的话，不登录的人也能发一个塞了几万个 ID 的请求，让数据库去查。
+- **Kan 自己拼的列表另外过滤**：`board.all`（项目的看板列表）的结果经 `onlyVisibleBoards` 去掉别人的仅自己可见看板。`workspace.search`（⌘K 搜索）有条数上限，事后过滤会让看不到的结果占掉名额，所以把 `boardVisibleTo(viewerId)` 作为条件传进 Kan 的搜索 SQL（`workspace.repo.ts` 的接缝）。首页、总版、我完成的、个人日程都从 `kan/tasks.gateway.ts` 的 `listTaskRows` / `listBoardsWithLists` 取数据，那里的 SQL 也带上了同一个条件。
+- **界面**：看板页的「可见范围」按钮换成了 `BoardVisibilityButton`（替身），三个选项：公开链接、社团成员可见、仅自己可见。最后一项只给创建者看。
+- **操作日志不写看板名**：日志只记「把自己建的一个看板设为仅自己可见」和看板的 ID。后台管理员能读日志，看板名本身就是主人想藏的内容。
+- **已知的局限**：项目如果配置了 webhook（Kan 的 `sendWebhooksForWorkspace`），仍会收到这个看板里卡片的创建、修改、删除事件；上传附件的 `/api/upload/attachment` 不经过 tRPC，只看项目权限，能往别人的私有卡片上传附件（读不到），前提是知道卡片的 ID，而且线上没配文件存储时这个接口本来就用不了。
+
 ## 限流
 
 登录、注册和注册链接检查都有按 IP 的限流，计数存在 `hub_rate_limit` 表里（`packages/hub/src/rate-limit/`）。放在数据库而不是内存，是因为线上跑在多个无服务器实例上，各自在内存里计数等于没有限制。

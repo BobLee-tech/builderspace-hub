@@ -21,6 +21,7 @@ import { createAvatarUrlResolver } from "../utils/avatarUrls";
 import { assertPermission } from "../utils/permissions";
 // hub-seam: only back-office admins create projects (docs/hub/UPSTREAM_SEAMS.md)
 import { assertCanCreateProject } from "./hub/guards";
+import { boardsVisibleTo } from "./hub/private-boards"; // hub-seam
 
 export const workspaceRouter = createTRPCRouter({
   all: protectedProcedure
@@ -631,6 +632,7 @@ export const workspaceRouter = createTRPCRouter({
         workspace.id,
         input.query,
         input.limit,
+        boardsVisibleTo(ctx.db, userId), // hub-seam: leaves out others' 仅自己可见 boards
       );
 
       return result;
