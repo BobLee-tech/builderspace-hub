@@ -260,6 +260,30 @@ HUB_URL=... HUB_API_KEY=... HUB_TASKS_FILE=packages/builderspace/tasks.local.jso
 
 **不要用 `SMTP_*`、`EMAIL_FROM`**：那是 Kan 自己的发信配置，设了会打开 Kan 的邀请和魔法链接邮件，绕过注册闸门。没设 `HUB_RESEND_API_KEY` 时，改成「已录取」照常生效，但不发链接，页面会提示。
 
+**从命令行补发。** 不经过上面那一步的录取不会发信：只有「名单」权限的人改的、直接在官网数据库里改的、配好发信之前录取的。这些用命令行补发，先看会发给谁，再发：
+
+```bash
+pnpm --filter @kan/hub cli:prod mail-links --dry-run
+```
+
+```bash
+pnpm --filter @kan/hub cli:prod mail-links
+```
+
+- 只发给「已录取」、还没有 Hub 账号、也从没发过链接的人；同一个邮箱只发一封。发过的不会再发，所以可以反复执行。
+- 链接已经过期的人只列出来，不自动重发。要给某一个人重发（会替换对方手上还能用的链接），加 `--email <邮箱>`。
+- 有一封没发成时命令以失败退出，那个人留在「还没发过」，下次执行会再试。
+- 每封都记进操作日志，操作人是 `cli`。
+- `cli:prod` 只读根目录的 `.env.production.local`（git 忽略，不读 `.env`）。先拉一次生产环境变量：
+
+  ```bash
+  vercel env pull --environment production .env.production.local
+  ```
+
+  Vercel 不会给回 sensitive 的值，要手动往这个文件里补 `HUB_SITE_DATABASE_URL`（见上面「连接官网」第 3 步）、`HUB_RESEND_API_KEY`、`HUB_MAIL_REPLY_TO`。用完可以删掉这个文件。
+
+- 不要用 `vercel env run`：它会让本地 `.env` 盖过生产的值，`POSTGRES_URL` 会变成本机数据库。命令发现 `NEXT_PUBLIC_BASE_URL` 或 `POSTGRES_URL` 是本机地址时会拒绝发信，免得把打不开的链接寄出去。
+
 本地开发时把 `HUB_SITE_DATABASE_URL` 指向一个本机 Postgres 即可（本机地址不走 TLS），里面按官网的迁移建好表，测试用的最小表结构见 `packages/hub/src/testing/site-test-db.ts`。
 
 ## 开发约定
