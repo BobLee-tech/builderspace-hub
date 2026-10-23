@@ -69,7 +69,12 @@ export const formsRouter = createTRPCRouter({
     ),
 
   setStatus: hubProcedure
-    .input(formInput.extend({ status: z.enum(formStatuses) }))
+    .input(
+      formInput.extend({
+        status: z.enum(formStatuses),
+        expectedUpdatedAt: z.string().max(40).optional(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       runHub(() => setFormStatus(ctx.db, ctx.actor, input)),
     ),

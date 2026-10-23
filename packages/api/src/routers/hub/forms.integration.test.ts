@@ -97,4 +97,17 @@ describe("hub.forms", () => {
     await save();
     await expect(save()).rejects.toMatchObject({ code: "CONFLICT" });
   });
+
+  it("tells the builder its copy is still current after a status change", async () => {
+    const asAdmin = createHubCaller(db, admin);
+    const { publicId } = await asAdmin.forms.create({ title: "x" });
+    const detail = await asAdmin.forms.get({ formPublicId: publicId });
+    const { updatedAt } = await asAdmin.forms.setStatus({
+      formPublicId: publicId,
+      status: "open",
+      expectedUpdatedAt: detail.updatedAt.toISOString(),
+    });
+    expect(updatedAt).toBeInstanceOf(Date);
+    expect(updatedAt?.getTime()).toBeGreaterThan(detail.updatedAt.getTime());
+  });
 });

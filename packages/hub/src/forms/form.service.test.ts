@@ -402,7 +402,7 @@ describe("opening and closing", () => {
     const { publicId } = await createForm(db, admin, { title: "x" }, now);
     await expect(
       setFormStatus(db, admin, { formPublicId: publicId, status: "open" }, now),
-    ).resolves.toEqual({ phase: { phase: "open" } });
+    ).resolves.toEqual({ phase: { phase: "open" }, updatedAt: null });
     await expect(
       setFormStatus(
         db,
@@ -410,12 +410,77 @@ describe("opening and closing", () => {
         { formPublicId: publicId, status: "closed" },
         now,
       ),
-    ).resolves.toEqual({ phase: { phase: "closed", reason: "manual" } });
+    ).resolves.toEqual({
+      phase: { phase: "closed", reason: "manual" },
+      updatedAt: null,
+    });
     const entries = await listAudit(db, { limit: 2, offset: 0 });
     expect(entries.map((e) => e.action)).toEqual([
       "form.closed",
       "form.opened",
     ]);
+  });
+
+  it("keeps the builder's copy current across its own status change", async () => {
+    const publicId = await openForm();
+    const opened = await getFormDetail(db, admin, publicId, now);
+    const copy = {
+      formPublicId: publicId,
+      title: opened.title,
+      access: opened.access,
+      definition: opened.definition,
+      settings: opened.settings,
+      closesAt: null,
+      maxResponses: null,
+    };
+
+    // 停止收集 with changes not yet saved: the copy moves on and still saves.
+    const closed = await setFormStatus(
+      db,
+      admin,
+      {
+        formPublicId: publicId,
+        status: "closed",
+        expectedUpdatedAt: opened.updatedAt.toISOString(),
+      },
+      later(1000),
+    );
+    expect(closed.updatedAt).toEqual(later(1000));
+    await expect(
+      saveForm(
+        db,
+        admin,
+        {
+          ...copy,
+          title: "改过",
+          expectedUpdatedAt: later(1000).toISOString(),
+        },
+        later(2000),
+      ),
+    ).resolves.toEqual({ updatedAt: later(2000) });
+    const saved = await getFormDetail(db, admin, publicId, later(2000));
+    expect(saved).toMatchObject({ title: "改过", status: "closed" });
+
+    // A copy that was already stale is not carried, and its save is refused.
+    const reopened = await setFormStatus(
+      db,
+      admin,
+      {
+        formPublicId: publicId,
+        status: "open",
+        expectedUpdatedAt: later(1000).toISOString(),
+      },
+      later(3000),
+    );
+    expect(reopened.updatedAt).toBeNull();
+    await expect(
+      saveForm(
+        db,
+        admin,
+        { ...copy, expectedUpdatedAt: later(1000).toISOString() },
+        later(4000),
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("refuses to open a form without questions, past its deadline, or full", async () => {
@@ -487,12 +552,18 @@ describe("opening and closing", () => {
 
   it("does nothing, and logs nothing, when the status does not change", async () => {
     const { publicId } = await createForm(db, admin, { title: "x" }, now);
-    await setFormStatus(
-      db,
-      admin,
-      { formPublicId: publicId, status: "draft" },
-      now,
-    );
+    await expect(
+      setFormStatus(
+        db,
+        admin,
+        {
+          formPublicId: publicId,
+          status: "draft",
+          expectedUpdatedAt: now.toISOString(),
+        },
+        later(1000),
+      ),
+    ).resolves.toMatchObject({ updatedAt: now });
     const [entry] = await listAudit(db, { limit: 1, offset: 0 });
     expect(entry?.action).toBe("form.created");
   });

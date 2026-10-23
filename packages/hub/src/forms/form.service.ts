@@ -377,6 +377,12 @@ function checkStatusChange(
 const statusSchema = z.object({
   formPublicId: idSchema,
   status: z.enum(formStatuses),
+  /** The `updatedAt` of the builder's copy, when the change is made from it. */
+  expectedUpdatedAt: z
+    .string()
+    .datetime()
+    .transform((value) => new Date(value))
+    .optional(),
 });
 
 const STATUS_WORDS: Record<FormStatus, string> = {
@@ -385,45 +391,62 @@ const STATUS_WORDS: Record<FormStatus, string> = {
   closed: "停止收集",
 };
 
-/** Opens a form for answers, closes it, or (before any answer) takes it back to draft. */
+/**
+ * Opens a form for answers, closes it, or (before any answer) takes it back to draft.
+ *
+ * The status is not part of what the builder saves, so a copy that was
+ * current right before the change is still current after it: given that
+ * copy's `expectedUpdatedAt`, `updatedAt` is the time to save it against.
+ * A copy that was already stale, or none, gets null, and its save is still
+ * refused.
+ */
 export async function setFormStatus(
   db: Db,
   actor: AdminActor,
   rawInput: z.input<typeof statusSchema>,
   now: Date = new Date(),
-): Promise<{ phase: FormPhase }> {
+): Promise<{ phase: FormPhase; updatedAt: Date | null }> {
   const input = parse(statusSchema, rawInput);
   const { row } = await loadManaged(db, actor, input.formPublicId);
   const responseCount = await countResponses(db, row.id);
   const status = input.status;
   checkStatusChange(row, status, responseCount, now);
 
-  if (status !== row.status) {
-    await withAudit(
-      db,
-      async (tx) => {
-        // An answer or a save arriving now holds the same lock: check again
-        // against the form and its answers as they are under it.
-        const locked = await lockForm(tx, row.id);
-        if (!locked) throw new HubError("NOT_FOUND", "找不到这份表单");
-        checkStatusChange(
-          locked,
-          status,
-          await countResponses(tx, row.id),
-          now,
+  const carried = (before: FormRow, after: Date) =>
+    before.updatedAt.getTime() === input.expectedUpdatedAt?.getTime()
+      ? after
+      : null;
+  const updatedAt =
+    status === row.status
+      ? carried(row, row.updatedAt)
+      : await withAudit(
+          db,
+          async (tx) => {
+            // An answer or a save arriving now holds the same lock: check again
+            // against the form and its answers as they are under it.
+            const locked = await lockForm(tx, row.id);
+            if (!locked) throw new HubError("NOT_FOUND", "找不到这份表单");
+            checkStatusChange(
+              locked,
+              status,
+              await countResponses(tx, row.id),
+              now,
+            );
+            await updateForm(tx, row.id, { status }, now);
+            return carried(locked, now);
+          },
+          () => ({
+            actor,
+            action: status === "open" ? "form.opened" : "form.closed",
+            entityType: "form",
+            entityId: row.publicId,
+            summary: `把表单「${row.title}」${STATUS_WORDS[status]}`,
+          }),
         );
-        await updateForm(tx, row.id, { status }, now);
-      },
-      () => ({
-        actor,
-        action: status === "open" ? "form.opened" : "form.closed",
-        entityType: "form",
-        entityId: row.publicId,
-        summary: `把表单「${row.title}」${STATUS_WORDS[status]}`,
-      }),
-    );
-  }
-  return { phase: formPhase({ ...row, status }, responseCount, now) };
+  return {
+    phase: formPhase({ ...row, status }, responseCount, now),
+    updatedAt,
+  };
 }
 
 /**

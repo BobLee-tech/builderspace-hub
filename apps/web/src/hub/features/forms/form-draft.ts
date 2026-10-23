@@ -45,6 +45,21 @@ export function sameDraft(a: FormDraft, b: FormDraft): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * The `updatedAt` a draft saves against after a status change made from
+ * the page. The draft does not hold the status, so if it was current when
+ * the change was sent (`sent`) and the server says so (`changed`), it moves
+ * to the form's new time. A draft saved again meanwhile, or found stale,
+ * keeps its own.
+ */
+export function baseAfterStatusChange(
+  current: string,
+  sent: string,
+  changed: Date | null,
+): string {
+  return changed && current === sent ? changed.toISOString() : current;
+}
+
 export function newOption(label = ""): ChoiceOption {
   return { id: newFieldId(), label, image: null };
 }

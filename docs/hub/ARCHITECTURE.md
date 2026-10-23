@@ -156,7 +156,7 @@ Kan 的看板只有两种可见性：`public`（不登录拿到链接也能看�
 
 `packages/hub/src/forms/` 负责 `/forms`：可复用的表单，收集回答，后台看数据。
 
-- **表**：`hub_form`（标题、状态、谁能填、截止时间、名额；题目 `definition` 和设置 `settings` 是 JSON）、`hub_form_manager`（除所有者外谁能管理这份表单）、`hub_form_response`（一份回答，`answers` 是 JSON）、`hub_form_image`（图片，字节存库里）、`hub_form_like`（结果墙上的赞）。题目和设置整体读写，所以放 JSON 而不是一题一行；每次写入都经 `form.model.ts` 的 zod 校验，保存时带上打开时的 `updatedAt`，别人改过就拒绝。
+- **表**：`hub_form`（标题、状态、谁能填、截止时间、名额；题目 `definition` 和设置 `settings` 是 JSON）、`hub_form_manager`（除所有者外谁能管理这份表单）、`hub_form_response`（一份回答，`answers` 是 JSON）、`hub_form_image`（图片，字节存库里）、`hub_form_like`（结果墙上的赞）。题目和设置整体读写，所以放 JSON 而不是一题一行；每次写入都经 `form.model.ts` 的 zod 校验，保存时带上打开时的 `updatedAt`，别人改过就拒绝。状态不在保存的内容里，所以在页面上开始/停止收集、改回草稿时也带上这个时间：改之前它还是最新的，服务端就回新的时间让页面接着用，没保存的改动照样能保存，不会被当成「被别人改过」。
 - **规则分三处**：`form.model.ts` 是纯函数（题型、上限、题目检查 `checkDefinition`、答案检查 `checkAnswers`、表单此刻收不收 `formPhase`），从 `@kan/hub/public` 导出，**浏览器里的编辑器和填写页跑的是同一套检查**；`form.policy.ts` 是谁能做什么；`image.policy.ts` 按字节认图片。
 - **谁能做什么**：新建是所有者和管理员（`forms.manage`）；改题目、看回答、导出是所有者和这份表单的管理者（创建者自动是）；把表单交给别人、删除表单是所有者和管理它的管理员。管理员不能看别人表单的回答（里面可能有电话）。看不到的表单和不存在的一样回 `NOT_FOUND`。
 - **只给管理者看**（`settings.managersOnly`）：打开后，所有者也不再自动能管理这份表单，只有名单上的人能看到它、它的回答、统计、导出和答案图片（`isHiddenForm` + `canManageForm`，列表的 SQL 同样过滤）。为了不让表单变成谁都看不到：不在名单上的人不能打开这个开关；名单只剩一人时不能再移除；名单上的账号都被删掉后，自动回到所有者可见。填写和结果墙照常按各自的设置走，操作日志里仍记表单标题。早于这个开关存的表单没有这个字段，一律按关闭处理。

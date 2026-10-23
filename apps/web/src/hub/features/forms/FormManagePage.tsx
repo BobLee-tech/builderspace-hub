@@ -23,7 +23,7 @@ import {
 } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 import { formatDateTime } from "./form-display";
-import { draftOf, sameDraft } from "./form-draft";
+import { baseAfterStatusChange, draftOf, sameDraft } from "./form-draft";
 import { CopyLinkButton, PhasePill } from "./form-ui";
 import { FormBuilder } from "./FormBuilder";
 import { FormSettingsPanel } from "./FormSettingsPanel";
@@ -142,7 +142,23 @@ export function FormManagePage() {
 
   const save = api.hub.forms.save.useMutation();
   const setStatus = api.hub.forms.setStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (result, sent) => {
+      // Before the fresh copy arrives: a draft with changes keeps its time,
+      // so it must already be the one this change left the form at.
+      setEditing((previous) =>
+        previous &&
+        previous.formId === sent.formPublicId &&
+        sent.expectedUpdatedAt
+          ? {
+              ...previous,
+              baseUpdatedAt: baseAfterStatusChange(
+                previous.baseUpdatedAt,
+                sent.expectedUpdatedAt,
+                result.updatedAt,
+              ),
+            }
+          : previous,
+      );
       void utils.hub.forms.get.invalidate({ formPublicId: formId ?? "" });
       void utils.hub.forms.list.invalidate();
     },
@@ -287,7 +303,11 @@ export function FormManagePage() {
                   dirty={dirty}
                   isPending={setStatus.isPending}
                   onChange={(status) =>
-                    setStatus.mutate({ formPublicId: formId, status })
+                    setStatus.mutate({
+                      formPublicId: formId,
+                      status,
+                      expectedUpdatedAt: current.baseUpdatedAt,
+                    })
                   }
                 />
                 {detail.status !== "draft" && (
