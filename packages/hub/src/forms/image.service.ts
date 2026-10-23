@@ -25,6 +25,7 @@ import {
   findResponseById,
   imageUsage,
   insertImage,
+  lockForm,
   readImageBody,
 } from "./form.repo";
 import { imageSizeProblem, sniffImage } from "./image.policy";
@@ -100,30 +101,38 @@ export async function uploadFormImage(
     );
   }
 
-  const usage = await imageUsage(db, form.id, new Date(now.getTime() - DAY_MS));
-  if (usage.bytes + input.bytes.length > FORM_IMAGE_BUDGET_BYTES) {
-    throw new HubError(
-      "CONFLICT",
-      "这份表单的图片空间已经满了，请联系表单的管理者",
+  // Uploads to one form take turns on its row, so two arriving together
+  // cannot both fit under the limits by reading the same usage.
+  const created = await db.transaction(async (tx) => {
+    await lockForm(tx, form.id);
+    const usage = await imageUsage(
+      tx,
+      form.id,
+      new Date(now.getTime() - DAY_MS),
     );
-  }
-  if (input.purpose === "answer" && usage.pending >= PENDING_PER_DAY) {
-    throw new HubError("CONFLICT", "现在上传的人太多了，请稍后再试");
-  }
-
-  const created = await insertImage(db, {
-    publicId: generateUID(),
-    formId: form.id,
-    responseId: null,
-    fieldId,
-    kind: input.purpose,
-    uploadedBy: viewer.userId,
-    contentType: image.contentType,
-    size: input.bytes.length,
-    width: image.width,
-    height: image.height,
-    body: Buffer.from(input.bytes),
-    now,
+    if (usage.bytes + input.bytes.length > FORM_IMAGE_BUDGET_BYTES) {
+      throw new HubError(
+        "CONFLICT",
+        "这份表单的图片空间已经满了，请联系表单的管理者",
+      );
+    }
+    if (input.purpose === "answer" && usage.pending >= PENDING_PER_DAY) {
+      throw new HubError("CONFLICT", "现在上传的人太多了，请稍后再试");
+    }
+    return insertImage(tx, {
+      publicId: generateUID(),
+      formId: form.id,
+      responseId: null,
+      fieldId,
+      kind: input.purpose,
+      uploadedBy: viewer.userId,
+      contentType: image.contentType,
+      size: input.bytes.length,
+      width: image.width,
+      height: image.height,
+      body: Buffer.from(input.bytes),
+      now,
+    });
   });
   return {
     publicId: created.publicId,

@@ -38,6 +38,7 @@ import {
   listImagesOfKind,
   listManagedForms,
   listManagers,
+  lockForm,
   removeManager,
   searchManagerCandidates,
   updateForm,
@@ -266,20 +267,6 @@ export async function saveForm(
     throw new HubError("INVALID_INPUT", "已发布的表单至少要有一道题");
   }
 
-  const responseCount = await countResponses(db, row.id);
-  if (responseCount > 0) {
-    const before = new Map(row.definition.fields.map((f) => [f.id, f.type]));
-    for (const field of definition.fields) {
-      const type = before.get(field.id);
-      if (type && type !== field.type) {
-        throw new HubError(
-          "INVALID_INPUT",
-          "已经有人回答了，题目的类型不能再改。可以删掉这道题再加一道新的",
-        );
-      }
-    }
-  }
-
   // Every picture the form points at must be one of this form's own.
   const wanted = referencedImages(definition);
   const found = await listImagesOf(db, row.id, wanted);
@@ -293,6 +280,12 @@ export async function saveForm(
   await withAudit(
     db,
     async (tx) => {
+      // Answers take the same lock, so a first answer cannot arrive between
+      // this check and the write.
+      await lockForm(tx, row.id);
+      if ((await countResponses(tx, row.id)) > 0) {
+        keepQuestionTypes(row.definition, definition);
+      }
       const written = await updateForm(
         tx,
         row.id,
@@ -331,6 +324,26 @@ export async function saveForm(
   return { updatedAt: now };
 }
 
+/** Once a form has answers, a question keeps its type (its answers are of it). */
+function keepQuestionTypes(
+  before: FormDefinition,
+  after: FormDefinition,
+): void {
+  const types = new Map(before.fields.map((f) => [f.id, f.type]));
+  for (const field of after.fields) {
+    const type = types.get(field.id);
+    if (type && type !== field.type) {
+      throw new HubError(
+        "INVALID_INPUT",
+        "已经有人回答了，题目的类型不能再改。可以删掉这道题再加一道新的",
+      );
+    }
+  }
+}
+
+const answeredDraftError = () =>
+  new HubError("CONFLICT", "已经有人回答了，不能改回草稿，可以停止收集");
+
 const statusSchema = z.object({
   formPublicId: idSchema,
   status: z.enum(formStatuses),
@@ -353,12 +366,7 @@ export async function setFormStatus(
   const { row } = await loadManaged(db, actor, input.formPublicId);
   const responseCount = await countResponses(db, row.id);
 
-  if (input.status === "draft" && responseCount > 0) {
-    throw new HubError(
-      "CONFLICT",
-      "已经有人回答了，不能改回草稿，可以停止收集",
-    );
-  }
+  if (input.status === "draft" && responseCount > 0) throw answeredDraftError();
   if (input.status === "open") {
     if (!row.definition.fields.some(isQuestion)) {
       throw new HubError("INVALID_INPUT", "表单还没有题目，加一道题再发布");
@@ -381,7 +389,14 @@ export async function setFormStatus(
   if (status !== row.status) {
     await withAudit(
       db,
-      (tx) => updateForm(tx, row.id, { status }, now),
+      async (tx) => {
+        // A first answer arriving now holds the same lock: check again under it.
+        await lockForm(tx, row.id);
+        if (status === "draft" && (await countResponses(tx, row.id)) > 0) {
+          throw answeredDraftError();
+        }
+        await updateForm(tx, row.id, { status }, now);
+      },
       () => ({
         actor,
         action: status === "open" ? "form.opened" : "form.closed",
