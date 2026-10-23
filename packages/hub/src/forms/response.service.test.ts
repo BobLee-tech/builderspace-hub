@@ -312,6 +312,24 @@ describe("submitResponse", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("still finds an answer sent before signing in, by this browser's token", async () => {
+    const publicId = await makeForm({ settings: { allowEdit: true } });
+    const first = await send(anonymous, publicId, { name01: "A" });
+    const secrets = { editToken: first.editToken };
+    const view = await openForm(db, viewerOf(mia), publicId, secrets, now);
+    expect(view.mine?.publicId).toBe(first.responsePublicId);
+    await expect(
+      submitResponse(
+        db,
+        viewerOf(mia),
+        publicId,
+        { answers: { name01: "M" }, submissionKey: key() },
+        secrets,
+        now,
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
   it("takes one answer per browser on a public form, known by its token", async () => {
     const publicId = await makeForm();
     const first = await send(anonymous, publicId, { name01: "A" });

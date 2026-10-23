@@ -6,7 +6,12 @@ import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
 import type { FormAccess, FormStatus } from "../schema";
 import type { FormDefinition, FormPhase, FormSettings } from "./form.model";
-import type { CandidateRow, FormListRow, ManagerRow } from "./form.repo";
+import type {
+  CandidateRow,
+  FormListRow,
+  FormRow,
+  ManagerRow,
+} from "./form.repo";
 import { withAudit } from "../audit";
 import { listMemberships } from "../kan/accounts.gateway";
 import { listProjects } from "../kan/projects.gateway";
@@ -341,8 +346,33 @@ function keepQuestionTypes(
   }
 }
 
-const answeredDraftError = () =>
-  new HubError("CONFLICT", "已经有人回答了，不能改回草稿，可以停止收集");
+/** Back to draft only before any answer; open only with a question, a future deadline and room left. */
+function checkStatusChange(
+  form: FormRow,
+  status: FormStatus,
+  responseCount: number,
+  now: Date,
+): void {
+  if (status === "draft" && responseCount > 0) {
+    throw new HubError(
+      "CONFLICT",
+      "已经有人回答了，不能改回草稿，可以停止收集",
+    );
+  }
+  if (status !== "open") return;
+  if (!form.definition.fields.some(isQuestion)) {
+    throw new HubError("INVALID_INPUT", "表单还没有题目，加一道题再发布");
+  }
+  if (form.closesAt && form.closesAt.getTime() <= now.getTime()) {
+    throw new HubError("INVALID_INPUT", "截止时间已经过了，先改截止时间再发布");
+  }
+  if (form.maxResponses !== null && responseCount >= form.maxResponses) {
+    throw new HubError(
+      "INVALID_INPUT",
+      `已经收满 ${form.maxResponses} 份，先调高名额上限再发布`,
+    );
+  }
+}
 
 const statusSchema = z.object({
   formPublicId: idSchema,
@@ -365,36 +395,23 @@ export async function setFormStatus(
   const input = parse(statusSchema, rawInput);
   const { row } = await loadManaged(db, actor, input.formPublicId);
   const responseCount = await countResponses(db, row.id);
-
-  if (input.status === "draft" && responseCount > 0) throw answeredDraftError();
-  if (input.status === "open") {
-    if (!row.definition.fields.some(isQuestion)) {
-      throw new HubError("INVALID_INPUT", "表单还没有题目，加一道题再发布");
-    }
-    if (row.closesAt && row.closesAt.getTime() <= now.getTime()) {
-      throw new HubError(
-        "INVALID_INPUT",
-        "截止时间已经过了，先改截止时间再发布",
-      );
-    }
-    if (row.maxResponses !== null && responseCount >= row.maxResponses) {
-      throw new HubError(
-        "INVALID_INPUT",
-        `已经收满 ${row.maxResponses} 份，先调高名额上限再发布`,
-      );
-    }
-  }
-
   const status = input.status;
+  checkStatusChange(row, status, responseCount, now);
+
   if (status !== row.status) {
     await withAudit(
       db,
       async (tx) => {
-        // A first answer arriving now holds the same lock: check again under it.
-        await lockForm(tx, row.id);
-        if (status === "draft" && (await countResponses(tx, row.id)) > 0) {
-          throw answeredDraftError();
-        }
+        // An answer or a save arriving now holds the same lock: check again
+        // against the form and its answers as they are under it.
+        const locked = await lockForm(tx, row.id);
+        if (!locked) throw new HubError("NOT_FOUND", "找不到这份表单");
+        checkStatusChange(
+          locked,
+          status,
+          await countResponses(tx, row.id),
+          now,
+        );
         await updateForm(tx, row.id, { status }, now);
       },
       () => ({

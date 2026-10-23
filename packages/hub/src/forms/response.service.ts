@@ -141,17 +141,21 @@ async function contextFor(
   };
 }
 
-function findMine(
+async function findMine(
   db: DbOrTx,
   formId: number,
   viewer: FormViewer,
   secrets: BrowserSecrets,
 ): Promise<ResponseRow | null> {
-  if (viewer.userId) return findLatestByUser(db, formId, viewer.userId);
+  if (viewer.userId) {
+    const byAccount = await findLatestByUser(db, formId, viewer.userId);
+    if (byAccount) return byAccount;
+  }
+  // Also for someone who answered before signing in, in this browser.
   if (isGrantTokenShape(secrets.editToken)) {
     return findByTokenHash(db, formId, hashGrantToken(secrets.editToken));
   }
-  return Promise.resolve(null);
+  return null;
 }
 
 const blockedMessage = (decision: FillDecision) =>
