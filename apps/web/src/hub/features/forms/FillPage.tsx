@@ -71,7 +71,7 @@ export function FillPage() {
 
   const refresh = useCallback(async () => {
     if (!formId) return null;
-    const next = await formApi<View>(formId, formId);
+    const next = await formApi<View>(formId, []);
     setView(next);
     return next;
   }, [formId]);
@@ -195,20 +195,16 @@ export function FillPage() {
     setSending(true);
     try {
       if (editing) {
-        await formApi(formId, `${formId}/responses/mine`, {
+        await formApi(formId, ["responses", "mine"], {
           method: "PUT",
           json: { answers: values },
         });
       } else {
         submissionKey.current ??= crypto.randomUUID();
-        const result = await formApi<SubmitResult>(
-          formId,
-          `${formId}/responses`,
-          {
-            method: "POST",
-            json: { answers: values, submissionKey: submissionKey.current },
-          },
-        );
+        const result = await formApi<SubmitResult>(formId, ["responses"], {
+          method: "POST",
+          json: { answers: values, submissionKey: submissionKey.current },
+        });
         rememberEditToken(formId, result.editToken);
         submissionKey.current = null;
         clearDraft(formId);

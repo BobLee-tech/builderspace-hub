@@ -115,25 +115,42 @@ async function errorOf(response: Response): Promise<FormApiError> {
   );
 }
 
+/** Every part of these URLs: a public id (`generateUID`) or a fixed word. */
+const URL_PART = /^[a-z0-9]{1,32}$/;
+
 /**
- * Calls `/api/hub/forms/<path>` with this browser's secrets for the form.
- * Throws FormApiError with the server's message (and field errors).
+ * `/api/hub/forms/<formId>/<rest…>`. The form id comes from the address
+ * bar, so a crafted link could otherwise point the request at another Hub
+ * endpoint (`../`); anything that is not a plain id is treated as no form.
+ */
+function formUrl(formId: string, rest: readonly string[]): string {
+  const parts = [formId, ...rest];
+  if (!parts.every((part) => URL_PART.test(part))) {
+    throw new FormApiError(404, copy.forms.fill.notFound);
+  }
+  return `/api/hub/forms/${parts.join("/")}`;
+}
+
+/**
+ * Calls `/api/hub/forms/<formId>/<rest…>` with this browser's secrets for
+ * the form. Throws FormApiError with the server's message (and field errors).
  */
 export async function formApi<T>(
   formId: string,
-  path: string,
+  rest: readonly string[],
   init: {
     method?: string;
     json?: unknown;
     query?: Record<string, string>;
   } = {},
 ): Promise<T> {
+  const url = formUrl(formId, rest);
   const query = init.query
     ? `?${new URLSearchParams(init.query).toString()}`
     : "";
   let response: Response;
   try {
-    response = await fetch(`/api/hub/forms/${path}${query}`, {
+    response = await fetch(`${url}${query}`, {
       method: init.method ?? "GET",
       credentials: "same-origin",
       headers: {
@@ -171,11 +188,9 @@ export function uploadFormImage(input: {
   const query = new URLSearchParams({ purpose: input.purpose });
   if (input.fieldId) query.set("field", input.fieldId);
   return new Promise((resolve, reject) => {
+    const url = formUrl(input.formId, ["images"]);
     const request = new XMLHttpRequest();
-    request.open(
-      "POST",
-      `/api/hub/forms/${encodeURIComponent(input.formId)}/images?${query.toString()}`,
-    );
+    request.open("POST", `${url}?${query.toString()}`);
     request.withCredentials = true;
     request.setRequestHeader("Content-Type", input.blob.type || "image/jpeg");
     for (const [name, value] of Object.entries(secretHeaders(input.formId))) {

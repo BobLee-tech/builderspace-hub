@@ -54,7 +54,7 @@ export function WallPage() {
       const id = (requestId.current += 1);
       setLoading(true);
       try {
-        const data = await formApi<WallData>(formId, `${formId}/wall`, {
+        const data = await formApi<WallData>(formId, ["wall"], {
           query: { page: String(nextPage), sort: nextSort },
         });
         if (id !== requestId.current) return;
@@ -96,7 +96,7 @@ export function WallPage() {
     try {
       const result = await formApi<{ liked: boolean; likes: number }>(
         formId,
-        `${formId}/responses/${entry.publicId}/like`,
+        ["responses", entry.publicId, "like"],
         { method: "PUT", json: { like: want } },
       );
       patch(result.liked, result.likes);
