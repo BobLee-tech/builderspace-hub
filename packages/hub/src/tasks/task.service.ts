@@ -195,6 +195,7 @@ export async function getTaskBoard(
     await listBoardsWithLists(
       db,
       inScope.map((project) => project.id),
+      input.userId,
     )
   ).flatMap((board) => {
     const project = chips.get(board.projectId);
@@ -254,6 +255,7 @@ async function loadScope(
   const rows = await listTaskRows(
     db,
     inScope.map((project) => project.id),
+    input.userId,
   );
   const chips = new Map(inScope.map((p) => [p.id, toChip(p)]));
 

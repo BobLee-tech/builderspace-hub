@@ -50,6 +50,7 @@ import { EditYouTubeModal } from "~/components/YouTubeEmbed/EditYouTubeModal";
 import { useDragToScroll } from "~/hooks/useDragToScroll";
 import { usePermissions } from "~/hooks/usePermissions";
 import { useScrollRestore } from "~/hooks/useScrollRestore";
+import { BoardVisibilityButton as VisibilityButton } from "~/hub/features/boards/BoardVisibilityButton"; // hub-seam: adds 仅自己可见
 import { useKeyboardShortcut } from "~/providers/keyboard-shortcuts";
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
@@ -77,7 +78,6 @@ import { NewListForm } from "./components/NewListForm";
 import { NewTemplateForm } from "./components/NewTemplateForm";
 import { UpdateBoardSlugForm } from "./components/UpdateBoardSlugForm";
 import ViewToggle from "./components/ViewToggle";
-import VisibilityButton from "./components/VisibilityButton";
 import { createBoardCollisionDetection } from "./dnd/collision";
 
 type PublicListId = string;

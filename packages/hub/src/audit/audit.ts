@@ -19,6 +19,7 @@ export type AuditAction =
   | "grant.mail_unconfirmed"
   | "project.created"
   | "board.created"
+  | "board.privacy_changed"
   | "account.created"
   | "account.renamed"
   | "account.password_reset"

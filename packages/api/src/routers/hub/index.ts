@@ -40,6 +40,7 @@ import {
   getPermissionMatrix,
   setProjectRolePermission,
 } from "@kan/hub/permissions";
+import { getBoardPrivacy, setBoardOnlyMe } from "@kan/hub/private-boards";
 import { can } from "@kan/hub/public";
 import {
   blockInputs,
@@ -399,6 +400,25 @@ const scheduleRouter = createTRPCRouter({
     ),
 });
 
+const boardInput = z.object({ boardPublicId: z.string().min(1).max(32) });
+
+const boardsRouter = createTRPCRouter({
+  /** Whether a board is 仅自己可见, and whether I may change that. */
+  privacy: hubProcedure
+    .input(boardInput)
+    .query(({ ctx, input }) =>
+      runHub(() =>
+        getBoardPrivacy(ctx.db, ctx.actor.userId, input.boardPublicId),
+      ),
+    ),
+
+  setOnlyMe: hubProcedure
+    .input(boardInput.extend({ onlyMe: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => setBoardOnlyMe(ctx.db, ctx.actor, input)),
+    ),
+});
+
 const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "颜色要写成 #RRGGBB 的形式");
@@ -446,6 +466,7 @@ export const hubRouter = createTRPCRouter({
   github: githubRouter,
   site: siteRouter,
   archive: archiveRouter,
+  boards: boardsRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

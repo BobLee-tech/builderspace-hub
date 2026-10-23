@@ -26,6 +26,7 @@ import { createAvatarUrlResolver } from "../utils/avatarUrls";
 import { assertCanDelete, assertCanEdit, assertPermission } from "../utils/permissions";
 // hub-seam: templates are for project admins (docs/hub/UPSTREAM_SEAMS.md)
 import { assertCanCreateTemplate } from "./hub/guards";
+import { visibleBoardsOnly } from "./hub/private-boards"; // hub-seam
 
 export const boardRouter = createTRPCRouter({
   all: protectedProcedure
@@ -79,7 +80,7 @@ export const boardRouter = createTRPCRouter({
         }
       );
 
-      return result;
+      return visibleBoardsOnly(ctx.db, userId, await result); // hub-seam: hide others' 仅自己可见 boards
     }),
   byId: protectedProcedure
     .meta({

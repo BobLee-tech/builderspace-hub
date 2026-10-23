@@ -14,6 +14,7 @@ import {
 } from "@kan/db/schema";
 
 import type { Db } from "../db";
+import { boardVisibleTo } from "./private-boards.gateway";
 
 export interface ViewableProject {
   id: number;
@@ -99,8 +100,9 @@ export interface TaskRow {
 }
 
 /**
- * Every live card on the ordinary boards of the given projects. Templates,
- * archived boards and anything soft-deleted are left out.
+ * Every live card on the ordinary boards of the given projects that the viewer
+ * may see. Templates, archived boards, other people's 仅自己可见 boards and
+ * anything soft-deleted are left out.
  *
  * Loads everything in three queries and lets the caller filter in memory.
  * That is plenty for a team's worth of cards; if it ever is not, push the
@@ -109,6 +111,7 @@ export interface TaskRow {
 export async function listTaskRows(
   db: Db,
   projectIds: readonly number[],
+  viewerId: string,
 ): Promise<TaskRow[]> {
   if (projectIds.length === 0) return [];
 
@@ -136,6 +139,7 @@ export async function listTaskRows(
         isNull(boards.deletedAt),
         isNull(lists.deletedAt),
         isNull(cards.deletedAt),
+        boardVisibleTo(db, viewerId),
       ),
     );
   if (rows.length === 0) return [];
@@ -200,13 +204,14 @@ export interface BoardWithLists {
 }
 
 /**
- * The ordinary boards of the given projects with their lists, including empty
- * ones: the task board needs them to move a card into a column that has no
- * cards yet, and to offer a place for a new task.
+ * The ordinary boards of the given projects that the viewer may see, with
+ * their lists, including empty ones: the task board needs them to move a card
+ * into a column that has no cards yet, and to offer a place for a new task.
  */
 export async function listBoardsWithLists(
   db: Db,
   projectIds: readonly number[],
+  viewerId: string,
 ): Promise<BoardWithLists[]> {
   if (projectIds.length === 0) return [];
 
@@ -227,6 +232,7 @@ export async function listBoardsWithLists(
         eq(boards.type, "regular"),
         eq(boards.isArchived, false),
         isNull(boards.deletedAt),
+        boardVisibleTo(db, viewerId),
       ),
     )
     .orderBy(asc(boards.id), asc(lists.index));
