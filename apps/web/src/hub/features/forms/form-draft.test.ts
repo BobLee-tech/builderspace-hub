@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fieldTypes } from "@kan/hub/public";
 
 import {
+  baseAfterStatusChange,
   draftOf,
   duplicateField,
   move,
@@ -81,5 +82,22 @@ describe("draftOf and sameDraft", () => {
     expect(sameDraft(draft, draftOf(detail))).toBe(true);
     expect(sameDraft(draft, { ...draft, title: "u" })).toBe(false);
     expect(draftOf({ ...detail, closesAt: null }).closesAt).toBeNull();
+  });
+});
+
+describe("baseAfterStatusChange", () => {
+  const sent = "2026-10-23T10:00:00.000Z";
+  const changed = new Date("2026-10-23T10:05:00Z");
+
+  it("moves a draft that was current to the form's new time", () => {
+    expect(baseAfterStatusChange(sent, sent, changed)).toBe(
+      "2026-10-23T10:05:00.000Z",
+    );
+  });
+
+  it("keeps a draft the server found stale, or one saved again meanwhile", () => {
+    expect(baseAfterStatusChange(sent, sent, null)).toBe(sent);
+    const resaved = "2026-10-23T10:03:00.000Z";
+    expect(baseAfterStatusChange(resaved, sent, changed)).toBe(resaved);
   });
 });
