@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+
+import { users } from "@kan/db/schema";
 
 import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
@@ -24,8 +27,13 @@ import {
   saveForm,
   setFormStatus,
 } from "./form.service";
-import { uploadFormImage } from "./image.service";
-import { submitResponse } from "./response.service";
+import { readFormImage, uploadFormImage } from "./image.service";
+import {
+  exportResponses,
+  listFormResponses,
+  submitResponse,
+  summarizeResponses,
+} from "./response.service";
 
 let db: Db;
 let owner: AdminActor;
@@ -756,5 +764,172 @@ describe("listForms", () => {
     expect(stillOpen.has(forMembers)).toBe(true);
     expect(stillOpen.has(full)).toBe(false);
     expect(stillOpen.has(ending)).toBe(false);
+  });
+});
+
+describe("a form only its managers see", () => {
+  let owner2: AdminActor;
+
+  beforeEach(async () => {
+    const o2 = await seedUser(db, { name: "Owen" });
+    await seedHubAccount(db, o2.id, { role: "owner" });
+    owner2 = actorOf(o2, "owner");
+  });
+
+  /** An owner's form, handed to a member friend, then set to 只给管理者看. */
+  async function privateForm() {
+    const { publicId } = await createForm(db, owner, { title: "私密" }, now);
+    await save(owner, publicId, {
+      access: "public",
+      definition: {
+        fields: [
+          ...QUESTIONS.fields,
+          { id: "shot01", type: "image", title: "截图" },
+        ],
+      },
+    });
+    await setFormStatus(
+      db,
+      owner,
+      { formPublicId: publicId, status: "open" },
+      now,
+    );
+    await addFormManager(db, owner, {
+      formPublicId: publicId,
+      userId: member.userId,
+    });
+    await save(owner, publicId, { settings: { managersOnly: true } });
+    return publicId;
+  }
+
+  it("shows it, its answers and their pictures to the managers only, other owners included", async () => {
+    const publicId = await privateForm();
+    const picture = await uploadFormImage(
+      db,
+      viewerOf(admin2),
+      {
+        formPublicId: publicId,
+        purpose: "answer",
+        fieldId: "shot01",
+        bytes: PNG_1X1,
+      },
+      now,
+    );
+    await submitResponse(
+      db,
+      viewerOf(admin2),
+      publicId,
+      {
+        answers: { name01: "Ada", shot01: [picture.publicId] },
+        submissionKey: crypto.randomUUID(),
+      },
+      {},
+      now,
+    );
+
+    // The two managers see everything.
+    for (const actor of [owner, member]) {
+      await expect(
+        getFormDetail(db, actor, publicId, now),
+      ).resolves.toMatchObject({
+        settings: { managersOnly: true },
+        isManager: true,
+      });
+      expect(
+        (await listFormResponses(db, actor, { formPublicId: publicId })).total,
+      ).toBe(1);
+      expect(
+        (await listForms(db, actor, now)).managed.map((f) => f.publicId),
+      ).toContain(publicId);
+      await expect(
+        readFormImage(db, viewerOf(actor), picture.publicId),
+      ).resolves.toBeDefined();
+    }
+    const listed = (await listForms(db, owner, now)).managed.find(
+      (f) => f.publicId === publicId,
+    );
+    expect(listed?.managersOnly).toBe(true);
+
+    // Another owner and an admin see nothing of it.
+    for (const actor of [owner2, admin]) {
+      await expect(getFormDetail(db, actor, publicId)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      await expect(
+        listFormResponses(db, actor, { formPublicId: publicId }),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        summarizeResponses(db, actor, publicId),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(exportResponses(db, actor, publicId)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      await expect(deleteForm(db, actor, publicId)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      await expect(duplicateForm(db, actor, publicId)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      await expect(
+        readFormImage(db, viewerOf(actor), picture.publicId),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(
+        (await listForms(db, actor, now)).managed.map((f) => f.publicId),
+      ).not.toContain(publicId);
+    }
+  });
+
+  it("lets only an owner or admin who manages it hand it on; the member friend cannot", async () => {
+    const publicId = await privateForm();
+    await expect(
+      addFormManager(db, member, {
+        formPublicId: publicId,
+        userId: admin.userId,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await addFormManager(db, owner, {
+      formPublicId: publicId,
+      userId: admin.userId,
+    });
+    await expect(getFormDetail(db, admin, publicId)).resolves.toMatchObject({
+      canShare: true,
+    });
+  });
+
+  it("never ends up with nobody able to see it", async () => {
+    const publicId = await privateForm();
+    await removeFormManager(db, owner, {
+      formPublicId: publicId,
+      userId: member.userId,
+    });
+    await expect(
+      removeFormManager(db, owner, {
+        formPublicId: publicId,
+        userId: owner.userId,
+      }),
+    ).rejects.toMatchObject({
+      message: "这份表单只给管理者看，至少要留一位管理者",
+    });
+
+    // Someone who does not manage a form cannot hide it from themselves.
+    const other = await createForm(db, admin, { title: "x" }, now);
+    await expect(
+      save(owner, other.publicId, { settings: { managersOnly: true } }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+
+    // If every manager's account is deleted, the owners get it back.
+    await db.delete(users).where(eq(users.id, owner.userId));
+    await expect(getFormDetail(db, owner2, publicId)).resolves.toMatchObject({
+      isManager: false,
+      canShare: true,
+    });
+  });
+
+  it("is visible to the owners again once the switch is turned off", async () => {
+    const publicId = await privateForm();
+    await save(owner, publicId, { settings: { managersOnly: false } });
+    await expect(getFormDetail(db, owner2, publicId)).resolves.toMatchObject({
+      isManager: false,
+    });
   });
 });

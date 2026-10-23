@@ -150,24 +150,31 @@ export async function deleteForm(db: DbOrTx, id: number): Promise<void> {
 
 export type FormListRow = FormRow & { responseCount: number };
 
-/** Every form (for an owner), or the ones this person manages. Newest first. */
+/**
+ * Every form an owner may see (all but the hidden ones they do not manage,
+ * see `isHiddenForm`), or the ones this person manages. Newest first.
+ */
 export async function listManagedForms(
   db: DbOrTx,
   input: { userId: string; all: boolean },
 ): Promise<FormListRow[]> {
-  const query = db
+  const managedByThem = sql`EXISTS (
+    SELECT 1 FROM ${hubFormManagers}
+    WHERE ${qualified(hubFormManagers, hubFormManagers.formId)} = ${formIdOuter}
+      AND ${qualified(hubFormManagers, hubFormManagers.userId)} = ${input.userId}
+  )`;
+  const hidden = sql`(
+    coalesce((${qualified(hubForms, hubForms.settings)} ->> 'managersOnly')::boolean, false)
+    AND EXISTS (
+      SELECT 1 FROM ${hubFormManagers}
+      WHERE ${qualified(hubFormManagers, hubFormManagers.formId)} = ${formIdOuter}
+    )
+  )`;
+  const rows = await db
     .select({ form: hubForms, responseCount })
     .from(hubForms)
+    .where(input.all ? or(managedByThem, sql`NOT ${hidden}`) : managedByThem)
     .orderBy(desc(hubForms.updatedAt), desc(hubForms.id));
-  const rows = input.all
-    ? await query
-    : await query.where(
-        sql`EXISTS (
-          SELECT 1 FROM ${hubFormManagers}
-          WHERE ${qualified(hubFormManagers, hubFormManagers.formId)} = ${formIdOuter}
-            AND ${qualified(hubFormManagers, hubFormManagers.userId)} = ${input.userId}
-        )`,
-      );
   return rows.map((row) => ({ ...row.form, responseCount: row.responseCount }));
 }
 
@@ -243,6 +250,17 @@ export async function isManager(
     )
     .limit(1);
   return row !== undefined;
+}
+
+export async function countManagers(
+  db: DbOrTx,
+  formId: number,
+): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(hubFormManagers)
+    .where(eq(hubFormManagers.formId, formId));
+  return row?.n ?? 0;
 }
 
 export async function addManager(

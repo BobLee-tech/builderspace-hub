@@ -40,6 +40,7 @@ export function FormSettingsPanel({
   projects,
   managers,
   canShare,
+  isManager,
 }: {
   formId: string;
   draft: FormDraft;
@@ -47,6 +48,8 @@ export function FormSettingsPanel({
   projects: { publicId: string; name: string }[];
   managers: { userId: string; name: string; email: string }[];
   canShare: boolean;
+  /** The person looking is one of the managers (needed to hide the form). */
+  isManager: boolean;
 }) {
   const { settings } = draft;
   const set = (patch: Partial<FormDraft["settings"]>) =>
@@ -274,7 +277,16 @@ export function FormSettingsPanel({
         />
       </Card>
 
-      <ManagersCard formId={formId} managers={managers} canShare={canShare} />
+      <ManagersCard
+        formId={formId}
+        managers={managers}
+        canShare={canShare}
+        managersOnly={settings.managersOnly === true}
+        // Turning it on is refused for someone not on the list: it would
+        // hide the form from them. Turning it off is always possible.
+        canHide={isManager}
+        onManagersOnlyChange={(managersOnly) => set({ managersOnly })}
+      />
     </div>
   );
 }
@@ -283,10 +295,16 @@ function ManagersCard({
   formId,
   managers,
   canShare,
+  managersOnly,
+  canHide,
+  onManagersOnlyChange,
 }: {
   formId: string;
   managers: { userId: string; name: string; email: string }[];
   canShare: boolean;
+  managersOnly: boolean;
+  canHide: boolean;
+  onManagersOnlyChange: (managersOnly: boolean) => void;
 }) {
   const utils = api.useUtils();
   const [searchInput, setSearchInput] = useState("");
@@ -317,6 +335,23 @@ function ManagersCard({
 
   return (
     <Card title={text.managers} hint={text.managersHint}>
+      <div className="mb-3 rounded-lg border border-light-300 p-3 dark:border-dark-300">
+        <label className={optionRow}>
+          <input
+            type="checkbox"
+            className={`${checkClass} mt-0.5`}
+            checked={managersOnly}
+            disabled={!managersOnly && !canHide}
+            onChange={(event) => onManagersOnlyChange(event.target.checked)}
+          />
+          {text.managersOnly}
+        </label>
+        <p className={`${hintClass} ml-6 mt-1`}>
+          {!managersOnly && !canHide
+            ? text.managersOnlyNeedsYou
+            : text.managersOnlyHint}
+        </p>
+      </div>
       <ul className="divide-y divide-light-200 dark:divide-dark-200">
         {managers.map((manager) => (
           <li
