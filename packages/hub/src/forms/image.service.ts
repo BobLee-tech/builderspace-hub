@@ -7,7 +7,12 @@ import type { BrowserSecrets } from "./response.service";
 import { HubError } from "../shared/errors";
 import { hashGrantToken, isGrantTokenShape } from "../shared/token";
 import { viewerManages } from "./form.guard";
-import { closedReasonText, formPhase, isQuestion } from "./form.model";
+import {
+  closedReasonText,
+  formPhase,
+  isQuestion,
+  referencedImages,
+} from "./form.model";
 import { canFill, canSeeWall } from "./form.policy";
 import {
   countResponses,
@@ -144,7 +149,8 @@ const NOT_FOUND = "找不到这张图片";
  * One picture, for someone allowed to see it. Pictures someone may not see
  * and ones that do not exist get the same answer.
  *
- * - The form's own pictures: whoever may open the published form.
+ * - The form's own pictures: whoever may open the published form, while
+ *   the form still uses them (a removed one is kept a day for undo).
  * - An answer picture: the form's managers; the person who sent it (by
  *   account, or by the browser's edit token); and, when its question is
  *   shown on the results wall, whoever may see the wall.
@@ -165,7 +171,11 @@ export async function readFormImage(
     if (form.status === "draft") return false;
     const mayFill = canFill(form, viewer).allowed;
 
-    if (meta.kind === "asset") return mayFill;
+    if (meta.kind === "asset") {
+      return (
+        mayFill && referencedImages(form.definition).includes(meta.publicId)
+      );
+    }
 
     if (meta.responseId === null) {
       return viewer.userId !== null && meta.uploadedBy === viewer.userId;

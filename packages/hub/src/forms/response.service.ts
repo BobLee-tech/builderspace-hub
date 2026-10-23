@@ -308,6 +308,36 @@ async function checkAnswerImages(
 }
 
 /**
+ * A repeated attempt, answered like the first time. The first token may
+ * never have reached the browser, so an anonymous answer gets a new one.
+ */
+async function replayed(
+  db: DbOrTx,
+  earlier: ResponseRow,
+  viewer: FormViewer,
+): Promise<SubmitResult> {
+  if (earlier.userId !== viewer.userId) {
+    throw new HubError("CONFLICT", "这次提交的编号已经被用过了，请刷新页面");
+  }
+  const editToken = viewer.userId ? null : generateGrantToken();
+  if (editToken) {
+    await setEditTokenHash(db, earlier.id, hashGrantToken(editToken));
+  }
+  return { responsePublicId: earlier.publicId, editToken };
+}
+
+/** An upload that another answer, sent at the same moment, took first. */
+function imageTakenError(
+  wanted: ImageMeta[],
+  attached: number[],
+): AnswerProblemsError {
+  const taken = wanted.find((image) => !attached.includes(image.id));
+  return new AnswerProblemsError({
+    [taken?.fieldId ?? ""]: "有图片已经失效了，请删掉后重新上传",
+  });
+}
+
+/**
  * Answers are checked against the form as it was read, before its row is
  * locked. If a manager saved it in between, the check no longer holds.
  */
@@ -344,22 +374,24 @@ export async function submitResponse(
   const input = parse(submitSchema, rawInput);
   const context = await contextFor(db, viewer, publicId, secrets, now);
   const { form, decision } = context;
+
+  // A retry of an attempt that already went through gets the first answer
+  // back, even if the form has changed since: nothing is checked again.
+  const earlier = await findBySubmissionKey(db, form.id, input.submissionKey);
+  if (earlier) return replayed(db, earlier, viewer);
+
   if (!decision.allowed)
     throw new HubError("FORBIDDEN", blockedMessage(decision));
   if (form.status === "draft") throw closedError(context.phase);
 
   const checked = checkAnswers(form.definition, input.answers);
   if (!checked.ok) throw new AnswerProblemsError(checked.errors);
-  // A retry of an attempt that already went through: its pictures are now
-  // part of that answer, so check them against it and let the replay below
-  // answer as the first time did.
-  const earlier = await findBySubmissionKey(db, form.id, input.submissionKey);
   const toAttach = await checkAnswerImages(
     db,
     form,
     checked.answers,
     viewer,
-    earlier?.userId === viewer.userId ? earlier : null,
+    null,
   );
   const respondentName = viewer.userId
     ? await findUserName(db, viewer.userId)
@@ -419,11 +451,14 @@ export async function submitResponse(
         editTokenHash,
         now,
       });
-      await attachImages(
+      const attached = await attachImages(
         tx,
         toAttach.map((image) => image.id),
         response.id,
       );
+      if (attached.length < toAttach.length) {
+        throw imageTakenError(toAttach, attached);
+      }
       return response;
     });
 
@@ -482,11 +517,14 @@ export async function updateMyResponse(
     if (phase.phase !== "open") throw closedError(phase);
 
     await updateResponseAnswers(tx, mine.id, checked.answers, now);
-    await attachImages(
+    const attached = await attachImages(
       tx,
       toAttach.map((image) => image.id),
       mine.id,
     );
+    if (attached.length < toAttach.length) {
+      throw imageTakenError(toAttach, attached);
+    }
     const dropped = (await listResponseImages(tx, mine.id)).filter(
       (image) => !kept.has(image.publicId),
     );

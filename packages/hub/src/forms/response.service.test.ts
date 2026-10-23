@@ -283,6 +283,35 @@ describe("submitResponse", () => {
     ).resolves.toBeDefined();
   });
 
+  it("answers a repeated attempt like the first even after the form changed", async () => {
+    const publicId = await makeForm();
+    const attempt = key();
+    const first = await send(anonymous, publicId, { name01: "A" }, attempt);
+    // Members only now: a new anonymous answer would be refused.
+    const detail = await getFormDetail(db, admin, publicId, now);
+    await saveForm(
+      db,
+      admin,
+      {
+        formPublicId: publicId,
+        title: detail.title,
+        access: "members",
+        definition: detail.definition,
+        settings: detail.settings,
+        closesAt: null,
+        maxResponses: null,
+        expectedUpdatedAt: detail.updatedAt.toISOString(),
+      },
+      now,
+    );
+    const again = await send(anonymous, publicId, { name01: "A" }, attempt);
+    expect(again.responsePublicId).toBe(first.responsePublicId);
+    expect(again.editToken).not.toBeNull();
+    await expect(
+      send(anonymous, publicId, { name01: "B" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("takes one answer per browser on a public form, known by its token", async () => {
     const publicId = await makeForm();
     const first = await send(anonymous, publicId, { name01: "A" });

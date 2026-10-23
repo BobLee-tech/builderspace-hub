@@ -690,16 +690,24 @@ export async function listResponseImages(
     .where(eq(hubFormImages.responseId, responseId));
 }
 
+/**
+ * Makes uploads part of an answer. Only ones still unattached: another
+ * answer sent at the same moment may have taken one. Returns the ids attached.
+ */
 export async function attachImages(
   db: DbOrTx,
   ids: number[],
   responseId: number,
-): Promise<void> {
-  if (ids.length === 0) return;
-  await db
+): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
     .update(hubFormImages)
     .set({ responseId })
-    .where(inArray(hubFormImages.id, ids));
+    .where(
+      and(inArray(hubFormImages.id, ids), isNull(hubFormImages.responseId)),
+    )
+    .returning({ id: hubFormImages.id });
+  return rows.map((row) => row.id);
 }
 
 export async function deleteImages(db: DbOrTx, ids: number[]): Promise<void> {

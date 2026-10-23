@@ -200,6 +200,32 @@ describe("reading", () => {
     expect(file.body.length).toBe(PNG_1X1.length);
   });
 
+  it("stops showing a picture once the form no longer uses it, except to managers", async () => {
+    const { publicId, cover } = await makeForm("public");
+    const detail = await getFormDetail(db, admin, publicId, now);
+    await saveForm(
+      db,
+      admin,
+      {
+        formPublicId: publicId,
+        title: detail.title,
+        access: "public",
+        definition: { ...detail.definition, coverImage: null },
+        settings: detail.settings,
+        closesAt: null,
+        maxResponses: null,
+        expectedUpdatedAt: detail.updatedAt.toISOString(),
+      },
+      now,
+    );
+    await expect(readFormImage(db, anonymous, cover)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(
+      readFormImage(db, adminViewer(), cover),
+    ).resolves.toBeDefined();
+  });
+
   it("shows a members' form's pictures to signed-in people only, uncached", async () => {
     const { cover } = await makeForm("members");
     await expect(readFormImage(db, anonymous, cover)).rejects.toMatchObject({
