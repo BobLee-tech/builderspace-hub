@@ -24,21 +24,20 @@ import {
   referencedImages,
   settingsSchema,
 } from "./form.model";
-import { canCreateForm, canFill, reconcileSettings } from "./form.policy";
+import { canCreateForm, reconcileSettings } from "./form.policy";
 import {
   addManager,
   copyImages,
   countResponses,
   deleteForm as deleteFormRow,
   deleteImages,
-  findLatestByUser,
   findUserName,
   insertForm,
+  listFormsToFill,
   listImagesOf,
   listImagesOfKind,
   listManagedForms,
   listManagers,
-  listMemberForms,
   removeManager,
   searchManagerCandidates,
   updateForm,
@@ -533,35 +532,27 @@ export async function listForms(
   now: Date = new Date(),
 ): Promise<FormList> {
   if (!actor.userId) throw new HubError("FORBIDDEN", "请先登录");
-  const [managed, open, memberships] = await Promise.all([
-    listManagedForms(db, {
-      userId: actor.userId,
-      all: actor.role === "owner",
-    }),
-    listMemberForms(db),
-    listMemberships(db, [actor.userId]),
-  ]);
-  const viewer = {
-    userId: actor.userId,
-    role: actor.role,
-    projectIds: (memberships.get(actor.userId) ?? []).map(
-      (item) => item.projectPublicId,
+  const userId = actor.userId;
+  const [managed, open] = await Promise.all([
+    listManagedForms(db, { userId, all: actor.role === "owner" }),
+    listMemberships(db, [userId]).then((memberships) =>
+      listFormsToFill(db, {
+        userId,
+        projectIds: (memberships.get(userId) ?? []).map(
+          (item) => item.projectPublicId,
+        ),
+        now,
+      }),
     ),
-  };
-
-  const toFill = [];
-  for (const row of open) {
-    const summary = summaryOf(row, now);
-    if (summary.phase.phase !== "open") continue;
-    if (!canFill(row, viewer).allowed) continue;
-    const mine = await findLatestByUser(db, row.id, actor.userId);
-    toFill.push({ ...summary, answered: mine !== null });
-  }
+  ]);
 
   return {
     canCreate: canCreateForm(actor.role),
     managed: managed.map((row) => summaryOf(row, now)),
-    toFill,
+    toFill: open.map((row) => ({
+      ...summaryOf(row, now),
+      answered: row.answered,
+    })),
   };
 }
 

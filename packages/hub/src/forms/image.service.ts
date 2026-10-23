@@ -131,9 +131,9 @@ export interface ImageFile {
   contentType: string;
   body: Buffer;
   /**
-   * A picture the managers put in a published form: the same bytes for
-   * everyone who may open the form, so the browser may keep it a while.
-   * Answer pictures are never cached: who may see them can change.
+   * A picture the managers put in a public form: the same bytes for
+   * everyone, so the browser may keep a copy, though it still asks each
+   * time (the form can stop being public). Answer pictures are never kept.
    */
   cacheable: boolean;
 }

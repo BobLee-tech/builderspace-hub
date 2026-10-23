@@ -129,11 +129,11 @@ const handle: Handler = async (req, res) => {
       res.setHeader("Content-Disposition", "inline");
       // Even if a browser were tricked into reading it as a page, it could do nothing.
       res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+      // Never served from a cache without asking again: a manager can take
+      // the form off the open web or remove the picture at any time.
       res.setHeader(
         "Cache-Control",
-        file.cacheable
-          ? "public, max-age=86400, immutable"
-          : "private, no-store",
+        file.cacheable ? "private, no-cache" : "private, no-store",
       );
       res.status(response.status).end(file.body);
       return;

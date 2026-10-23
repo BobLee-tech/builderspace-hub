@@ -339,12 +339,16 @@ export async function submitResponse(
 
   const checked = checkAnswers(form.definition, input.answers);
   if (!checked.ok) throw new AnswerProblemsError(checked.errors);
+  // A retry of an attempt that already went through: its pictures are now
+  // part of that answer, so check them against it and let the replay below
+  // answer as the first time did.
+  const earlier = await findBySubmissionKey(db, form.id, input.submissionKey);
   const toAttach = await checkAnswerImages(
     db,
     form,
     checked.answers,
     viewer,
-    null,
+    earlier?.userId === viewer.userId ? earlier : null,
   );
   const respondentName = viewer.userId
     ? await findUserName(db, viewer.userId)

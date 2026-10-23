@@ -713,6 +713,7 @@ describe("listForms", () => {
       forMember.toFill.map((f) => [f.publicId, f.answered]),
     );
     expect(toFill.get(forMembers)).toBe(true);
+    expect(toFill.get(forProject)).toBe(false);
     expect(toFill.has(isPublic)).toBe(false);
     expect(toFill.has(notMine)).toBe(false);
     expect(toFill.has(draft.publicId)).toBe(false);
@@ -720,7 +721,35 @@ describe("listForms", () => {
     const forAdmin = await listForms(db, admin, now);
     expect(forAdmin.canCreate).toBe(true);
     expect(forAdmin.managed).toHaveLength(5);
+    const counts = new Map(
+      forAdmin.managed.map((f) => [f.publicId, f.responseCount]),
+    );
+    expect(counts.get(forMembers)).toBe(1);
+    expect(counts.get(forProject)).toBe(0);
     expect((await listForms(db, admin2, now)).managed).toEqual([]);
     expect((await listForms(db, owner, now)).managed).toHaveLength(5);
+
+    // Full and past-deadline forms are left out by the query itself.
+    const full = await openForm();
+    await save(admin, full, { access: "members", maxResponses: 1 });
+    await submitResponse(
+      db,
+      viewerOf(admin),
+      full,
+      { answers: { name01: "Ada" }, submissionKey: key() },
+      now,
+    );
+    const ending = await openForm();
+    await save(admin, ending, {
+      access: "members",
+      closesAt: new Date(now.getTime() + 60_000).toISOString(),
+    });
+    const later = new Date(now.getTime() + 120_000);
+    const stillOpen = new Set(
+      (await listForms(db, member, later)).toFill.map((f) => f.publicId),
+    );
+    expect(stillOpen.has(forMembers)).toBe(true);
+    expect(stillOpen.has(full)).toBe(false);
+    expect(stillOpen.has(ending)).toBe(false);
   });
 });

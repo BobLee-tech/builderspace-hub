@@ -380,6 +380,25 @@ describe("answer pictures", () => {
     ).rejects.toBeInstanceOf(AnswerProblemsError);
   });
 
+  it("answers a repeated attempt with pictures like the first", async () => {
+    const publicId = await makeForm();
+    const shot = await upload(anonymous, publicId);
+    const attempt = key();
+    const answers = { name01: "A", shot01: [shot.publicId] };
+    const first = await send(anonymous, publicId, answers, attempt);
+    // The first reply was lost: the pictures are now part of that answer.
+    const again = await send(anonymous, publicId, answers, attempt);
+    expect(again.responsePublicId).toBe(first.responsePublicId);
+    const view = await openForm(
+      db,
+      anonymous,
+      publicId,
+      { editToken: again.editToken },
+      now,
+    );
+    expect(view.mine?.publicId).toBe(first.responsePublicId);
+  });
+
   it("lets the sender, the managers and wall viewers see them, and nobody else", async () => {
     const publicId = await makeForm({ settings: { wall: "after_submit" } });
     const image = await upload(anonymous, publicId);

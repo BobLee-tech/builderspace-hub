@@ -1,8 +1,10 @@
+import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 import {
   and,
   asc,
   desc,
   eq,
+  gt,
   ilike,
   inArray,
   isNull,
@@ -33,9 +35,19 @@ export type ResponseRow = typeof hubFormResponses.$inferSelect;
 
 /* ── forms ───────────────────────────────────────────────────────────── */
 
+/**
+ * A column with its table name, for subqueries that look at the outer row.
+ * A select from one table leaves table names out, and inside a subquery a
+ * bare "id" would then mean the inner table's own id.
+ */
+const qualified = (table: AnyPgTable, column: AnyPgColumn) =>
+  sql`${table}.${sql.identifier(column.name)}`;
+
+const formIdOuter = qualified(hubForms, hubForms.id);
+
 const responseCount = sql<number>`(
   SELECT count(*)::int FROM ${hubFormResponses}
-  WHERE ${hubFormResponses.formId} = ${hubForms.id}
+  WHERE ${qualified(hubFormResponses, hubFormResponses.formId)} = ${formIdOuter}
 )`;
 
 export type NewForm = Omit<FormRow, "id" | "createdAt" | "updatedAt">;
@@ -152,27 +164,65 @@ export async function listManagedForms(
     : await query.where(
         sql`EXISTS (
           SELECT 1 FROM ${hubFormManagers}
-          WHERE ${hubFormManagers.formId} = ${hubForms.id}
-            AND ${hubFormManagers.userId} = ${input.userId}
+          WHERE ${qualified(hubFormManagers, hubFormManagers.formId)} = ${formIdOuter}
+            AND ${qualified(hubFormManagers, hubFormManagers.userId)} = ${input.userId}
         )`,
       );
   return rows.map((row) => ({ ...row.form, responseCount: row.responseCount }));
 }
 
-/** Forms open to signed-in people, for the 待填写 list. Filtered further by the service. */
-export async function listMemberForms(db: DbOrTx): Promise<FormListRow[]> {
+/**
+ * Forms one signed-in person may answer now, for the 待填写 list: open, before
+ * the deadline, not full, and for all members or one of their projects, with
+ * whether they have answered. Filtered here, before the cap, so other
+ * people's forms cannot crowd theirs out.
+ */
+export async function listFormsToFill(
+  db: DbOrTx,
+  input: { userId: string; projectIds: string[]; now: Date },
+): Promise<(FormListRow & { answered: boolean })[]> {
+  const inTheirProjects =
+    input.projectIds.length === 0
+      ? undefined
+      : and(
+          eq(hubForms.access, "projects"),
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(${qualified(hubForms, hubForms.settings)} -> 'projectIds') AS project(id)
+            WHERE project.id IN (${sql.join(
+              input.projectIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})
+          )`,
+        );
   const rows = await db
-    .select({ form: hubForms, responseCount })
+    .select({
+      form: hubForms,
+      responseCount,
+      answered: sql<boolean>`EXISTS (
+        SELECT 1 FROM ${hubFormResponses}
+        WHERE ${qualified(hubFormResponses, hubFormResponses.formId)} = ${formIdOuter}
+          AND ${qualified(hubFormResponses, hubFormResponses.userId)} = ${input.userId}
+      )`,
+    })
     .from(hubForms)
     .where(
       and(
         eq(hubForms.status, "open"),
-        inArray(hubForms.access, ["members", "projects"]),
+        or(isNull(hubForms.closesAt), gt(hubForms.closesAt, input.now)),
+        or(
+          isNull(hubForms.maxResponses),
+          sql`${responseCount} < ${hubForms.maxResponses}`,
+        ),
+        or(eq(hubForms.access, "members"), inTheirProjects),
       ),
     )
     .orderBy(desc(hubForms.updatedAt))
     .limit(100);
-  return rows.map((row) => ({ ...row.form, responseCount: row.responseCount }));
+  return rows.map((row) => ({
+    ...row.form,
+    responseCount: row.responseCount,
+    answered: row.answered,
+  }));
 }
 
 /* ── managers ────────────────────────────────────────────────────────── */
@@ -452,7 +502,7 @@ export interface ListedResponse {
 
 const likeCount = sql<number>`(
   SELECT count(*)::int FROM ${hubFormLikes}
-  WHERE ${hubFormLikes.responseId} = ${hubFormResponses.id}
+  WHERE ${qualified(hubFormLikes, hubFormLikes.responseId)} = ${qualified(hubFormResponses, hubFormResponses.id)}
 )`;
 
 const listedColumns = {
