@@ -14,26 +14,43 @@ export function canCreateForm(role: HubRole | null): boolean {
 }
 
 /**
+ * A form set to 只给管理者看 is hidden from owners who do not manage it.
+ * Only while someone manages it: a form whose last manager's account was
+ * deleted falls back to the owners rather than to nobody.
+ */
+export function isHiddenForm(input: {
+  managersOnly: boolean;
+  managerCount: number;
+}): boolean {
+  return input.managersOnly && input.managerCount > 0;
+}
+
+/**
  * Changing a form and reading its answers: owners, and the people it was
  * handed to (its creator is one). An admin does not see every form's
- * answers, which may hold phone numbers and the like.
+ * answers, which may hold phone numbers and the like. A hidden form is for
+ * the people it was handed to only.
  */
 export function canManageForm(input: {
   role: HubRole | null;
   isManager: boolean;
+  hidden: boolean;
 }): boolean {
-  return input.role === "owner" || input.isManager;
+  return input.isManager || (input.role === "owner" && !input.hidden);
 }
 
 /**
  * Handing a form to more people, and deleting it: owners, and admins who
- * manage it. A member it was handed to cannot pass it on or delete it.
+ * manage it. A member it was handed to cannot pass it on or delete it. On a
+ * hidden form an owner must manage it too.
  */
 export function canShareForm(input: {
   role: HubRole | null;
   isManager: boolean;
+  hidden: boolean;
 }): boolean {
-  return input.role === "owner" || (input.role === "admin" && input.isManager);
+  if (input.role === "owner") return input.isManager || !input.hidden;
+  return input.role === "admin" && input.isManager;
 }
 
 /** Someone opening a form: signed in or not, and which projects they are in. */

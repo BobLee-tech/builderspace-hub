@@ -48,6 +48,16 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: text.groups.content,
+    items: [
+      {
+        href: "/admin/forms",
+        label: copy.forms.title,
+        access: { permission: "admin.view" },
+      },
+    ],
+  },
+  {
     label: text.groups.people,
     items: [
       {

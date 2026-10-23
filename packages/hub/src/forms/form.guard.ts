@@ -7,8 +7,8 @@ import type { FormRow } from "./form.repo";
 import { getAccessFacts } from "../accounts/account.service";
 import { listMemberships } from "../kan/accounts.gateway";
 import { HubError } from "../shared/errors";
-import { canManageForm, canShareForm } from "./form.policy";
-import { findForm, isManager } from "./form.repo";
+import { canManageForm, canShareForm, isHiddenForm } from "./form.policy";
+import { countManagers, findForm, isManager } from "./form.repo";
 
 export function parse<T, I>(
   schema: z.ZodType<T, z.ZodTypeDef, I>,
@@ -34,6 +34,15 @@ export interface FormAccessFacts {
   canShare: boolean;
 }
 
+/** Whether the form is hidden from owners who do not manage it. */
+async function hiddenForm(db: DbOrTx, form: FormRow): Promise<boolean> {
+  if (!form.settings.managersOnly) return false;
+  return isHiddenForm({
+    managersOnly: true,
+    managerCount: await countManagers(db, form.id),
+  });
+}
+
 /**
  * Loads a form for someone who must be able to manage it. A form that does
  * not exist and one they do not manage get the same answer, so the
@@ -48,14 +57,17 @@ export async function loadManaged(
   const row = await findForm(db, publicId);
   if (!row) throw new HubError("NOT_FOUND", NOT_FOUND);
   const listed = await isManager(db, row.id, actor.userId);
-  if (!canManageForm({ role: actor.role, isManager: listed })) {
-    throw new HubError("NOT_FOUND", NOT_FOUND);
-  }
+  const facts = {
+    role: actor.role,
+    isManager: listed,
+    hidden: await hiddenForm(db, row),
+  };
+  if (!canManageForm(facts)) throw new HubError("NOT_FOUND", NOT_FOUND);
   return {
     row,
     userId: actor.userId,
     isManager: listed,
-    canShare: canShareForm({ role: actor.role, isManager: listed }),
+    canShare: canShareForm(facts),
   };
 }
 
@@ -68,16 +80,17 @@ export function requireShare(access: FormAccessFacts): void {
   }
 }
 
-/** Whether this viewer manages the form (owners manage every form). */
+/** Whether this viewer manages the form (owners manage every form that is not hidden). */
 export async function viewerManages(
   db: DbOrTx,
   viewer: FormViewer,
-  formId: number,
+  form: FormRow,
 ): Promise<boolean> {
   if (!viewer.userId) return false;
   return canManageForm({
     role: viewer.role,
-    isManager: await isManager(db, formId, viewer.userId),
+    isManager: await isManager(db, form.id, viewer.userId),
+    hidden: await hiddenForm(db, form),
   });
 }
 

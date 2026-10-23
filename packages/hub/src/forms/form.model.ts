@@ -189,6 +189,11 @@ export const settingsSchema = z.object({
     .default([]),
   /** Shown after sending. Empty means the default thank-you line. */
   confirmation: block(FORM_LIMITS.confirmation).default(""),
+  /**
+   * Only the people the form was handed to may see it and its answers:
+   * other owners and admins do not (see `isHiddenForm`).
+   */
+  managersOnly: z.boolean().default(false),
 });
 
 export type FormField = z.output<typeof fieldSchema>;

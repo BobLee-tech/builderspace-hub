@@ -121,7 +121,7 @@ async function contextFor(
 ): Promise<ViewerContext> {
   const form = await findForm(db, publicId);
   if (!form) throw new HubError("NOT_FOUND", NOT_FOUND);
-  const isManager = await viewerManages(db, viewer, form.id);
+  const isManager = await viewerManages(db, viewer, form);
   if (form.status === "draft" && !isManager) {
     throw new HubError("NOT_FOUND", NOT_FOUND);
   }
