@@ -115,8 +115,8 @@ async function errorOf(response: Response): Promise<FormApiError> {
   );
 }
 
-/** Every part of these URLs: a public id (`generateUID`) or a fixed word. */
-const URL_PART = /^[a-z0-9]{1,32}$/;
+/** Parts after `/api/hub/forms/`: public ids (`generateUID`) and fixed words. */
+const FORM_API_PATH = /^[a-z0-9]{1,32}(\/[a-z0-9]{1,32}){0,3}$/;
 
 /**
  * `/api/hub/forms/<formId>/<rest…>`. The form id comes from the address
@@ -124,11 +124,11 @@ const URL_PART = /^[a-z0-9]{1,32}$/;
  * endpoint (`../`); anything that is not a plain id is treated as no form.
  */
 function formUrl(formId: string, rest: readonly string[]): string {
-  const parts = [formId, ...rest];
-  if (!parts.every((part) => URL_PART.test(part))) {
+  const path = [formId, ...rest].join("/");
+  if (!FORM_API_PATH.test(path)) {
     throw new FormApiError(404, copy.forms.fill.notFound);
   }
-  return `/api/hub/forms/${parts.join("/")}`;
+  return `/api/hub/forms/${path}`;
 }
 
 /**

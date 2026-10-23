@@ -92,6 +92,7 @@ async function route(
         viewer,
         form,
         { answers: body.answers, submissionKey: body.submissionKey as string },
+        secrets,
         now,
       );
       return json(result, 201);

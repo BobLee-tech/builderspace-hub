@@ -139,7 +139,7 @@ const send = (
   answers: Record<string, unknown>,
   submissionKey = key(),
   at = now,
-) => submitResponse(db, viewer, publicId, { answers, submissionKey }, at);
+) => submitResponse(db, viewer, publicId, { answers, submissionKey }, {}, at);
 
 describe("openForm", () => {
   it("hides drafts from everyone but managers", async () => {
@@ -280,6 +280,29 @@ describe("submitResponse", () => {
     await send(viewerOf(mia), many, { name01: "1" });
     await expect(
       send(viewerOf(mia), many, { name01: "2" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("takes one answer per browser on a public form, known by its token", async () => {
+    const publicId = await makeForm();
+    const first = await send(anonymous, publicId, { name01: "A" });
+    // A second tab of the same browser sends the token the first one kept.
+    await expect(
+      submitResponse(
+        db,
+        anonymous,
+        publicId,
+        { answers: { name01: "B" }, submissionKey: key() },
+        { editToken: first.editToken },
+        now,
+      ),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "你已经提交过了，每人只能提交一次",
+    });
+    // Another browser has no token and may answer.
+    await expect(
+      send(anonymous, publicId, { name01: "C" }),
     ).resolves.toBeDefined();
   });
 

@@ -307,6 +307,16 @@ async function checkAnswerImages(
   return toAttach;
 }
 
+/**
+ * Answers are checked against the form as it was read, before its row is
+ * locked. If a manager saved it in between, the check no longer holds.
+ */
+const changedSince = (read: FormRow, locked: FormRow) =>
+  read.updatedAt.getTime() !== locked.updatedAt.getTime();
+
+const formChangedError = () =>
+  new HubError("CONFLICT", "表单刚刚有改动，请刷新页面后再提交");
+
 function closedError(phase: FormPhase): HubError {
   if (phase.phase === "closed") {
     return new HubError("CONFLICT", closedReasonText[phase.reason]);
@@ -328,10 +338,11 @@ export async function submitResponse(
   viewer: FormViewer,
   publicId: string,
   rawInput: z.input<typeof submitSchema>,
+  secrets: BrowserSecrets = {},
   now: Date = new Date(),
 ): Promise<SubmitResult> {
   const input = parse(submitSchema, rawInput);
-  const context = await contextFor(db, viewer, publicId, {}, now);
+  const context = await contextFor(db, viewer, publicId, secrets, now);
   const { form, decision } = context;
   if (!decision.allowed)
     throw new HubError("FORBIDDEN", blockedMessage(decision));
@@ -362,6 +373,7 @@ export async function submitResponse(
     db.transaction(async (tx) => {
       const locked = await lockForm(tx, form.id);
       if (!locked) throw new HubError("NOT_FOUND", NOT_FOUND);
+      if (changedSince(form, locked)) throw formChangedError();
 
       // The same attempt arriving again (a retry after a dropped connection):
       // answer as the first time did. The first token may never have reached
@@ -385,8 +397,9 @@ export async function submitResponse(
       const phase = formPhase(locked, await countResponses(tx, form.id), now);
       if (phase.phase !== "open") throw closedError(phase);
 
-      if (locked.settings.limitOne && viewer.userId) {
-        if (await findLatestByUser(tx, form.id, viewer.userId)) {
+      // Anonymous people are known by the token this browser kept.
+      if (locked.settings.limitOne) {
+        if (await findMine(tx, form.id, viewer, secrets)) {
           throw new HubError(
             "CONFLICT",
             locked.settings.allowEdit
@@ -463,6 +476,7 @@ export async function updateMyResponse(
   await db.transaction(async (tx) => {
     const locked = await lockForm(tx, form.id);
     if (!locked) throw new HubError("NOT_FOUND", NOT_FOUND);
+    if (changedSince(form, locked)) throw formChangedError();
     // A full form still lets people fix what they sent; a closed one does not.
     const phase = formPhase(locked, 0, now);
     if (phase.phase !== "open") throw closedError(phase);
