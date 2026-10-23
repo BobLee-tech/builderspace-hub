@@ -72,6 +72,7 @@ describe("draftOf and sameDraft", () => {
         likes: "off" as const,
         projectIds: [],
         confirmation: "",
+        managersOnly: false,
       },
       closesAt: new Date("2026-10-30T10:00:00Z"),
       maxResponses: null,

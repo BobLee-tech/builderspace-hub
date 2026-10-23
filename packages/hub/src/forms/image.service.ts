@@ -71,7 +71,7 @@ export async function uploadFormImage(
 
   const form = await findForm(db, input.formPublicId);
   if (!form) throw new HubError("NOT_FOUND", "找不到这份表单");
-  const isManager = await viewerManages(db, viewer, form.id);
+  const isManager = await viewerManages(db, viewer, form);
 
   if (input.purpose === "asset") {
     if (!isManager) throw new HubError("NOT_FOUND", "找不到这份表单");
@@ -219,7 +219,7 @@ export async function readFormImage(
   if (!form) throw new HubError("NOT_FOUND", NOT_FOUND);
 
   const allowed = async (): Promise<boolean> => {
-    if (await viewerManages(db, viewer, form.id)) return true;
+    if (await viewerManages(db, viewer, form)) return true;
     if (form.status === "draft") return false;
     const mayFill = canFill(form, viewer).allowed;
 

@@ -153,6 +153,7 @@ export const zh = {
       copyLink: "复制链接",
       copied: "已复制",
       open: "去填写",
+      managersOnly: "🔒 仅管理者",
     },
     manage: {
       tabs: {
@@ -252,7 +253,12 @@ export const zh = {
       confirmationPlaceholder: "谢谢你的回答！",
       managers: "谁能管理这份表单",
       managersHint:
-        "能管理的人可以改题目、看回答和导出。所有者能管理全部表单。",
+        "能管理的人可以改题目、看回答和导出。没有打开下面的开关时，所有者能管理全部表单。",
+      managersOnly: "只给下面这些人看",
+      managersOnlyHint:
+        "打开后，这份表单的题目、回答、统计和图片只有下面列出的人能看到，其他所有者和管理员都看不到（操作日志里仍会出现表单的标题）。填写和结果墙不受影响。改完记得点「保存」。",
+      managersOnlyNeedsYou:
+        "要打开这个开关，先把自己加进下面的名单，不然保存后你自己也看不到了。",
       addManager: "搜索名字或邮箱",
       removeManager: "移除",
       cannotShare: "只有所有者和管理这份表单的管理员能指派别人。",
@@ -714,6 +720,7 @@ export const zh = {
     loading: "加载中…",
     groups: {
       overview: "概览",
+      content: "内容",
       people: "成员与准入",
       system: "系统管理",
       site: "官网",

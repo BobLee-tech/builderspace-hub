@@ -8,6 +8,7 @@ import {
   canManageForm,
   canSeeWall,
   canShareForm,
+  isHiddenForm,
   reconcileSettings,
 } from "./form.policy";
 
@@ -20,13 +21,55 @@ describe("who manages forms", () => {
   });
 
   it("lets owners and listed managers manage, but only owners and admin managers share", () => {
-    expect(canManageForm({ role: "owner", isManager: false })).toBe(true);
-    expect(canManageForm({ role: "admin", isManager: false })).toBe(false);
-    expect(canManageForm({ role: null, isManager: true })).toBe(true);
-    expect(canShareForm({ role: "owner", isManager: false })).toBe(true);
-    expect(canShareForm({ role: "admin", isManager: true })).toBe(true);
-    expect(canShareForm({ role: "admin", isManager: false })).toBe(false);
-    expect(canShareForm({ role: null, isManager: true })).toBe(false);
+    const open = { hidden: false };
+    expect(canManageForm({ role: "owner", isManager: false, ...open })).toBe(
+      true,
+    );
+    expect(canManageForm({ role: "admin", isManager: false, ...open })).toBe(
+      false,
+    );
+    expect(canManageForm({ role: null, isManager: true, ...open })).toBe(true);
+    expect(canShareForm({ role: "owner", isManager: false, ...open })).toBe(
+      true,
+    );
+    expect(canShareForm({ role: "admin", isManager: true, ...open })).toBe(
+      true,
+    );
+    expect(canShareForm({ role: "admin", isManager: false, ...open })).toBe(
+      false,
+    );
+    expect(canShareForm({ role: null, isManager: true, ...open })).toBe(false);
+  });
+
+  it("keeps a hidden form to the people it was handed to, owners included", () => {
+    const hidden = { hidden: true };
+    expect(canManageForm({ role: "owner", isManager: false, ...hidden })).toBe(
+      false,
+    );
+    expect(canManageForm({ role: "owner", isManager: true, ...hidden })).toBe(
+      true,
+    );
+    expect(canManageForm({ role: null, isManager: true, ...hidden })).toBe(
+      true,
+    );
+    expect(canShareForm({ role: "owner", isManager: false, ...hidden })).toBe(
+      false,
+    );
+    expect(canShareForm({ role: "owner", isManager: true, ...hidden })).toBe(
+      true,
+    );
+    expect(canShareForm({ role: "admin", isManager: true, ...hidden })).toBe(
+      true,
+    );
+    expect(canShareForm({ role: null, isManager: true, ...hidden })).toBe(
+      false,
+    );
+  });
+
+  it("hides a form only while someone manages it", () => {
+    expect(isHiddenForm({ managersOnly: true, managerCount: 2 })).toBe(true);
+    expect(isHiddenForm({ managersOnly: true, managerCount: 0 })).toBe(false);
+    expect(isHiddenForm({ managersOnly: false, managerCount: 2 })).toBe(false);
   });
 });
 

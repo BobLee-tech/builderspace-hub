@@ -391,6 +391,7 @@ export function FormManagePage() {
                 projects={detail.projects}
                 managers={detail.managers}
                 canShare={detail.canShare}
+                isManager={detail.isManager}
               />
             )}
             {tab === "responses" && (

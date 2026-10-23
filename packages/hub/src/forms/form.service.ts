@@ -33,6 +33,7 @@ import { canCreateForm, reconcileSettings } from "./form.policy";
 import {
   addManager,
   copyImages,
+  countManagers,
   countResponses,
   deleteForm as deleteFormRow,
   deleteUnusedAssets,
@@ -146,6 +147,8 @@ export interface FormDetail {
   updatedAt: Date;
   createdAt: Date;
   canShare: boolean;
+  /** Whether the person asking is one of the form's managers. */
+  isManager: boolean;
   /** Every project, for the "which projects may answer" picker. */
   projects: { publicId: string; name: string }[];
   managers: ManagerRow[];
@@ -178,6 +181,7 @@ export async function getFormDetail(
     updatedAt: row.updatedAt,
     createdAt: row.createdAt,
     canShare: access.canShare,
+    isManager: access.isManager,
     projects: projects.map((project) => ({
       publicId: project.publicId,
       name: project.name,
@@ -244,6 +248,13 @@ export async function saveForm(
     input.access,
     parse(settingsSchema, input.settings),
   );
+  // Otherwise the save would hide the form from the person making it.
+  if (settings.managersOnly && !access.isManager) {
+    throw new HubError(
+      "INVALID_INPUT",
+      "要设成只给管理者看，先在「谁能管理这份表单」里把自己加进去",
+    );
+  }
 
   if (input.access === "projects") {
     if (settings.projectIds.length === 0) {
@@ -526,6 +537,8 @@ export interface FormSummary {
   maxResponses: number | null;
   closesAt: Date | null;
   updatedAt: Date;
+  /** Only the people it was handed to see it. */
+  managersOnly: boolean;
 }
 
 export interface FormList {
@@ -545,6 +558,8 @@ const summaryOf = (row: FormListRow, now: Date): FormSummary => ({
   maxResponses: row.maxResponses,
   closesAt: row.closesAt,
   updatedAt: row.updatedAt,
+  // Forms saved before the switch existed have no value: off.
+  managersOnly: row.settings.managersOnly === true,
 });
 
 export async function listForms(
@@ -636,6 +651,17 @@ export async function removeFormManager(
   await withAudit(
     db,
     async (tx) => {
+      // Under the lock, so two removals at once cannot both pass the check.
+      const locked = await lockForm(tx, access.row.id);
+      if (
+        locked?.settings.managersOnly &&
+        (await countManagers(tx, access.row.id)) <= 1
+      ) {
+        throw new HubError(
+          "CONFLICT",
+          "这份表单只给管理者看，至少要留一位管理者",
+        );
+      }
       const removed = await removeManager(tx, access.row.id, input.userId);
       if (!removed)
         throw new HubError("NOT_FOUND", "这个人本来就不能管理这份表单");
