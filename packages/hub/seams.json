@@ -70,7 +70,12 @@
     {
       "file": "packages/api/src/routers/workspace.ts",
       "marker": "hub-seam",
-      "why": "Only back-office admins may create projects (workspaces); search leaves out other people's 仅自己可见 boards and their cards."
+      "why": "Only back-office admins may create projects (workspaces); search passes a condition that leaves out other people's 仅自己可见 boards and their cards."
+    },
+    {
+      "file": "packages/db/src/repository/workspace.repo.ts",
+      "marker": "hub-seam",
+      "why": "Search takes an optional extra board condition, so hidden boards are left out before its limits apply, not after."
     },
     {
       "file": "packages/api/src/routers/board.ts",

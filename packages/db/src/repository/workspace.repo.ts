@@ -1,3 +1,4 @@
+import type { SQL } from "drizzle-orm"; // hub-seam
 import {
   and,
   asc,
@@ -429,6 +430,7 @@ export const searchBoardsAndCards = async (
   workspaceId: number,
   query: string,
   limit = 20,
+  boardFilter?: SQL, // hub-seam: leaves out others' 仅自己可见 boards before the limits apply
 ) => {
   const searchQuery = `%${query}%`;
 
@@ -454,6 +456,7 @@ export const searchBoardsAndCards = async (
           sql`similarity(${boards.name}, ${query}) > 0.2`, // Fuzzy match
         ),
         isNull(boards.deletedAt),
+        boardFilter, // hub-seam
       ),
     )
     .orderBy(
@@ -500,7 +503,7 @@ export const searchBoardsAndCards = async (
     .innerJoin(lists, eq(cards.listId, lists.id))
     .innerJoin(boards, eq(lists.boardId, boards.id))
     .innerJoin(workspaces, eq(boards.workspaceId, workspaces.id))
-    .where(cardWhereConditions)
+    .where(and(cardWhereConditions, boardFilter)) // hub-seam
     .orderBy(
       ...(ticketId
         ? [desc(cards.createdAt)]

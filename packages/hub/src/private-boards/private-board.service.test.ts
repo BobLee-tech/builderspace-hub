@@ -330,6 +330,19 @@ describe("assertRequestAllowed", () => {
     }
   });
 
+  it("refuses a request naming too many things before running any query", async () => {
+    const ids = Array.from({ length: 5_000 }, (_, i) => `c${i}`);
+    // Any query on this database would throw something other than INVALID_INPUT.
+    const noQueries = {} as Db;
+    await expect(
+      assertRequestAllowed(noQueries, {
+        viewerId: null,
+        path: "card.byId",
+        input: { cardPublicIds: ids },
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
   it("hides the board from everyone once its owner's account is deleted", async () => {
     const hidden = await seedBoard("private", creator);
     await setBoardOnlyMe(db, actor(creator), {

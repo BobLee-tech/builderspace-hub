@@ -32,7 +32,7 @@ export function callerContext(
     db,
     auth: {} as never,
     headers: new Headers(headers),
-    transport: "trpc",
+    transport: "trpc" as const,
     requestId: crypto.randomUUID(),
   };
 }

@@ -1,6 +1,7 @@
 import type { dbClient } from "@kan/db/client";
 import {
   assertRequestAllowed,
+  boardVisibleTo,
   onlyVisibleBoards,
 } from "@kan/hub/private-boards";
 
@@ -33,13 +34,10 @@ export function visibleBoardsOnly<T extends { publicId: string }>(
   return onlyVisibleBoards(db, viewerId, boards, (board) => board.publicId);
 }
 
-/** `workspace.search`: boards and cards, minus those in other people's private boards. */
-export function visibleSearchResultsOnly<
-  T extends
-    | { type: "board"; publicId: string }
-    | { type: "card"; boardPublicId: string },
->(db: dbClient, viewerId: string, results: readonly T[]): Promise<T[]> {
-  return onlyVisibleBoards(db, viewerId, results, (result) =>
-    result.type === "board" ? result.publicId : result.boardPublicId,
-  );
+/**
+ * `workspace.search`: a condition Kan's search query adds to its own, so
+ * other people's private boards and their cards never take up its limits.
+ */
+export function boardsVisibleTo(db: dbClient, viewerId: string) {
+  return boardVisibleTo(db, viewerId);
 }

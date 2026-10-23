@@ -15,7 +15,8 @@ import {
   canChangeOnlyMe,
   canSeePrivateBoard,
   collectBoardRefs,
-  hasBoardRefs,
+  countBoardRefs,
+  MAX_BOARD_REFS,
 } from "./private-board.policy";
 import { deletePrivateBoard, insertPrivateBoard } from "./private-board.repo";
 
@@ -39,13 +40,20 @@ const NOT_FOUND_ANYTHING = "没有找到，或者你看不到它。";
  *
  * Also refuses putting such a board on Kan's public link: a board hidden from
  * the project must not be readable by anyone with the URL.
+ *
+ * It reads the raw input, before the procedure validates it, so a request
+ * naming more than `MAX_BOARD_REFS` things is refused without any query.
  */
 export async function assertRequestAllowed(
   db: DbOrTx,
   request: { viewerId: string | null; path: string; input: unknown },
 ): Promise<void> {
   const refs = collectBoardRefs(request.input);
-  if (!hasBoardRefs(refs)) return;
+  const count = countBoardRefs(refs);
+  if (count > MAX_BOARD_REFS) {
+    throw new HubError("INVALID_INPUT", "一次请求里的 ID 太多了。");
+  }
+  if (count === 0) return;
 
   const owners = await ownersOfPrivateBoards(db, refs);
   if (owners.some((owner) => !canSeePrivateBoard(owner, request.viewerId))) {

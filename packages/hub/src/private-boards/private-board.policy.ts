@@ -29,18 +29,35 @@ const REF_FIELD = new RegExp(
 // without walking anything unbounded.
 const MAX_DEPTH = 4;
 
+// Every table these ids point into stores them as varchar(12), so a longer
+// string cannot name anything and is not looked up.
+const PUBLIC_ID_MAX_LENGTH = 12;
+
+/**
+ * More distinct ids than any real request carries. The guard reads the raw
+ * input, before the procedure's own validation, so without a cap anyone could
+ * make it look up thousands of ids; collecting stops just past this and the
+ * request is refused without a query.
+ */
+export const MAX_BOARD_REFS = 200;
+
 /**
  * Every board, list, card, label, checklist, checklist item, comment and
- * attachment a request's input names, wherever in the input it appears.
+ * attachment a request's input names, wherever in the input it appears, each
+ * id once. Stops collecting once there are more than `MAX_BOARD_REFS`.
  */
 export function collectBoardRefs(input: unknown): BoardRefs {
-  const refs = emptyRefs();
-  walk(input, 0, refs);
-  return refs;
+  const found = Object.fromEntries(
+    boardRefKinds.map((kind) => [kind, new Set<string>()]),
+  ) as Record<BoardRefKind, Set<string>>;
+  walk(input, 0, { found, total: 0 });
+  return Object.fromEntries(
+    boardRefKinds.map((kind) => [kind, [...found[kind]]]),
+  ) as BoardRefs;
 }
 
-export function hasBoardRefs(refs: BoardRefs): boolean {
-  return boardRefKinds.some((kind) => refs[kind].length > 0);
+export function countBoardRefs(refs: BoardRefs): number {
+  return boardRefKinds.reduce((total, kind) => total + refs[kind].length, 0);
 }
 
 /**
@@ -90,28 +107,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function emptyRefs(): BoardRefs {
-  return Object.fromEntries(
-    boardRefKinds.map((kind) => [kind, [] as string[]]),
-  ) as BoardRefs;
+interface Collecting {
+  found: Record<BoardRefKind, Set<string>>;
+  total: number;
 }
 
-function walk(value: unknown, depth: number, refs: BoardRefs): void {
+const isFull = (state: Collecting) => state.total > MAX_BOARD_REFS;
+
+function walk(value: unknown, depth: number, state: Collecting): void {
   if (depth > MAX_DEPTH || value === null || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    for (const item of value) walk(item, depth + 1, refs);
+    for (const item of value) {
+      if (isFull(state)) return;
+      walk(item, depth + 1, state);
+    }
     return;
   }
   for (const [key, field] of Object.entries(value)) {
+    if (isFull(state)) return;
     const kind = kindOf(key);
     if (kind) {
       for (const id of [field].flat()) {
-        if (typeof id === "string" && id !== "") refs[kind].push(id);
+        if (isFull(state)) return;
+        if (!isPublicId(id) || state.found[kind].has(id)) continue;
+        state.found[kind].add(id);
+        state.total += 1;
       }
     } else {
-      walk(field, depth + 1, refs);
+      walk(field, depth + 1, state);
     }
   }
+}
+
+function isPublicId(id: unknown): id is string {
+  return (
+    typeof id === "string" && id.length > 0 && id.length <= PUBLIC_ID_MAX_LENGTH
+  );
 }
 
 function kindOf(key: string): BoardRefKind | undefined {

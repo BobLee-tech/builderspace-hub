@@ -164,6 +164,43 @@ describe("a 仅自己可见 board", () => {
     );
   });
 
+  it("does not use up search's limits for anyone else", async () => {
+    const listIdOf = async (publicId: string) => {
+      const [list] = await db
+        .select({ id: kanSchema.lists.id })
+        .from(kanSchema.lists)
+        .where(eq(kanSchema.lists.publicId, publicId));
+      if (!list) throw new Error("no list");
+      return list.id;
+    };
+    // Exact matches in the private board outrank the visible card below.
+    const hiddenList = await listIdOf(hidden.list);
+    for (const index of [1, 2, 3]) {
+      await db.insert(kanSchema.cards).values({
+        publicId: nextId(),
+        title: "Diary",
+        index,
+        listId: hiddenList,
+      });
+    }
+    await db.insert(kanSchema.cards).values({
+      publicId: nextId(),
+      title: "Diary notes for the roadmap",
+      index: 1,
+      listId: await listIdOf(shared.list),
+    });
+
+    // A limit of 2 leaves one place for cards.
+    const results = await createAppCaller(db, teammate).workspace.search({
+      workspacePublicId: project.publicId,
+      query: "Diary",
+      limit: 2,
+    });
+    expect(results.map((result) => result.title)).toEqual([
+      "Diary notes for the roadmap",
+    ]);
+  });
+
   it("cannot go on the public link until its owner shares it again", async () => {
     const asOwner = createAppCaller(db, creator);
     await expect(

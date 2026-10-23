@@ -5,7 +5,8 @@ import {
   canChangeOnlyMe,
   canSeePrivateBoard,
   collectBoardRefs,
-  hasBoardRefs,
+  countBoardRefs,
+  MAX_BOARD_REFS,
 } from "./private-board.policy";
 
 describe("collectBoardRefs", () => {
@@ -64,14 +65,44 @@ describe("collectBoardRefs", () => {
       documentPublicId: "d1",
       cardPublicId: 42,
       listPublicId: "",
+      // Longer than any public id: it cannot name anything.
+      boardPublicId: "x".repeat(13),
     });
-    expect(hasBoardRefs(refs)).toBe(false);
+    expect(countBoardRefs(refs)).toBe(0);
   });
 
   it("accepts inputs that are not objects", () => {
     for (const input of [undefined, null, "boardPublicId", 7]) {
-      expect(hasBoardRefs(collectBoardRefs(input))).toBe(false);
+      expect(countBoardRefs(collectBoardRefs(input))).toBe(0);
     }
+  });
+
+  it("counts each id once", () => {
+    const refs = collectBoardRefs({
+      cardPublicId: "c1",
+      moves: [{ cardPublicId: "c1" }],
+      labelPublicIds: ["lb1", "lb1"],
+    });
+    expect(refs.card).toEqual(["c1"]);
+    expect(refs.label).toEqual(["lb1"]);
+    expect(countBoardRefs(refs)).toBe(2);
+  });
+
+  it("stops collecting just past the cap, however many ids are sent", () => {
+    const ids = Array.from({ length: 50_000 }, (_, i) => `c${i}`);
+    expect(countBoardRefs(collectBoardRefs({ cardPublicIds: ids }))).toBe(
+      MAX_BOARD_REFS + 1,
+    );
+    expect(
+      countBoardRefs(
+        collectBoardRefs({ cardPublicIds: ids.slice(0, MAX_BOARD_REFS) }),
+      ),
+    ).toBe(MAX_BOARD_REFS);
+    expect(
+      countBoardRefs(
+        collectBoardRefs({ moves: ids.map((id) => ({ cardPublicId: id })) }),
+      ),
+    ).toBe(MAX_BOARD_REFS + 1);
   });
 });
 
