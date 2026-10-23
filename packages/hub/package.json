@@ -32,6 +32,10 @@
       "types": "./src/documents/file-import.ts",
       "default": "./src/documents/file-import.ts"
     },
+    "./forms": {
+      "types": "./src/forms/index.ts",
+      "default": "./src/forms/index.ts"
+    },
     "./permissions": {
       "types": "./src/permissions/index.ts",
       "default": "./src/permissions/index.ts"

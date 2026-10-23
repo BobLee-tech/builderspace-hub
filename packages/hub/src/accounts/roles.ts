@@ -27,6 +27,11 @@ export const hubPermissions = [
    * the owner and to the people each document was assigned to.
    */
   "documents.manage",
+  /**
+   * Create forms. Changing a form and reading its answers is separate: it
+   * goes to the owners and to the people each form was handed to.
+   */
+  "forms.manage",
 ] as const;
 export type HubPermission = (typeof hubPermissions)[number];
 
@@ -41,6 +46,7 @@ const ROLE_PERMISSIONS: Record<HubRole, readonly HubPermission[]> = {
     "permissions.manage",
     "settings.manage",
     "documents.manage",
+    "forms.manage",
   ],
   viewer: ["admin.view"],
 };

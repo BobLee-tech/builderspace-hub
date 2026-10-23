@@ -22,6 +22,7 @@ describe("can", () => {
       "permissions.manage",
       "settings.manage",
       "documents.manage",
+      "forms.manage",
     ],
     viewer: ["admin.view"],
   };

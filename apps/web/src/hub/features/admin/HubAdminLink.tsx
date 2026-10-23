@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { TbFiles, TbShieldLock } from "react-icons/tb";
+import { TbFiles, TbForms, TbShieldLock } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
 import { can } from "@kan/hub/public";
@@ -13,8 +13,8 @@ const linkClass =
   "mt-1 flex items-center gap-3 rounded-md p-1.5 text-sm font-medium text-neutral-600 hover:bg-light-200 hover:text-light-1000 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000";
 
 /**
- * The Hub's own sidebar links, rendered once under Kan's navigation: 文档 for
- * every member, 后台 for back-office members and for those with website
+ * The Hub's own sidebar links, rendered once under Kan's navigation: 文档 and
+ * 表单 for every member, 后台 for back-office members and for those with website
  * access (who land in the 官网 section). They live in one component so the
  * sidebar needs a single registered edit (docs/hub/UPSTREAM_SEAMS.md).
  */
@@ -47,6 +47,19 @@ export function HubAdminLink({
       >
         <TbFiles size={18} className="shrink-0" />
         {!isCollapsed && copy.documents.entry}
+      </Link>
+      <Link
+        href="/forms"
+        onClick={onCloseSideNav}
+        title={copy.forms.entry}
+        className={twMerge(
+          linkClass,
+          isCollapsed && "justify-center",
+          pathname.startsWith("/forms") && "bg-light-200 dark:bg-dark-200",
+        )}
+      >
+        <TbForms size={18} className="shrink-0" />
+        {!isCollapsed && copy.forms.entry}
       </Link>
       {showAdmin && (
         <Link

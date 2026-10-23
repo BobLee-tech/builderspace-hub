@@ -50,7 +50,16 @@ export type AuditAction =
   | "document.edit_request_denied"
   | "document_folder.created"
   | "document_folder.renamed"
-  | "document_folder.deleted";
+  | "document_folder.deleted"
+  | "form.created"
+  | "form.updated"
+  | "form.opened"
+  | "form.closed"
+  | "form.duplicated"
+  | "form.deleted"
+  | "form.manager_added"
+  | "form.manager_removed"
+  | "form_response.deleted";
 
 export interface AuditActor {
   userId: string | null;
