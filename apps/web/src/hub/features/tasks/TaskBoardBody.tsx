@@ -8,7 +8,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { useState } from "react";
-import { TbPlus } from "react-icons/tb";
+import { TbPlus, TbSquare, TbSquareCheck } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
 import type { Stage, TaskView } from "@kan/hub/public";
@@ -21,6 +21,7 @@ import { useFunctionColors } from "~/hub/lib/use-function-colors";
 import { buttonClass, ErrorText } from "~/hub/ui/admin-primitives";
 import { BoardCard } from "./BoardCard";
 import { NewTaskForm } from "./NewTaskForm";
+import { chipClass } from "./ScopeSwitcher";
 import { useBoardActions } from "./use-board-actions";
 
 type Board = RouterOutputs["hub"]["tasks"]["board"];
@@ -34,44 +35,62 @@ function stageTitle(stage: Stage): string {
 }
 
 /**
- * The working part of a task board: the colour legend, 新建任务, the new-task
- * form and the columns. Shared by the board page (`/tasks/<view>`, where it
- * fills the screen) and the home page (where it is embedded as the 总版 of
- * the chosen scope). Where the person may edit, tasks can be dragged to
- * another column, given a due date and created here; every change goes
- * through Kan's own card API, so it lands on the task's own board.
+ * The working part of a task board: the colour legend, 只看我的, 新建任务,
+ * the new-task form and the columns. Shared by the board page
+ * (`/tasks/<view>`, where it fills the screen) and the home page (where it is
+ * embedded as the 总版 of the chosen scope). Where the person may edit, tasks
+ * can be dragged to another column, given a due date and created here; every
+ * change goes through Kan's own card API, so it lands on the task's own board.
  */
 export function TaskBoardBody({
   board,
   query,
   fill = false,
+  onOnlyMineChange,
 }: {
   board: Board;
   /** The query `board` was loaded with, so changes can update it in place. */
-  query: { view: TaskView; project?: string };
+  query: { view: TaskView; project?: string; onlyMine?: boolean };
   /** Fill the remaining height of the page instead of a fixed column height. */
   fill?: boolean;
+  /**
+   * Turns 只看我的 on or off. Left out, or on 指派给我的 where it would change
+   * nothing, the board offers no such switch.
+   */
+  onOnlyMineChange?: (onlyMine: boolean) => void;
 }) {
   const actions = useBoardActions(board, query);
   const [formStage, setFormStage] = useState<OpenStage | null>(null);
   const canCreateSomewhere = board.boards.some(
     (target) => board.access[target.project.publicId]?.canCreate,
   );
+  const onlyMine = query.onlyMine ?? false;
+  // The board on screen is the one from before 只看我的 was switched.
+  const switching = board.onlyMine !== onlyMine;
+  const noneOfMine =
+    board.onlyMine &&
+    !switching &&
+    board.columns.every((column) => column.total === 0);
 
   return (
     <div className={twMerge("flex flex-col", fill && "min-h-0 flex-1")}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <ColorLegend />
-        {canCreateSomewhere && (
-          <button
-            type="button"
-            className={buttonClass.primary}
-            onClick={() => setFormStage("todo")}
-          >
-            <TbPlus className="mr-1 h-4 w-4" aria-hidden="true" />
-            {text.newTask}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {onOnlyMineChange && query.view !== "mine" && (
+            <OnlyMineToggle pressed={onlyMine} onChange={onOnlyMineChange} />
+          )}
+          {canCreateSomewhere && (
+            <button
+              type="button"
+              className={buttonClass.primary}
+              onClick={() => setFormStage("todo")}
+            >
+              <TbPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+              {text.newTask}
+            </button>
+          )}
+        </div>
       </div>
 
       {formStage && (
@@ -85,15 +104,59 @@ export function TaskBoardBody({
         />
       )}
       <ErrorText message={actions.error ?? undefined} />
+      {noneOfMine && (
+        <p
+          role="status"
+          className="mb-3 text-sm text-light-900 dark:text-dark-900"
+        >
+          {text.onlyMine.empty}
+          {onOnlyMineChange && (
+            <button
+              type="button"
+              className="ml-2 underline hover:text-light-1000 dark:hover:text-dark-1000"
+              onClick={() => onOnlyMineChange(false)}
+            >
+              {text.onlyMine.showAll}
+            </button>
+          )}
+        </p>
+      )}
 
       <Columns
         board={board}
         fill={fill}
+        busy={switching}
         onMove={actions.move}
         onSetDue={actions.setDue}
         onAdd={canCreateSomewhere ? setFormStage : undefined}
       />
     </div>
+  );
+}
+
+/** 只看我的: narrows the board to the tasks assigned to me, and back. */
+function OnlyMineToggle({
+  pressed,
+  onChange,
+}: {
+  pressed: boolean;
+  onChange: (pressed: boolean) => void;
+}) {
+  const Icon = pressed ? TbSquareCheck : TbSquare;
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      title={text.onlyMine.hint}
+      className={twMerge(
+        chipClass(pressed),
+        "inline-flex items-center gap-1.5",
+      )}
+      onClick={() => onChange(!pressed)}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      {text.onlyMine.label}
+    </button>
   );
 }
 
@@ -119,12 +182,15 @@ export function ColorLegend() {
 function Columns({
   board,
   fill,
+  busy,
   onMove,
   onSetDue,
   onAdd,
 }: {
   board: Board;
   fill: boolean;
+  /** A new board is on its way; this one is dimmed until it arrives. */
+  busy: boolean;
   onMove: (task: HubTask, to: Stage) => Promise<void>;
   onSetDue: (task: HubTask, dueDate: Date | null) => void;
   onAdd?: (stage: OpenStage) => void;
@@ -154,9 +220,11 @@ function Columns({
       }}
     >
       <div
+        aria-busy={busy || undefined}
         className={twMerge(
-          "flex gap-3 overflow-x-auto pb-2",
+          "flex gap-3 overflow-x-auto pb-2 transition-opacity",
           fill && "min-h-0 flex-1 pb-4",
+          busy && "opacity-60",
         )}
       >
         {board.columns.map((column) => (

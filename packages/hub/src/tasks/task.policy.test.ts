@@ -12,6 +12,7 @@ import {
   functionKeys,
   functionNames,
   inView,
+  onBoard,
   stageNames,
   stageOf,
   taskViews,
@@ -123,6 +124,38 @@ describe("inView", () => {
 
   it("covers every view", () => {
     expect(new Set(cases.map(([view]) => view))).toEqual(new Set(taskViews));
+  });
+});
+
+describe("onBoard", () => {
+  const cases: [TaskView, TaskFacts, boolean, boolean][] = [
+    ["all", task(), false, true],
+    ["all", task(), true, false],
+    ["all", task({ assignedToMe: true, stage: "done" }), true, true],
+    ["dev", task({ assignedToMe: true, functionKey: "ops" }), true, false],
+    ["overdue", task({ assignedToMe: true, dueState: "overdue" }), true, true],
+    ["overdue", task({ assignedToMe: true }), true, false],
+    ["mine", task({ assignedToMe: true }), true, true],
+    ["mine", task(), false, false],
+  ];
+
+  it.each(cases)(
+    "%s with %j, only mine %s → %s",
+    (view, facts, onlyMine, expected) => {
+      expect(onBoard(facts, view, onlyMine)).toBe(expected);
+    },
+  );
+
+  it("is the view itself without 只看我的", () => {
+    for (const view of taskViews) {
+      for (const facts of [
+        task(),
+        task({ assignedToMe: true, stage: "done" }),
+        task({ dueState: "soon", functionKey: "ops" }),
+      ]) {
+        expect(onBoard(facts, view, false)).toBe(inView(facts, view));
+      }
+    }
   });
 });
 

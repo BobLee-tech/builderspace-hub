@@ -133,6 +133,19 @@ export function inView(task: TaskFacts, view: TaskView): boolean {
 }
 
 /**
+ * Whether a task is on a board: in its view and, with 只看我的 on, assigned to
+ * me. The board narrows before it counts and before it cuts the done column,
+ * so totals and the limit are those of the tasks shown.
+ */
+export function onBoard(
+  task: TaskFacts,
+  view: TaskView,
+  onlyMine: boolean,
+): boolean {
+  return inView(task, view) && (!onlyMine || task.assignedToMe);
+}
+
+/**
  * The columns a view shows. Finished work is never due or overdue, so those
  * views leave the "done" column out. "other" is kept here; the board hides it
  * when it is empty.

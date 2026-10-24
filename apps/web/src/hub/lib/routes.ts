@@ -26,12 +26,19 @@ export function homeHref(projectPublicId?: string | null): string {
   return withProject(hubRoutes.home, projectPublicId);
 }
 
+/** `?assigned=me` on a task board: 只看我的 is on. */
+export const onlyMineParam = { name: "assigned", value: "me" } as const;
+
 /** The task board for one view, scoped like the home page. */
 export function taskBoardHref(
   view: TaskView,
   projectPublicId?: string | null,
+  onlyMine = false,
 ): string {
-  return withProject(`/tasks/${view}`, projectPublicId);
+  const path = withProject(`/tasks/${view}`, projectPublicId);
+  if (!onlyMine) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}${onlyMineParam.name}=${onlyMineParam.value}`;
 }
 
 export function cardHref(cardPublicId: string): string {

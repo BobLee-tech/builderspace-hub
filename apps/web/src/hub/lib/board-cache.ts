@@ -42,6 +42,22 @@ export function withTaskMoved(
   };
 }
 
+/**
+ * For a board query's `placeholderData`: keeps the board on screen while
+ * 只看我的 is switched, so the switch does not vanish under the pointer. A
+ * different view or scope still starts from the skeleton. Pure.
+ */
+export function keepWhileSwitchingMine(query: {
+  view: Board["view"];
+  project?: string;
+}) {
+  return (previous: Board | undefined): Board | undefined =>
+    previous?.view === query.view &&
+    (previous.scope.current?.publicId ?? undefined) === query.project
+      ? previous
+      : undefined;
+}
+
 /** The board with one task's due date changed. Pure. */
 export function withTaskDue(
   board: Board,

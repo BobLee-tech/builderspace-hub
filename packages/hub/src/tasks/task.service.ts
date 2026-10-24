@@ -22,8 +22,8 @@ import {
   dueStateOf,
   functionKeyOf,
   functionKeys,
-  inView,
   isOpen,
+  onBoard,
   stageOf,
 } from "./task.policy";
 
@@ -100,6 +100,8 @@ export interface BoardTarget {
 export interface TaskBoard {
   scope: Scope;
   view: TaskView;
+  /** 只看我的: only tasks assigned to me are on the board and in the totals. */
+  onlyMine: boolean;
   columns: TaskColumn[];
   /** Keyed by project public id; only projects in scope. */
   access: Record<string, ProjectAccess>;
@@ -165,14 +167,17 @@ export async function getVisibleTasks(
 
 export async function getTaskBoard(
   db: Db,
-  input: ScopeInput & { view: TaskView },
+  input: ScopeInput & { view: TaskView; onlyMine?: boolean },
 ): Promise<TaskBoard> {
   const { scope, tasks, inScope } = await loadScope(db, input);
-  const inThisView = tasks.filter((task) => inView(task, input.view));
+  const onlyMine = input.onlyMine ?? false;
+  const onThisBoard = tasks.filter((task) =>
+    onBoard(task, input.view, onlyMine),
+  );
 
   const columns = columnsOf(input.view)
     .map((stage) => {
-      const all = inThisView.filter((task) => task.stage === stage);
+      const all = onThisBoard.filter((task) => task.stage === stage);
       return stage === "done"
         ? {
             stage,
@@ -219,6 +224,7 @@ export async function getTaskBoard(
   return {
     scope,
     view: input.view,
+    onlyMine,
     columns,
     access: Object.fromEntries(
       inScope.map((project) => [

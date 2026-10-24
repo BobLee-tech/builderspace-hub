@@ -408,6 +408,105 @@ describe("getTaskBoard", () => {
   });
 });
 
+describe("getTaskBoard with 只看我的", () => {
+  beforeEach(async () => {
+    await join(me, coursemate);
+    await join(me, echo);
+  });
+
+  it("keeps only my tasks and counts only those", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const mine = [{ user: me, project: coursemate }];
+    await seedCard(dev.todo, "我的待办", { assignees: mine });
+    await seedCard(dev.todo, "别人的待办");
+    await seedCard(dev.review, "我的待验收", { assignees: mine });
+    await seedCard(dev.ideas, "别人的灵感");
+
+    const all = await getTaskBoard(db, { userId: me.id, view: "all", now });
+    const board = await getTaskBoard(db, {
+      userId: me.id,
+      view: "all",
+      onlyMine: true,
+      now,
+    });
+
+    expect(all.onlyMine).toBe(false);
+    expect(all.columns.map((c) => c.stage)).toContain("other");
+    expect(board.onlyMine).toBe(true);
+    expect(
+      board.columns.map((c) => [c.stage, titles(c.tasks), c.total]),
+    ).toEqual([
+      ["todo", ["我的待办"], 1],
+      ["doing", [], 0],
+      ["review", ["我的待验收"], 1],
+      ["done", [], 0],
+    ]);
+  });
+
+  it("narrows before cutting the done column", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    await seedCard(dev.done, "别人刚完成的", { updatedDaysAgo: 0 });
+    for (let i = 0; i < DONE_COLUMN_LIMIT + 1; i += 1) {
+      await seedCard(dev.done, `我完成的 ${i}`, {
+        updatedDaysAgo: i + 1,
+        assignees: [{ user: me, project: coursemate }],
+      });
+    }
+
+    const board = await getTaskBoard(db, {
+      userId: me.id,
+      view: "all",
+      onlyMine: true,
+      now,
+    });
+    const done = board.columns.find((c) => c.stage === "done");
+
+    expect(done?.total).toBe(DONE_COLUMN_LIMIT + 1);
+    expect(done?.tasks).toHaveLength(DONE_COLUMN_LIMIT);
+    expect(done?.tasks[0]?.title).toBe("我完成的 0");
+    expect(done?.tasks.every((task) => task.assignedToMe)).toBe(true);
+  });
+
+  it("works within one project and within any view", async () => {
+    const dev = await seedBoard(coursemate, "开发");
+    const echoDev = await seedBoard(echo, "开发");
+    const echoOps = await seedBoard(echo, "活动");
+    await seedCard(dev.todo, "我的 CourseMate", {
+      assignees: [{ user: me, project: coursemate }],
+    });
+    await seedCard(echoDev.todo, "我的 EchoAgent 技术", {
+      assignees: [{ user: me, project: echo }],
+    });
+    await seedCard(echoOps.todo, "我的 EchoAgent 活动", {
+      assignees: [{ user: me, project: echo }],
+    });
+    await seedCard(echoDev.todo, "别人的 EchoAgent");
+
+    const inEcho = await getTaskBoard(db, {
+      userId: me.id,
+      view: "all",
+      projectPublicId: echo.publicId,
+      onlyMine: true,
+      now,
+    });
+    const devInEcho = await getTaskBoard(db, {
+      userId: me.id,
+      view: "dev",
+      projectPublicId: echo.publicId,
+      onlyMine: true,
+      now,
+    });
+
+    expect(inEcho.columns.flatMap((c) => titles(c.tasks)).sort()).toEqual([
+      "我的 EchoAgent 技术",
+      "我的 EchoAgent 活动",
+    ]);
+    expect(devInEcho.columns.flatMap((c) => titles(c.tasks))).toEqual([
+      "我的 EchoAgent 技术",
+    ]);
+  });
+});
+
 describe("what the task board lets someone do", () => {
   it("says per project whether they may create and edit tasks", async () => {
     await join(me, coursemate, "member");

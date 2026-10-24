@@ -268,15 +268,24 @@ const tasksRouter = createTRPCRouter({
     ),
   ),
 
-  /** The cross-project task board for one view, split into columns. */
+  /**
+   * The cross-project task board for one view, split into columns.
+   * `onlyMine` (只看我的) narrows it to the tasks assigned to the caller.
+   */
   board: hubProcedure
-    .input(scopeInput.extend({ view: z.enum(taskViews) }))
+    .input(
+      scopeInput.extend({
+        view: z.enum(taskViews),
+        onlyMine: z.boolean().optional(),
+      }),
+    )
     .query(({ ctx, input }) =>
       runHub(() =>
         getTaskBoard(ctx.db, {
           userId: ctx.actor.userId,
           projectPublicId: input.project,
           view: input.view,
+          onlyMine: input.onlyMine,
           now: new Date(),
         }),
       ),

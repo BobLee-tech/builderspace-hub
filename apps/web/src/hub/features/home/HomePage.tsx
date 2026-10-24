@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useState } from "react";
 import { TbArrowRight, TbLayoutKanban } from "react-icons/tb";
 
 import type { TaskView } from "@kan/hub/public";
@@ -9,6 +10,7 @@ import type { RouterOutputs } from "~/utils/api";
 import Modal from "~/components/modal";
 import { NewWorkspaceForm } from "~/components/NewWorkspaceForm";
 import { copy } from "~/hub/copy/zh";
+import { keepWhileSwitchingMine } from "~/hub/lib/board-cache";
 import { homeHref, taskBoardHref } from "~/hub/lib/routes";
 import { useOpenInProject } from "~/hub/lib/use-open-in-project";
 import { buttonClass, Card } from "~/hub/ui/admin-primitives";
@@ -42,6 +44,9 @@ export function HomePage() {
   );
   const { data: session } = authClient.useSession();
   useFollowScope(home.data?.scope.current);
+  // 只看我的 on the embedded 总版. Held here so it survives a scope switch,
+  // which reloads everything below.
+  const [onlyMine, setOnlyMine] = useState(false);
 
   const name = session?.user.name;
 
@@ -66,13 +71,25 @@ export function HomePage() {
       ) : home.data.scope.projects.length === 0 ? (
         <WaitingForProject />
       ) : (
-        <HomeContent home={home.data} />
+        <HomeContent
+          home={home.data}
+          onlyMine={onlyMine}
+          onOnlyMineChange={setOnlyMine}
+        />
       )}
     </div>
   );
 }
 
-function HomeContent({ home }: { home: Home }) {
+function HomeContent({
+  home,
+  onlyMine,
+  onOnlyMineChange,
+}: {
+  home: Home;
+  onlyMine: boolean;
+  onOnlyMineChange: (onlyMine: boolean) => void;
+}) {
   const scopeId = home.scope.current?.publicId ?? null;
   const openInProject = useOpenInProject();
 
@@ -159,7 +176,11 @@ function HomeContent({ home }: { home: Home }) {
         </Card>
       </section>
 
-      <OverallBoard scopeId={scopeId} />
+      <OverallBoard
+        scopeId={scopeId}
+        onlyMine={onlyMine}
+        onOnlyMineChange={onOnlyMineChange}
+      />
     </div>
   );
 }
@@ -169,9 +190,24 @@ function HomeContent({ home }: { home: Home }) {
  * 技术 / 活动 / 运营 boards (of one project, or of all of them), editable in
  * place. Same component and same data as `/tasks/all`.
  */
-function OverallBoard({ scopeId }: { scopeId: string | null }) {
-  const query = { view: "all" as const, project: scopeId ?? undefined };
-  const board = api.hub.tasks.board.useQuery(query, { retry: false });
+function OverallBoard({
+  scopeId,
+  onlyMine,
+  onOnlyMineChange,
+}: {
+  scopeId: string | null;
+  onlyMine: boolean;
+  onOnlyMineChange: (onlyMine: boolean) => void;
+}) {
+  const query = {
+    view: "all" as const,
+    project: scopeId ?? undefined,
+    onlyMine: onlyMine || undefined,
+  };
+  const board = api.hub.tasks.board.useQuery(query, {
+    retry: false,
+    placeholderData: keepWhileSwitchingMine(query),
+  });
 
   return (
     <section>
@@ -185,7 +221,7 @@ function OverallBoard({ scopeId }: { scopeId: string | null }) {
           </p>
         </div>
         <Link
-          href={taskBoardHref("all", scopeId)}
+          href={taskBoardHref("all", scopeId, onlyMine)}
           className="inline-flex shrink-0 items-center gap-1 text-xs text-light-900 hover:text-light-1000 dark:text-dark-900 dark:hover:text-dark-1000"
         >
           {text.overall.fullScreen}
@@ -193,7 +229,11 @@ function OverallBoard({ scopeId }: { scopeId: string | null }) {
         </Link>
       </div>
       {board.data ? (
-        <TaskBoardBody board={board.data} query={query} />
+        <TaskBoardBody
+          board={board.data}
+          query={query}
+          onOnlyMineChange={onOnlyMineChange}
+        />
       ) : (
         <ColumnsSkeleton />
       )}
