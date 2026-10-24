@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { createLogger } from "@kan/logger";
 
 import type { createTRPCContext } from "./trpc-context";
+import { anonymousLogEntry } from "./routers/hub/anonymous"; // hub-seam
 import { guardPrivateBoards } from "./routers/hub/private-boards"; // hub-seam
 
 const log = createLogger("api");
@@ -82,12 +83,20 @@ const loggingMiddleware = t.middleware(
     const label = transport === "rest" ? "REST" : "tRPC";
 
     if (result.ok) {
-      log.info({ ...meta, status: 200 }, `${label} OK`);
+      log.info(
+        anonymousLogEntry(path, { ...meta, status: 200 }),
+        `${label} OK`,
+      ); // hub-seam
     } else {
       const status = TRPC_STATUS_MAP[result.error.code] ?? 500;
       const errorCode = result.error.code;
       log.error(
-        { ...meta, status, errorCode, err: result.error },
+        anonymousLogEntry(path, {
+          ...meta,
+          status,
+          errorCode,
+          err: result.error,
+        }), // hub-seam
         `${label} error`,
       );
     }

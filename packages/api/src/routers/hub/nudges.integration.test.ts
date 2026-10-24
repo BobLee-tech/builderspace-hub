@@ -5,10 +5,36 @@ import type { dbClient } from "@kan/db/client";
 import * as kanSchema from "@kan/db/schema";
 import { createHubTestDb, seedProject, seedUser } from "@kan/hub/testing";
 
-import { createHubCaller, ensureProjectMemberForTests } from "./test-helpers";
+import { appRouter } from "../../root";
+import {
+  callerContext,
+  createHubCaller,
+  ensureProjectMemberForTests,
+} from "./test-helpers";
 
 // Each test boots an in-memory Postgres and applies every migration.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
+// Kan's import router reads this when the whole API is loaded.
+vi.hoisted(() => {
+  process.env.BETTER_AUTH_SECRET ??= "nudges-integration-test";
+});
+
+// What the API logs, to check that a nudge never names who sent it to whom.
+const logged = vi.hoisted(() => [] as unknown[]);
+vi.mock("@kan/logger", () => {
+  const record = (entry: unknown) => void logged.push(entry);
+  const log = {
+    trace: record,
+    debug: record,
+    info: record,
+    warn: record,
+    error: record,
+    fatal: record,
+    child: () => log,
+  };
+  return { logger: log, createLogger: () => log };
+});
 
 /**
  * 催一下 through the API: the list, sending through Resend, the hourly limit
@@ -148,6 +174,38 @@ describe("hub.nudges", () => {
     await expect(
       createHubCaller(db, ann).nudges.send({ userId: me.id }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("never logs who nudged whom, sent or refused", async () => {
+    withResend();
+    // Through the whole API, so the procedure has the path it has in production.
+    const { hub } = appRouter.createCaller(callerContext(db, me));
+    logged.length = 0;
+
+    await hub.nudges.send({ userId: ann.id });
+    await expect(hub.nudges.send({ userId: ann.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    const text = JSON.stringify(logged);
+    expect(logged).toHaveLength(2);
+    expect(logged).toMatchObject([
+      { procedure: "hub.nudges.send", status: 200 },
+      { procedure: "hub.nudges.send", status: 409, errorCode: "CONFLICT" },
+    ]);
+    for (const identifying of [me.id, me.email, ann.id, ann.email]) {
+      expect(text).not.toContain(identifying);
+    }
+  });
+
+  it("still logs every other call in full", async () => {
+    logged.length = 0;
+
+    await appRouter.createCaller(callerContext(db, me)).hub.nudges.list();
+
+    expect(logged).toMatchObject([
+      { procedure: "hub.nudges.list", userId: me.id },
+    ]);
   });
 
   it("lets me turn my own mail off and on", async () => {
