@@ -58,6 +58,7 @@ function SiteJoins() {
               {[
                 columns.name,
                 columns.school,
+                columns.zid,
                 columns.skills,
                 columns.hours,
                 columns.interest,
@@ -87,6 +88,9 @@ function SiteJoins() {
                   {join.schoolDegree}
                   <div className={tableClass.sub}>{join.major}</div>
                 </td>
+                <td className={`${tableClass.td} whitespace-nowrap`}>
+                  {join.zid ?? <span className={tableClass.sub}>–</span>}
+                </td>
                 <td className={tableClass.td}>
                   {labelsOf("skills", join.skills)}
                 </td>
@@ -107,10 +111,7 @@ function SiteJoins() {
                 </td>
                 <td className={tableClass.td}>
                   {join.affiliationSupport ? (
-                    <>
-                      {join.fullName}
-                      <div className={tableClass.sub}>{join.zid}</div>
-                    </>
+                    join.fullName
                   ) : (
                     <span className={tableClass.sub}>–</span>
                   )}
