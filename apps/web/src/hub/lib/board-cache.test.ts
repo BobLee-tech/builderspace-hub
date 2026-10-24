@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { RouterOutputs } from "~/utils/api";
-import { withTaskDue, withTaskMoved } from "./board-cache";
+import {
+  keepWhileSwitchingMine,
+  withTaskDue,
+  withTaskMoved,
+} from "./board-cache";
 
 type Board = RouterOutputs["hub"]["tasks"]["board"];
 
@@ -33,6 +37,40 @@ describe("withTaskMoved", () => {
     expect(withTaskMoved(board, "zz", "doing", "进行中")).toBe(board);
     expect(withTaskMoved(board, "a", "todo", "待办")).toBe(board);
     expect(withTaskMoved(board, "a", "done", "已完成")).toBe(board);
+  });
+});
+
+describe("keepWhileSwitchingMine", () => {
+  const shown = (view: string, project: string | null) =>
+    ({
+      view,
+      onlyMine: false,
+      scope: { current: project ? { publicId: project } : null },
+    }) as unknown as Board;
+
+  it("keeps the board when only 只看我的 changes", () => {
+    const all = shown("all", null);
+    const scoped = shown("all", "p1");
+
+    expect(keepWhileSwitchingMine({ view: "all" })(all)).toBe(all);
+    expect(keepWhileSwitchingMine({ view: "all", project: "p1" })(scoped)).toBe(
+      scoped,
+    );
+  });
+
+  it("drops it for another view or another scope", () => {
+    expect(
+      keepWhileSwitchingMine({ view: "dev" })(shown("all", null)),
+    ).toBeUndefined();
+    expect(
+      keepWhileSwitchingMine({ view: "all", project: "p2" })(
+        shown("all", "p1"),
+      ),
+    ).toBeUndefined();
+    expect(
+      keepWhileSwitchingMine({ view: "all" })(shown("all", "p1")),
+    ).toBeUndefined();
+    expect(keepWhileSwitchingMine({ view: "all" })(undefined)).toBeUndefined();
   });
 });
 

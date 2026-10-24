@@ -69,17 +69,22 @@ export function ScopeSwitcher({
             href={hrefFor(option.publicId)}
             aria-current={selected ? "page" : undefined}
             title={option.publicId ? undefined : copy.home.scope.allHint}
-            className={twMerge(
-              "shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-              selected
-                ? "border-light-1000 bg-light-1000 text-light-50 dark:border-dark-1000 dark:bg-dark-1000 dark:text-dark-50"
-                : "border-light-300 text-light-1000 hover:border-light-600 dark:border-dark-300 dark:text-dark-1000 dark:hover:border-dark-600",
-            )}
+            className={chipClass(selected)}
           >
             {option.name}
           </Link>
         );
       })}
     </nav>
+  );
+}
+
+/** The pill these choices are drawn as, dark when chosen. 只看我的 uses it too. */
+export function chipClass(selected: boolean): string {
+  return twMerge(
+    "shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+    selected
+      ? "border-light-1000 bg-light-1000 text-light-50 dark:border-dark-1000 dark:bg-dark-1000 dark:text-dark-50"
+      : "border-light-300 text-light-1000 hover:border-light-600 dark:border-dark-300 dark:text-dark-1000 dark:hover:border-dark-600",
   );
 }

@@ -6,7 +6,8 @@ import type { TaskView } from "@kan/hub/public";
 import { functionNames, taskViews } from "@kan/hub/public";
 
 import { copy } from "~/hub/copy/zh";
-import { homeHref, taskBoardHref } from "~/hub/lib/routes";
+import { keepWhileSwitchingMine } from "~/hub/lib/board-cache";
+import { homeHref, onlyMineParam, taskBoardHref } from "~/hub/lib/routes";
 import { Card } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 import {
@@ -38,15 +39,29 @@ export function TaskBoardPage() {
   const { projectPublicId, isReady } = useProjectParam();
   const view = router.query.view;
   const valid = isTaskView(view);
+  // 只看我的 lives in the URL; on 指派给我的 it would change nothing.
+  const onlyMine =
+    valid &&
+    view !== "mine" &&
+    router.query[onlyMineParam.name] === onlyMineParam.value;
   const query = {
     view: valid ? view : ("all" as const),
     project: projectPublicId,
+    onlyMine: onlyMine || undefined,
   };
 
   const board = api.hub.tasks.board.useQuery(query, {
     enabled: isReady && valid,
     retry: false,
+    placeholderData: keepWhileSwitchingMine(query),
   });
+  const setOnlyMine = (next: boolean) => {
+    if (!valid) return;
+    void router.replace(taskBoardHref(view, projectPublicId, next), undefined, {
+      shallow: true,
+      scroll: false,
+    });
+  };
   useFollowScope(board.data?.scope.current);
   const scopeName = board.data?.scope.current?.name;
 
@@ -80,7 +95,7 @@ export function TaskBoardPage() {
             <ScopeSwitcher
               projects={board.data.scope.projects}
               current={board.data.scope.current}
-              hrefFor={(id) => taskBoardHref(view, id)}
+              hrefFor={(id) => taskBoardHref(view, id, onlyMine)}
             />
           )}
         </div>
@@ -92,7 +107,7 @@ export function TaskBoardPage() {
         <Notice>
           {copy.home.scopeMissing}{" "}
           <Link
-            href={taskBoardHref(valid ? view : "all")}
+            href={taskBoardHref(valid ? view : "all", null, onlyMine)}
             className="underline"
           >
             {copy.home.scopeMissingBack}
@@ -101,7 +116,12 @@ export function TaskBoardPage() {
       ) : !board.data ? (
         <ColumnsSkeleton />
       ) : (
-        <TaskBoardBody board={board.data} query={query} fill />
+        <TaskBoardBody
+          board={board.data}
+          query={query}
+          fill
+          onOnlyMineChange={setOnlyMine}
+        />
       )}
     </div>
   );

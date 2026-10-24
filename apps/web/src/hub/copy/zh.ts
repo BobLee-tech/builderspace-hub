@@ -544,6 +544,12 @@ export const zh = {
       `显示最近 ${shown} 个，共 ${total} 个`,
     emptyColumn: "没有任务",
     emptyBoard: "这里还没有任务。",
+    onlyMine: {
+      label: "只看我的",
+      hint: "只显示指派给你的任务",
+      empty: "没有指派给你的任务。",
+      showAll: "看全部任务",
+    },
     due: {
       overdue: "已逾期",
       today: "今天到期",
