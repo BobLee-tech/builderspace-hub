@@ -7,6 +7,8 @@ import {
   consumeRateLimit,
   pruneRateLimits,
   rateLimitStorage,
+  rateLimitWaits,
+  resetRateLimit,
 } from "./rate-limit";
 
 let db: Db;
@@ -103,6 +105,55 @@ describe("rateLimitStorage (Better Auth)", () => {
 
     expect(await storage.get("old")).toBeUndefined();
     expect(await storage.get("new")).toBeDefined();
+  });
+});
+
+describe("rateLimitWaits", () => {
+  it("gives the wait for each used-up key and leaves out keys with room", async () => {
+    for (let i = 0; i < 3; i += 1)
+      await consumeRateLimit(db, "hub:full", rule, t0);
+    await consumeRateLimit(db, "hub:room", rule, t0);
+
+    const waits = await rateLimitWaits(
+      db,
+      ["hub:full", "hub:room", "hub:never"],
+      rule,
+      t0 + 20_000,
+    );
+
+    expect([...waits]).toEqual([["hub:full", 40]]);
+  });
+
+  it("counts nothing", async () => {
+    const once = { window: 60, max: 1 };
+    await rateLimitWaits(db, ["hub:b"], once, t0);
+
+    expect((await consumeRateLimit(db, "hub:b", once, t0)).allowed).toBe(true);
+  });
+
+  it("forgets a window that has passed", async () => {
+    for (let i = 0; i < 3; i += 1)
+      await consumeRateLimit(db, "hub:full", rule, t0);
+
+    expect(await rateLimitWaits(db, ["hub:full"], rule, t0 + 60_000)).toEqual(
+      new Map(),
+    );
+  });
+
+  it("returns nothing for no keys", async () => {
+    expect(await rateLimitWaits(db, [], rule, t0)).toEqual(new Map());
+  });
+});
+
+describe("resetRateLimit", () => {
+  it("lets the next request through at once", async () => {
+    const once = { window: 3600, max: 1 };
+    await consumeRateLimit(db, "hub:a", once, t0);
+    await resetRateLimit(db, "hub:a");
+
+    expect((await consumeRateLimit(db, "hub:a", once, t0 + 1)).allowed).toBe(
+      true,
+    );
   });
 });
 

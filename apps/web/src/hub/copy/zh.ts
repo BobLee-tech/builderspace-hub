@@ -574,6 +574,12 @@ export const zh = {
       title: "总版",
       hint: "所有职能的任务，按颜色区分",
     },
+    doneToast: {
+      title: (left: number) =>
+        left > 0 ? `做完一件，还剩 ${left} 件` : "做完一件，手上的都做完了",
+      seeMine: "查看我的任务",
+      close: "关闭",
+    },
   },
 
   boardVisibility: {
@@ -601,7 +607,37 @@ export const zh = {
       schedule: "日程",
       done: "我完成的",
       github: "GitHub",
+      reminders: "提醒",
     },
+  },
+
+  nudges: {
+    bell: "催一下",
+    title: "这些任务好几天没动了",
+    hint: "匿名提醒：对方会收到一封邮件，列出 TA 还没做完的事。Hub 不记录是谁点的，同一个人一小时内最多收到一封。",
+    empty: "大家的任务最近都有进展。",
+    mailOff: "还没有配置发信服务，暂时不能提醒。",
+    openCount: (count: number) => `${count} 件没做完`,
+    overdue: "已逾期",
+    idle: (days: number) => `${days} 天没动`,
+    nudge: "催一下",
+    sending: "发送中…",
+    sent: "已提醒",
+    unconfirmed: "可能已发出",
+    optedOut: "关了提醒",
+    wait: (minutes: number) => `${minutes} 分钟后可再催`,
+    nudgeAll: (count: number) => `全部催一遍（${count} 人）`,
+    failed: "没有发出去，请再试一次。",
+  },
+
+  reminders: {
+    title: "提醒",
+    description:
+      "队友看到你的任务好几天没动，可以在首页点铃铛匿名提醒你：你会收到一封邮件，列出你还没做完的任务。同一个人一小时内最多收到一封。",
+    mail: "催一下邮件",
+    on: "开着：有人提醒你时，会给你发邮件。",
+    off: "关着：别人不能提醒你，你也不会收到这类邮件。",
+    saveFailed: "没有保存成功，请再试一次。",
   },
 
   github: {

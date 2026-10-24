@@ -35,6 +35,12 @@ import {
   syncGitHub,
 } from "@kan/hub/github";
 import {
+  getNudgeMail,
+  listNudgeable,
+  nudgePerson,
+  setNudgeMail,
+} from "@kan/hub/nudges";
+import {
   editablePermissions,
   editableProjectRoles,
   getPermissionMatrix,
@@ -400,6 +406,37 @@ const scheduleRouter = createTRPCRouter({
     ),
 });
 
+const nudgesRouter = createTRPCRouter({
+  /** Teammates whose tasks have stalled, for the bell on the home page. */
+  list: hubProcedure.query(({ ctx }) =>
+    runHub(() =>
+      listNudgeable(ctx.db, { userId: ctx.actor.userId, now: new Date() }),
+    ),
+  ),
+
+  /** One anonymous mail to one of them; who asked is never stored. */
+  send: hubProcedure
+    .input(z.object({ userId: z.string().uuid() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        nudgePerson(ctx.db, {
+          userId: ctx.actor.userId,
+          recipientId: input.userId,
+          now: new Date(),
+        }),
+      ),
+    ),
+
+  /** Whether I get 催一下 mail. */
+  mail: hubProcedure.query(({ ctx }) => getNudgeMail(ctx.db, ctx.actor.userId)),
+
+  setMail: hubProcedure
+    .input(z.object({ on: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() => setNudgeMail(ctx.db, ctx.actor, input.on)),
+    ),
+});
+
 const boardInput = z.object({ boardPublicId: z.string().min(1).max(32) });
 
 const boardsRouter = createTRPCRouter({
@@ -467,6 +504,7 @@ export const hubRouter = createTRPCRouter({
   site: siteRouter,
   archive: archiveRouter,
   boards: boardsRouter,
+  nudges: nudgesRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

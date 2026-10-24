@@ -20,6 +20,7 @@ import { copy } from "~/hub/copy/zh";
 import { useFunctionColors } from "~/hub/lib/use-function-colors";
 import { buttonClass, ErrorText } from "~/hub/ui/admin-primitives";
 import { BoardCard } from "./BoardCard";
+import { DoneToast } from "./DoneToast";
 import { NewTaskForm } from "./NewTaskForm";
 import { useBoardActions } from "./use-board-actions";
 
@@ -93,6 +94,7 @@ export function TaskBoardBody({
         onSetDue={actions.setDue}
         onAdd={canCreateSomewhere ? setFormStage : undefined}
       />
+      <DoneToast toast={actions.doneToast} onClose={actions.dismissDoneToast} />
     </div>
   );
 }

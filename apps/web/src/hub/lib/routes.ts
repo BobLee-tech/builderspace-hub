@@ -11,6 +11,7 @@ export const hubRoutes = {
   personal: "/me",
   personalDone: "/me/done",
   personalGitHub: "/me/github",
+  personalReminders: "/me/reminders",
   login: "/login",
   signup: "/signup",
   join: HUB_JOIN_PATH,
