@@ -85,7 +85,7 @@
     {
       "file": "packages/api/src/trpc.ts",
       "marker": "hub-seam",
-      "why": "Every procedure first refuses requests that name anything inside someone else's 仅自己可见 board."
+      "why": "Every procedure first refuses requests that name anything inside someone else's 仅自己可见 board; the logging middleware leaves the caller and input out of anonymous procedures' entries (催一下)."
     },
     {
       "file": "packages/api/vitest.config.ts",

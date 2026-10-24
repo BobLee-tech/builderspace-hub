@@ -32,3 +32,15 @@ export async function findRegisteredEmails(
     .where(inArray(users.email, emails));
   return new Set(rows.map((row) => row.email.toLowerCase()));
 }
+
+/** The name and address of each of these users; unknown ids are left out. */
+export async function findUsersByIds(
+  db: Db,
+  userIds: readonly string[],
+): Promise<{ id: string; name: string | null; email: string }[]> {
+  if (userIds.length === 0) return [];
+  return db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(inArray(users.id, [...userIds]));
+}

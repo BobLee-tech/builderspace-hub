@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { Stage, TaskView } from "@kan/hub/public";
 import { stageNames } from "@kan/hub/public";
 
+import type { WhatIsLeft } from "./DoneToast";
 import type { HubTask } from "./task-display";
 import type { RouterOutputs } from "~/utils/api";
 import { copy } from "~/hub/copy/zh";
@@ -12,6 +13,9 @@ import { api } from "~/utils/api";
 type Board = RouterOutputs["hub"]["tasks"]["board"];
 
 const text = copy.tasks;
+
+/** How many of my remaining tasks the toast lists after I finish one. */
+const DONE_TOAST_NEXT = 3;
 
 export interface NewTask {
   title: string;
@@ -35,6 +39,8 @@ export function useBoardActions(
   const updateCard = api.card.update.useMutation();
   const createCard = api.card.create.useMutation();
   const [error, setError] = useState<string | null>(null);
+  const [doneToast, setDoneToast] = useState<WhatIsLeft | null>(null);
+  const dismissDoneToast = useCallback(() => setDoneToast(null), []);
 
   const refresh = () =>
     Promise.all([
@@ -63,11 +69,24 @@ export function useBoardActions(
         cardPublicId: task.publicId,
         listPublicId,
       });
+      if (to === "done") void showWhatIsLeft();
     } catch {
       setError(text.move.failed);
     } finally {
       void refresh();
     }
+  }
+
+  /** My open tasks across every project, fetched fresh once the move landed. */
+  async function showWhatIsLeft(): Promise<void> {
+    const home = await utils.hub.tasks.home
+      .fetch({}, { staleTime: 0 })
+      .catch(() => null);
+    if (!home) return;
+    setDoneToast({
+      left: home.tiles.mine,
+      next: home.myTasks.slice(0, DONE_TOAST_NEXT).map((t) => t.title),
+    });
   }
 
   async function setDue(task: HubTask, dueDate: Date | null): Promise<void> {
@@ -120,6 +139,8 @@ export function useBoardActions(
     create,
     isCreating: createCard.isPending,
     error,
+    doneToast,
+    dismissDoneToast,
     clearError: () => setError(null),
   };
 }

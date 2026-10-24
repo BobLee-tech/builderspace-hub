@@ -1,8 +1,9 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 
 import * as permissionRepo from "@kan/db/repository/permission.repo";
 import {
   boards,
+  cardActivities,
   cards,
   cardsToLabels,
   cardToWorkspaceMembers,
@@ -193,6 +194,27 @@ export async function listTaskRows(
       colourCode,
     })),
   }));
+}
+
+/**
+ * When each card last had any activity: a move, an edit, a comment. Kan
+ * records one for every change, which `cards.updatedAt` does not catch (a
+ * move between lists leaves it alone). Cards with no activity are left out.
+ */
+export async function lastActivityByCard(
+  db: Db,
+  cardPublicIds: readonly string[],
+): Promise<Map<string, Date>> {
+  if (cardPublicIds.length === 0) return new Map();
+  const rows = await db
+    .select({ publicId: cards.publicId, at: max(cardActivities.createdAt) })
+    .from(cardActivities)
+    .innerJoin(cards, eq(cards.id, cardActivities.cardId))
+    .where(inArray(cards.publicId, [...cardPublicIds]))
+    .groupBy(cards.publicId);
+  return new Map(
+    rows.flatMap((row) => (row.at ? [[row.publicId, row.at] as const] : [])),
+  );
 }
 
 export interface BoardWithLists {

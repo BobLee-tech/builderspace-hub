@@ -1,4 +1,4 @@
-import { eq, lt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { DbOrTx } from "../db";
 import { hubRateLimits } from "../schema";
@@ -67,6 +67,45 @@ export async function consumeRateLimit(
       Math.ceil((windowStart + windowMs - now) / 1000),
     ),
   };
+}
+
+/**
+ * Seconds until each key that has used up its window is allowed again; keys
+ * with room left are not in the map. Counts nothing, so a page can show the
+ * wait before anyone tries.
+ */
+export async function rateLimitWaits(
+  db: DbOrTx,
+  keys: readonly string[],
+  rule: RateLimitRule,
+  now: number = Date.now(),
+): Promise<Map<string, number>> {
+  if (keys.length === 0) return new Map();
+  const windowMs = rule.window * 1000;
+  const rows = await db
+    .select({
+      key: hubRateLimits.key,
+      lastRequest: hubRateLimits.lastRequest,
+    })
+    .from(hubRateLimits)
+    .where(
+      and(
+        inArray(hubRateLimits.key, [...keys]),
+        gt(hubRateLimits.lastRequest, now - windowMs),
+        sql`${hubRateLimits.count} >= ${rule.max}`,
+      ),
+    );
+  return new Map(
+    rows.map((row) => [
+      row.key,
+      Math.max(1, Math.ceil((row.lastRequest + windowMs - now) / 1000)),
+    ]),
+  );
+}
+
+/** Forgets a key's count, as if nothing had been asked in its window. */
+export async function resetRateLimit(db: DbOrTx, key: string): Promise<void> {
+  await db.delete(hubRateLimits).where(eq(hubRateLimits.key, key));
 }
 
 /** The record Better Auth reads and writes for each key. */

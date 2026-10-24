@@ -16,6 +16,7 @@ import { useOpenInProject } from "~/hub/lib/use-open-in-project";
 import { buttonClass, Card } from "~/hub/ui/admin-primitives";
 import { useModal } from "~/providers/modal";
 import { api } from "~/utils/api";
+import { NudgeBell } from "../nudges/NudgeBell";
 import {
   ScopeSwitcher,
   useFollowScope,
@@ -52,16 +53,19 @@ export function HomePage() {
 
   return (
     <div className="m-auto w-full max-w-[1100px] px-5 py-8 md:px-12 md:py-12">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-light-1000 dark:text-dark-1000">
-          {greeting(new Date())}
-          {name ? `，${name}` : ""}
-        </h1>
-        {home.data && home.data.scope.projects.length > 0 && (
-          <p className="mt-1 text-sm text-light-900 dark:text-dark-900">
-            {text.projectCount(home.data.scope.projects.length)}
-          </p>
-        )}
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-light-1000 dark:text-dark-1000">
+            {greeting(new Date())}
+            {name ? `，${name}` : ""}
+          </h1>
+          {home.data && home.data.scope.projects.length > 0 && (
+            <p className="mt-1 text-sm text-light-900 dark:text-dark-900">
+              {text.projectCount(home.data.scope.projects.length)}
+            </p>
+          )}
+        </div>
+        {home.data && home.data.scope.projects.length > 0 && <NudgeBell />}
       </header>
 
       {home.error?.data?.code === "NOT_FOUND" ? (

@@ -36,6 +36,10 @@
       "types": "./src/forms/index.ts",
       "default": "./src/forms/index.ts"
     },
+    "./nudges": {
+      "types": "./src/nudges/index.ts",
+      "default": "./src/nudges/index.ts"
+    },
     "./permissions": {
       "types": "./src/permissions/index.ts",
       "default": "./src/permissions/index.ts"

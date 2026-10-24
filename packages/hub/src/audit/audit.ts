@@ -35,6 +35,8 @@ export type AuditAction =
   | "github.connected"
   | "github.disconnected"
   | "settings.function_colors_changed"
+  | "nudge_mail.turned_on"
+  | "nudge_mail.turned_off"
   | "site.project_reviewed"
   | "site.update_reviewed"
   | "site.volunteer_updated"

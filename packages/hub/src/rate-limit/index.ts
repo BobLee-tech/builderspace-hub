@@ -7,4 +7,6 @@ export {
   consumeRateLimit,
   pruneRateLimits,
   rateLimitStorage,
+  rateLimitWaits,
+  resetRateLimit,
 } from "./rate-limit";
