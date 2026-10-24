@@ -1032,11 +1032,12 @@ export const zh = {
       joins: {
         title: "加入登记",
         description:
-          "在官网填写加入表单的人。勾选「只看支持社团申请的」可以拿到附有姓名和 zID 的支持者名单。",
+          "在官网填写加入表单的人。UNSW 成员都留了 zID；勾选「只看支持社团申请的」可以拿到附有姓名的支持者名单。",
         supportersOnly: "只看支持社团申请的",
         columns: {
           name: "昵称",
           school: "学校 / 专业",
+          zid: "zID",
           skills: "技能",
           hours: "每周时间",
           interest: "下次活动",
