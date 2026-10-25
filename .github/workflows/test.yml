@@ -11,7 +11,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # hub-seam: the Hub's integration tests each boot a database; 15 left no headroom (docs/hub/UPSTREAM_SEAMS.md)
+    timeout-minutes: 25
     env:
       CI: "true"
     steps:
