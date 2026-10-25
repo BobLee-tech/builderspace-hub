@@ -92,6 +92,13 @@
       "when": 1792821571416,
       "tag": "20261024055931_AddNudgeOptOuts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792855006769,
+      "tag": "20261024151646_AddDepartmentsAndDocumentReaders",
+      "breakpoints": true
     }
   ]
 }

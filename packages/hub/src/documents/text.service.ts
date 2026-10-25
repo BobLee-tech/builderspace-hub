@@ -8,6 +8,7 @@ import type { Db } from "../db";
 import type { DocumentStorage } from "./storage";
 import { withAudit } from "../audit";
 import { HubError } from "../shared/errors";
+import { audienceSchema, resolveAudience } from "./audience.service";
 import { loadReadable, requireEdit, requireUserId } from "./document.guard";
 import {
   canCreateDocument,
@@ -23,6 +24,7 @@ import {
   addEditor,
   findFolder,
   insertDocument,
+  replaceReaders,
   updateDocumentIfUnchanged,
   updateDocument as updateDocumentRow,
 } from "./document.repo";
@@ -52,7 +54,9 @@ const createSchema = z.object({
     .transform((value) => value.trim() || null)
     .nullish(),
   folderPublicId: idSchema.nullish(),
-  /** Defaults to readable by everyone; false hides it from the start. */
+  /** Who can read it; every member when left out. */
+  audience: audienceSchema.optional(),
+  /** The command line's on/off form of `audience`; ignored when that is given. */
   readable: z.boolean().optional(),
 });
 
@@ -122,6 +126,9 @@ export async function createTextDocument(
   if (input.folderPublicId && !folder) {
     throw new HubError("NOT_FOUND", "找不到这个文件夹");
   }
+  const audience = input.audience
+    ? await resolveAudience(db, input.audience)
+    : null;
 
   const key = storageKeyFor(file.ext, randomUUID());
   await store.put({ key, body: bytes, contentType: file.contentType });
@@ -141,7 +148,7 @@ export async function createTextDocument(
           size: bytes.length,
           sha256: createHash("sha256").update(bytes).digest("hex"),
           storageKey: key,
-          readable: input.readable ?? true,
+          readable: audience?.readable ?? input.readable ?? true,
           uploadedBy: userId,
           now,
         });
@@ -150,6 +157,7 @@ export async function createTextDocument(
           userId,
           grantedBy: userId,
         });
+        if (audience) await replaceReaders(tx, created.id, audience.targets);
         return { publicId: created.publicId };
       },
       (result) => ({
@@ -157,7 +165,11 @@ export async function createTextDocument(
         action: "document.created",
         entityType: "document",
         entityId: result.publicId,
-        summary: `新建了「${input.title}」（${file.displayName}）`,
+        summary:
+          audience && !audience.readable
+            ? `新建了「${input.title}」（${file.displayName}），${audience.summary}`
+            : `新建了「${input.title}」（${file.displayName}）`,
+        ...(audience ? { detail: audience.chosen } : {}),
       }),
     );
   } catch (error) {

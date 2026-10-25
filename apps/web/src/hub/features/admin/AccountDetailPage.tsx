@@ -46,7 +46,8 @@ function AccountDetail({ userId }: { userId: string }) {
     },
   });
   const setProjectRole = api.hub.accounts.setProjectRole.useMutation({
-    onSuccess: refresh,
+    onSuccess: () =>
+      Promise.all([refresh(), utils.hub.departments.directory.invalidate()]),
   });
   const resetPassword = api.hub.accounts.resetPassword.useMutation();
   const suspend = api.hub.accounts.suspend.useMutation({ onSuccess: refresh });
@@ -202,6 +203,8 @@ function AccountDetail({ userId }: { userId: string }) {
           />
         </Card>
 
+        <DepartmentsCard userId={userId} />
+
         {canManage && !isSelf && (
           <Card title={text.passwordHeading} hint={text.passwordHint}>
             {resetPassword.data ? (
@@ -247,6 +250,70 @@ function AccountDetail({ userId }: { userId: string }) {
         )}
       </div>
     </>
+  );
+}
+
+/** The departments this person is in, per project they are a member of. */
+function DepartmentsCard({ userId }: { userId: string }) {
+  const utils = api.useUtils();
+  const directory = api.hub.departments.directory.useQuery();
+  const setMember = api.hub.departments.setMember.useMutation({
+    onSuccess: () =>
+      Promise.all([
+        utils.hub.departments.directory.invalidate(),
+        utils.hub.documents.audienceOptions.invalidate(),
+      ]),
+  });
+  const data = directory.data;
+  const memberships = (data?.projects ?? []).flatMap((project) => {
+    const me = project.members.find((m) => m.userId === userId);
+    return me ? [{ project, departments: me.departments }] : [];
+  });
+
+  return (
+    <Card title={text.departmentsHeading} hint={text.departmentsHint}>
+      {data && memberships.length === 0 && (
+        <p className="text-sm text-light-900 dark:text-dark-900">
+          {text.departmentsNone}
+        </p>
+      )}
+      <div className="space-y-3">
+        {memberships.map(({ project, departments }) => (
+          <div key={project.publicId} className="text-sm">
+            <p className="font-medium">{project.name}</p>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1.5">
+              {data?.departments.map((department) => {
+                const inIt = departments.includes(department.publicId);
+                return (
+                  <label
+                    key={department.publicId}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={inIt}
+                      disabled={!data.canManage || setMember.isPending}
+                      onChange={() =>
+                        setMember.mutate({
+                          departmentPublicId: department.publicId,
+                          projectPublicId: project.publicId,
+                          userId,
+                          member: !inIt,
+                        })
+                      }
+                    />
+                    {department.name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <ErrorText
+        message={setMember.error?.message ?? directory.error?.message}
+      />
+    </Card>
   );
 }
 

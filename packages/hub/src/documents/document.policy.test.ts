@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { departmentRef } from "../departments/department.policy";
 import {
+  audienceOf,
   canCreateDocument,
   canEditDocument,
   canManageEditors,
@@ -10,9 +12,12 @@ import {
   FOLDER_MAX_DEPTH,
   importSizeProblem,
   inspectFile,
+  isListedReader,
   MAX_IMPORT_FILE_BYTES,
   MAX_TEXT_BYTES,
   normaliseName,
+  normaliseSelection,
+  readerTargetKey,
   storageKeyFor,
   viewContentType,
 } from "./document.policy";
@@ -162,10 +167,12 @@ describe("who may do what", () => {
     expect(canManageEditors({ role: null, isEditor: true })).toBe(false);
   });
 
-  it("shows an unreadable document only to people who can edit it", () => {
-    expect(canReadDocument({ readable: true, canEdit: false })).toBe(true);
-    expect(canReadDocument({ readable: false, canEdit: false })).toBe(false);
-    expect(canReadDocument({ readable: false, canEdit: true })).toBe(true);
+  it("shows an unreadable document only to its editors and 指定的人", () => {
+    const closed = { readable: false, canEdit: false, isListed: false };
+    expect(canReadDocument({ ...closed, readable: true })).toBe(true);
+    expect(canReadDocument(closed)).toBe(false);
+    expect(canReadDocument({ ...closed, canEdit: true })).toBe(true);
+    expect(canReadDocument({ ...closed, isListed: true })).toBe(true);
   });
 
   it("lets a reader who cannot edit ask once", () => {
@@ -174,5 +181,70 @@ describe("who may do what", () => {
     expect(canRequestEdit({ ...base, canEdit: true })).toBe(false);
     expect(canRequestEdit({ ...base, canRead: false })).toBe(false);
     expect(canRequestEdit({ ...base, hasPendingRequest: true })).toBe(false);
+  });
+});
+
+describe("audience", () => {
+  it("is all, 指定的人 or editors only, from the switch and the list", () => {
+    expect(audienceOf({ readable: true, hasReaders: false })).toBe("all");
+    expect(audienceOf({ readable: false, hasReaders: true })).toBe("selected");
+    expect(audienceOf({ readable: false, hasReaders: false })).toBe("editors");
+  });
+
+  const reader = {
+    userId: "u1",
+    projectIds: new Set([1, 2]),
+    departments: new Set([departmentRef(1, 10)]),
+  };
+  const person = (userId: string) => ({
+    userId,
+    workspaceId: null,
+    departmentId: null,
+  });
+  const group = (workspaceId: number, departmentId: number | null) => ({
+    userId: null,
+    workspaceId,
+    departmentId,
+  });
+
+  it("lists a person by name, project or department", () => {
+    expect(isListedReader([person("u1")], reader)).toBe(true);
+    expect(isListedReader([person("u2")], reader)).toBe(false);
+    expect(isListedReader([group(2, null)], reader)).toBe(true);
+    expect(isListedReader([group(3, null)], reader)).toBe(false);
+    expect(isListedReader([group(1, 10)], reader)).toBe(true);
+    // In project 1, but not in its department 11.
+    expect(isListedReader([group(1, 11)], reader)).toBe(false);
+    // In department 10 of project 1, not of project 2.
+    expect(isListedReader([group(2, 10)], reader)).toBe(false);
+    expect(isListedReader([], reader)).toBe(false);
+  });
+
+  it("drops repeats and the departments of a project chosen whole", () => {
+    expect(
+      normaliseSelection({
+        userIds: ["a", "b", "a"],
+        groups: [
+          { projectPublicId: "p1", departmentPublicId: "dev" },
+          { projectPublicId: "p1", departmentPublicId: null },
+          { projectPublicId: "p2", departmentPublicId: "dev" },
+          { projectPublicId: "p2", departmentPublicId: "dev" },
+          { projectPublicId: "p2", departmentPublicId: "ops" },
+        ],
+      }),
+    ).toEqual({
+      userIds: ["a", "b"],
+      groups: [
+        { projectPublicId: "p1", departmentPublicId: null },
+        { projectPublicId: "p2", departmentPublicId: "dev" },
+        { projectPublicId: "p2", departmentPublicId: "ops" },
+      ],
+    });
+  });
+
+  it("keys a person and a group differently", () => {
+    expect(readerTargetKey(person("u1"))).toBe("user:u1");
+    expect(readerTargetKey(group(1, null))).toBe("group:1:");
+    expect(readerTargetKey(group(1, 10))).toBe("group:1:10");
   });
 });

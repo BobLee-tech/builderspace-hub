@@ -103,7 +103,7 @@ describe("hub.documents", () => {
       title: "讲稿",
       filename: "讲稿.md",
       content: "# 讲稿",
-      readable: false,
+      audience: { kind: "editors" },
     });
     const opened = await asAdmin.documents.content({
       documentPublicId: created.publicId,
@@ -163,5 +163,55 @@ describe("hub.documents", () => {
         userId: "not-a-uuid",
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("shares a document with 指定的人 picked from the options", async () => {
+    const asAdmin = createHubCaller(db, admin);
+    const asMember = createHubCaller(db, member);
+    const created = await asAdmin.documents.createText({
+      title: "预算",
+      filename: "预算.md",
+      content: "# 预算",
+      audience: { kind: "selected", userIds: [member.id], groups: [] },
+    });
+
+    expect((await asMember.documents.library({})).documents).toMatchObject([
+      { publicId: created.publicId, audience: "selected" },
+    ]);
+    const detail = await asAdmin.documents.get({
+      documentPublicId: created.publicId,
+    });
+    expect(detail.readers?.users).toEqual([{ userId: member.id, name: "Mia" }]);
+
+    // The picker lists who is in which project: not for people who cannot
+    // choose who reads anything.
+    await expect(asMember.documents.audienceOptions()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(
+      (await asAdmin.documents.audienceOptions()).departments,
+    ).toHaveLength(3);
+  });
+});
+
+describe("hub.departments", () => {
+  it("is for the back office; changing it is for account managers", async () => {
+    await expect(
+      createHubCaller(db, member).departments.directory(),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await seedHubAccount(db, member.id, { role: "viewer" });
+    const asViewer = createHubCaller(db, member);
+    expect(
+      (await asViewer.departments.directory()).departments.map((d) => d.name),
+    ).toEqual(["技术", "活动", "运营"]);
+    await expect(
+      asViewer.departments.create({ name: "设计" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await createHubCaller(db, admin).departments.create({ name: "设计" });
+    expect(
+      (await asViewer.departments.directory()).departments.map((d) => d.name),
+    ).toEqual(["技术", "活动", "运营", "设计"]);
   });
 });

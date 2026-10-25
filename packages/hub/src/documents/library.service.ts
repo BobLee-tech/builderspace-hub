@@ -4,14 +4,17 @@ import { generateUID } from "@kan/shared/utils";
 
 import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
-import type { PreviewKind } from "./document.policy";
-import type { DocumentRow, FolderRow } from "./document.repo";
+import type { ReaderList } from "./audience.service";
+import type { Audience, PreviewKind } from "./document.policy";
+import type { DocumentRow, FolderRow, ReaderRow } from "./document.repo";
 import type { DocumentStorage } from "./storage";
 import { withAudit } from "../audit";
 import { isUniqueViolation } from "../shared/db-errors";
 import { HubError } from "../shared/errors";
-import { loadReadable, requireUserId } from "./document.guard";
+import { describeReaders } from "./audience.service";
+import { loadReadable, loadReader, requireUserId } from "./document.guard";
 import {
+  audienceOf,
   canCreateDocument,
   canEditDocument,
   canReadDocument,
@@ -19,6 +22,7 @@ import {
   fileLabel,
   FOLDER_MAX_DEPTH,
   FOLDER_NAME_MAX_LENGTH,
+  isListedReader,
   MAX_TEXT_BYTES,
   normaliseName,
   previewKindOf,
@@ -34,6 +38,7 @@ import {
   listEditors,
   listFolders,
   listPendingRequests,
+  listReaders,
   namesOf,
   renameFolder as renameFolderRow,
 } from "./document.repo";
@@ -58,7 +63,10 @@ export interface DocumentSummary {
   folderPublicId: string | null;
   /** The folders it sits in, joined: "合同 / 2026". */
   folderPath: string;
+  /** Every member can read it (the `all` audience). */
   readable: boolean;
+  /** Who can read it besides its editors. */
+  audience: Audience;
   /** Whether the viewer may change it. */
   canEdit: boolean;
   createdAt: Date;
@@ -119,6 +127,7 @@ function summarise(
   row: DocumentRow,
   canEdit: boolean,
   byId: Map<number, FolderRow>,
+  hasReaders: boolean,
 ): DocumentSummary {
   const folder = row.folderId === null ? undefined : byId.get(row.folderId);
   return {
@@ -135,6 +144,7 @@ function summarise(
       .map((f) => f.name)
       .join(" / "),
     readable: row.readable,
+    audience: audienceOf({ readable: row.readable, hasReaders }),
     canEdit,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -150,20 +160,26 @@ export async function getLibrary(
   const input = parse(libraryInput, rawInput);
   const userId = requireUserId(actor);
 
-  const [folderRows, documentRows, edited] = await Promise.all([
-    listFolders(db),
-    listDocuments(db),
-    listEditedDocumentIds(db, userId),
-  ]);
+  const [folderRows, documentRows, edited, readerRows, reader] =
+    await Promise.all([
+      listFolders(db),
+      listDocuments(db),
+      listEditedDocumentIds(db, userId),
+      listReaders(db),
+      loadReader(db, userId),
+    ]);
   const byId = new Map(folderRows.map((f) => [f.id, f]));
+  const readersOf = groupReaders(readerRows);
 
   const visible = documentRows.flatMap((row) => {
     const canEdit = canEditDocument({
       role: actor.role,
       isEditor: edited.has(row.id),
     });
-    return canReadDocument({ readable: row.readable, canEdit })
-      ? [{ row, canEdit }]
+    const readers = readersOf.get(row.id) ?? [];
+    const isListed = !row.readable && isListedReader(readers, reader);
+    return canReadDocument({ readable: row.readable, canEdit, isListed })
+      ? [{ row, canEdit, hasReaders: readers.length > 0 }]
       : [];
   });
 
@@ -223,10 +239,23 @@ export async function getLibrary(
     folders: search
       ? []
       : (childrenOf.get(current?.id ?? null) ?? []).map(summariseFolder),
-    documents: inScope.map(({ row, canEdit }) => summarise(row, canEdit, byId)),
+    documents: inScope.map(({ row, canEdit, hasReaders }) =>
+      summarise(row, canEdit, byId, hasReaders),
+    ),
     search,
     canCreate: canCreateDocument(actor.role),
   };
+}
+
+function groupReaders(rows: ReaderRow[]): Map<number, ReaderRow[]> {
+  const byDocument = new Map<number, ReaderRow[]>();
+  for (const row of rows) {
+    byDocument.set(row.documentId, [
+      ...(byDocument.get(row.documentId) ?? []),
+      row,
+    ]);
+  }
+  return byDocument;
 }
 
 export interface EditRequestSummary {
@@ -257,6 +286,8 @@ export interface DocumentDetail extends DocumentSummary {
   pendingRequests: EditRequestSummary[];
   /** Every folder with its path, to move the document to; editors only. */
   folderOptions: { publicId: string; path: string }[];
+  /** Its 指定的人, for the people who can change them; null for others. */
+  readers: ReaderList | null;
 }
 
 export async function getDocumentDetail(
@@ -268,14 +299,16 @@ export async function getDocumentDetail(
   const access = await loadReadable(db, actor, publicId);
   const { row } = access;
 
-  const [folderRows, editors, latest, uploaders] = await Promise.all([
-    listFolders(db),
-    listEditors(db, row.id),
-    findLatestRequest(db, row.id, access.userId),
-    row.uploadedBy
-      ? namesOf(db, [row.uploadedBy])
-      : Promise.resolve(new Map<string, string>()),
-  ]);
+  const [folderRows, editors, latest, uploaders, readerRows] =
+    await Promise.all([
+      listFolders(db),
+      listEditors(db, row.id),
+      findLatestRequest(db, row.id, access.userId),
+      row.uploadedBy
+        ? namesOf(db, [row.uploadedBy])
+        : Promise.resolve(new Map<string, string>()),
+      listReaders(db, [row.id]),
+    ]);
   const byId = new Map(folderRows.map((f) => [f.id, f]));
   const folder = row.folderId === null ? undefined : byId.get(row.folderId);
 
@@ -285,7 +318,7 @@ export async function getDocumentDetail(
   const hasPending = latest?.status === "pending";
 
   return {
-    ...summarise(row, access.canEdit, byId),
+    ...summarise(row, access.canEdit, byId, readerRows.length > 0),
     breadcrumbs: pathOf(folder, byId).map((f) => ({
       publicId: f.publicId,
       name: f.name,
@@ -328,6 +361,7 @@ export async function getDocumentDetail(
           }))
           .sort((a, b) => a.path.localeCompare(b.path, "zh-CN"))
       : [],
+    readers: access.canEdit ? await describeReaders(db, readerRows) : null,
   };
 }
 

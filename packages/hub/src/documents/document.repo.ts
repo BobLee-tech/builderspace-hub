@@ -14,11 +14,13 @@ import { users } from "@kan/db/schema";
 
 import type { DbOrTx } from "../db";
 import type { EditRequestStatus, HubRole } from "../schema";
+import type { ReaderTarget } from "./document.policy";
 import {
   hubAccounts,
   hubDocumentEditors,
   hubDocumentEditRequests,
   hubDocumentFolders,
+  hubDocumentReaders,
   hubDocuments,
 } from "../schema";
 
@@ -322,6 +324,49 @@ export async function searchEditorCandidates(
     .limit(input.limit);
 }
 
+/* ── readers (指定的人) ────────────────────────────────────────────────── */
+
+export interface ReaderRow extends ReaderTarget {
+  documentId: number;
+}
+
+/** The 指定的人 of the given documents, or of every document. */
+export async function listReaders(
+  db: DbOrTx,
+  documentIds?: number[],
+): Promise<ReaderRow[]> {
+  if (documentIds && documentIds.length === 0) return [];
+  return db
+    .select({
+      documentId: hubDocumentReaders.documentId,
+      userId: hubDocumentReaders.userId,
+      workspaceId: hubDocumentReaders.workspaceId,
+      departmentId: hubDocumentReaders.departmentId,
+    })
+    .from(hubDocumentReaders)
+    .where(
+      documentIds
+        ? inArray(hubDocumentReaders.documentId, documentIds)
+        : undefined,
+    )
+    .orderBy(asc(hubDocumentReaders.id));
+}
+
+/** Replaces a document's 指定的人 with `targets` (none clears them). */
+export async function replaceReaders(
+  db: DbOrTx,
+  documentId: number,
+  targets: readonly ReaderTarget[],
+): Promise<void> {
+  await db
+    .delete(hubDocumentReaders)
+    .where(eq(hubDocumentReaders.documentId, documentId));
+  if (targets.length === 0) return;
+  await db
+    .insert(hubDocumentReaders)
+    .values(targets.map((target) => ({ ...target, documentId })));
+}
+
 /* ── edit requests ───────────────────────────────────────────────────── */
 
 export type RequestRow = typeof hubDocumentEditRequests.$inferSelect;
@@ -509,6 +554,24 @@ export async function findActiveUser(
     )
     .limit(1);
   return row ?? null;
+}
+
+/** The given accounts that exist and are not suspended. */
+export async function findActiveUsers(
+  db: DbOrTx,
+  userIds: string[],
+): Promise<{ id: string; name: string }[]> {
+  if (userIds.length === 0) return [];
+  return db
+    .select({ id: users.id, name: userName })
+    .from(users)
+    .leftJoin(hubAccounts, eq(hubAccounts.userId, users.id))
+    .where(
+      and(
+        inArray(users.id, userIds),
+        or(isNull(hubAccounts.status), eq(hubAccounts.status, "active")),
+      ),
+    );
 }
 
 export async function namesOf(

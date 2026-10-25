@@ -141,9 +141,10 @@ Kan 的看板只有两种可见性：`public`（不登录拿到链接也能看�
 
 `packages/hub/src/documents/` 负责 `/documents`：用 Markdown 或 HTML 在页面里写和编辑的文档。**不存附件，不用对象存储。**
 
-- **内容在数据库里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_blob`（内容本身，按 `storageKey` 存，最大 400 KB）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）。`DocumentStorage` 接口只剩一个实现 `storage.db.ts`；接口保留是为了让内容存放的位置和业务规则分开，测试里另有一个内存实现。
+- **内容在数据库里。** 表：`hub_document`（标题、文件名、大小、`storageKey`、可读开关）、`hub_document_reader`（指定的人，见下）、`hub_document_blob`（内容本身，按 `storageKey` 存，最大 400 KB）、`hub_document_folder`（文件夹，可嵌套，最多 3 层）、`hub_document_editor`（谁被指派可以改哪份文档）、`hub_document_edit_request`（申请记录）。`DocumentStorage` 接口只剩一个实现 `storage.db.ts`；接口保留是为了让内容存放的位置和业务规则分开，测试里另有一个内存实现。
 - **历史：** 文档库最早做过文件上传（浏览器直传 S3 兼容存储，PDF、PPT 等），后来决定不需要附件，整条路删掉了：上传分两步的用例、S3 和磁盘存储、上传路由、导入命令。迁移历史不改写：`hub_document_upload` 表留着（表里没有数据，代码不再读写它），要彻底去掉得另写一条迁移。`hub_document.storageKey` 仍在用：它是内容在 `hub_document_blob` 里的键。线上从没配过 bucket，所以没有需要搬走的文件。
-- **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：登录成员，除非这份文档的可读开关被关掉（关掉后只有能修改的人看得到）。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
+- **权限规则全在 `document.policy.ts`**，界面和接口都不另写。读：三档，「所有成员」「指定的人」「只有能修改的人」；能修改的人始终能读。新建：所有者、管理员（`documents.manage`）。修改：所有者，或被指派的人；管理员不是所有文档的编辑者。指派和处理申请：所有者，和自己是编辑者的管理员；被指派的普通成员不能再往下指派。读不到的文档和不存在的文档，回答一样（`NOT_FOUND`）。
+- **谁能看（`audience.service.ts`）**：存的是可读开关加 `hub_document_reader` 里的名单。开关开着 = 所有成员；关着、名单里有人 = 指定的人；关着、名单是空的 = 只有能修改的人。名单的每一行是一个人、一整个项目，或一个项目里的一个部门（见下面「部门」）。判断按读的那一刻算：项目看此刻是不是这个项目的在职成员，部门看此刻是不是在这个项目的这个部门里，所以离开项目、被移出部门后立刻读不到。只在开关关着时保留名单，打开时清空，不会出现「开着但有名单」。名单里的人或项目都没了（账号、项目被删）时，文档退回只有能修改的人能看，不会变成所有人可读。挑人的选项（`hub.documents.audienceOptions`，列出每个项目的成员和部门）只给能新建文档或能修改某份文档的人，普通成员拿不到项目名单。命令行用的 REST 接口照旧收发 `readable` 开关：`true` 设为所有成员，`false` 设为只有能修改的人，和现状一样时不动（所以命令行不会把「指定的人」冲掉）；返回里另有 `audience`。
 - **上传 = 在浏览器里把文件变成文本。** `file-import.ts` 读 `.md` / `.markdown` / `.html` / `.htm`（必须是 UTF-8），把 Word（`.docx`）用 mammoth 转 HTML、再用 turndown 转 Markdown：表格的第一行当表头，图片去掉并计数。结果填进「新建文档」对话框，人看过再保存，走的还是 `createText`，服务端没有上传接口。转换放在浏览器，是因为带图的 `.docx` 很容易超过 tRPC 1 MB 的请求上限；转换库只在选了文件时才加载（`import()`），`IMPORT_ACCEPT` 在 `@kan/hub/public` 里，页面不用为了它加载转换库。
 - **格式白名单，类型由我们定。** 只认扩展名 `.md`、`.html`、`.htm`（`inspectFile`），不信客户端报的类型。读的时候返回的类型也由我们定：Markdown 经文件接口一律按纯文本输出，从不解释。
 - **渲染：** Markdown 在页面里用 react-markdown 加 remark-gfm 渲染（支持 GitHub 的表格、任务列表、删除线；不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。
@@ -152,6 +153,15 @@ Kan 的看板只有两种可见性：`public`（不登录拿到链接也能看�
 - **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文档或转让编辑权，这些只在网页里做。读不到的文档回 404，和不存在一样。
 - **每个改数据的用例都有操作日志。**
 - **已知的局限**：没有版本历史（保存会覆盖旧内容）；只有 Markdown 和 HTML，没有附件；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
+
+## 部门
+
+`packages/hub/src/departments/` 管社团的部门：一套名单所有项目共用（起步是技术、活动、运营，迁移里写好），每个项目里谁在哪个部门各自设置。后台「部门」页（`/admin/departments`）新建、改名、上下移动部门，按项目勾选成员所在的部门；账号详情页也能改这个人的部门。
+
+- **两张表**：`hub_department`（名字、顺序）和 `hub_department_member`（部门、项目、人）。部门**不能删**（2026-10-24 定）：外键都是 `restrict`，文档「指定的人」里引用的部门一直在。
+- **部门不是职能**：职能（看板）还是 `@kan/builderspace/structure` 里那三块，新建部门不会新建看板，改部门名也不会改看板名。起步的三个部门和职能同名，只是因为社团就是这么分的。
+- **谁能改**：能管理账号的人（`accounts.manage`，所有者和管理员）；后台只读成员能看不能改。只能把已经在项目里的人放进这个项目的部门；有人离开项目后记录不删，但不再算数，回到项目后恢复。
+- **每次改动都写操作日志**（新建、改名、移动、加人、移出）。
 
 ## 表单
 
