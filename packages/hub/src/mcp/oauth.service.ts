@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { z } from "zod";
 
 import { generateUID } from "@kan/shared/utils";
 
@@ -11,7 +12,12 @@ import { recordAudit, withAudit } from "../audit/audit";
 import { findSessionUser, findUsersByIds } from "../kan/users.gateway";
 import { HubError } from "../shared/errors";
 import { generateGrantToken, hashGrantToken } from "../shared/token";
-import { mcpUrls } from "./catalog";
+import {
+  MAX_MCP_TOKENS,
+  MCP_TOKEN_DAYS,
+  MCP_TOKEN_NAME_MAX,
+  mcpUrls,
+} from "./catalog";
 import {
   ACCESS_TOKEN_PREFIX,
   ACCESS_TOKEN_TTL_SECONDS,
@@ -21,6 +27,7 @@ import {
   isOurResource,
   isTokenShape,
   matchesRegisteredRedirect,
+  MCP_TOKEN_PREFIX,
   OAuthError,
   parseClientRegistration,
   readAuthorizeParams,
@@ -32,7 +39,10 @@ import {
   verifyPkce,
 } from "./oauth.policy";
 import {
+  countLiveTokens,
+  deleteClientConnections,
   deleteConnection,
+  deleteDeadConnections,
   deleteExpiredCodes,
   findClient,
   findConnectionByToken,
@@ -41,7 +51,7 @@ import {
   insertClient,
   insertCode,
   insertConnection,
-  listUserConnections,
+  listLiveConnections,
   rotateConnection,
   takeCode,
   touchConnection,
@@ -331,14 +341,17 @@ async function redeemCode(db: Db, form: unknown, now: Date) {
   const publicId = generateUID();
   await withAudit(
     db,
-    (tx) =>
-      insertConnection(tx, {
+    async (tx) => {
+      await deleteClientConnections(tx, stored.userId, client.id);
+      await deleteDeadConnections(tx, stored.userId, now);
+      await insertConnection(tx, {
         ...hashes,
         publicId,
         clientId: client.id,
         userId: stored.userId,
         now,
-      }),
+      });
+    },
     () => ({
       actor: { userId: user.id, email: user.email },
       action: "mcp.connected",
@@ -428,7 +441,15 @@ export async function authenticateMcpRequest(
   now: Date,
 ): Promise<McpCaller | null> {
   const token = bearerToken(authorization);
-  if (!token || !isTokenShape(token, ACCESS_TOKEN_PREFIX)) return null;
+  if (
+    !token ||
+    !(
+      isTokenShape(token, ACCESS_TOKEN_PREFIX) ||
+      isTokenShape(token, MCP_TOKEN_PREFIX)
+    )
+  ) {
+    return null;
+  }
   const connection = await findLiveConnection(db, hashGrantToken(token), now);
   if (!connection) return null;
 
@@ -454,20 +475,105 @@ export async function authenticateMcpRequest(
 
 export interface McpConnection {
   publicId: string;
-  clientName: string;
+  /** The app's name (OAuth) or the label the person gave the token. */
+  name: string;
+  kind: "oauth" | "token";
   createdAt: Date;
   lastUsedAt: Date;
+  /** When it stops working unless used: the refresh token's end, or the token's. */
+  expiresAt: Date;
 }
 
-/** The AI apps connected to my account. */
+/** The AI apps and tokens that can act as me right now. */
 export async function listMcpConnections(
   db: Db,
   userId: string,
+  now: Date,
 ): Promise<McpConnection[]> {
-  return listUserConnections(db, userId);
+  const rows = await listLiveConnections(db, userId, now);
+  return rows.map((row) => ({
+    publicId: row.publicId,
+    name: row.name,
+    kind: row.clientId === null ? "token" : "oauth",
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt,
+    expiresAt: row.refreshExpiresAt ?? row.accessExpiresAt,
+  }));
 }
 
-/** 断开: the app's tokens stop working at once; it has to ask me again. */
+const tokenInput = z.object({
+  name: z
+    .string()
+    .transform((value) => value.replace(/[\p{Cc}\p{Cf}]/gu, "").trim())
+    .pipe(
+      z
+        .string()
+        .min(1, "给令牌起个名字，比如用在哪个应用上")
+        .max(MCP_TOKEN_NAME_MAX, `名字最多 ${MCP_TOKEN_NAME_MAX} 个字`),
+    ),
+  days: z
+    .number()
+    .refine(
+      (value): value is (typeof MCP_TOKEN_DAYS)[number] =>
+        (MCP_TOKEN_DAYS as readonly number[]).includes(value),
+      `有效期只能选 ${MCP_TOKEN_DAYS.join(" / ")} 天`,
+    ),
+});
+
+/**
+ * 生成令牌: for an AI app that cannot sign in with OAuth. The token is shown
+ * once and only its hash is kept; it can do exactly what an OAuth connection
+ * can (and only at the MCP endpoint), until it expires or is revoked.
+ */
+export async function createMcpToken(
+  db: Db,
+  actor: { userId: string; email: string },
+  rawInput: unknown,
+  now: Date,
+): Promise<{ token: string; publicId: string; expiresAt: Date }> {
+  const parsed = tokenInput.safeParse(rawInput);
+  if (!parsed.success) {
+    throw new HubError(
+      "INVALID_INPUT",
+      parsed.error.issues[0]?.message ?? "输入不正确",
+    );
+  }
+  const { name, days } = parsed.data;
+  if ((await countLiveTokens(db, actor.userId, now)) >= MAX_MCP_TOKENS) {
+    throw new HubError(
+      "CONFLICT",
+      `最多同时有 ${MAX_MCP_TOKENS} 个有效令牌，先撤销不用的`,
+    );
+  }
+
+  const token = `${MCP_TOKEN_PREFIX}${generateGrantToken()}`;
+  const publicId = generateUID();
+  const expiresAt = seconds(now, days * 24 * 60 * 60);
+  await withAudit(
+    db,
+    async (tx) => {
+      await deleteDeadConnections(tx, actor.userId, now);
+      await insertConnection(tx, {
+        publicId,
+        userId: actor.userId,
+        name,
+        accessTokenHash: hashGrantToken(token),
+        accessExpiresAt: expiresAt,
+        now,
+      });
+    },
+    () => ({
+      actor,
+      action: "mcp.connected",
+      entityType: "mcp_connection",
+      entityId: publicId,
+      summary: `生成了 MCP 令牌「${name}」，${days} 天有效`,
+    }),
+  );
+  return { token, publicId, expiresAt };
+}
+
+/** 断开 / 撤销: the app's or the token's access stops at once. */
 export async function disconnectMcp(
   db: Db,
   actor: { userId: string; email: string },
@@ -483,7 +589,10 @@ export async function disconnectMcp(
       action: "mcp.disconnected",
       entityType: "mcp_connection",
       entityId: connection.publicId,
-      summary: `断开了「${connection.clientName}」的 MCP 连接`,
+      summary:
+        connection.clientId === null
+          ? `撤销了 MCP 令牌「${connection.clientName}」`
+          : `断开了「${connection.clientName}」的 MCP 连接`,
     }),
   );
 }

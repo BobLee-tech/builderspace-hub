@@ -35,7 +35,7 @@ describe("the MCP guide", () => {
         ? [block.code.code]
         : [],
     );
-    expect(json).toHaveLength(2);
+    expect(json).toHaveLength(3);
     for (const code of json)
       expect(() => JSON.parse(code) as unknown).not.toThrow();
     expect(json.join()).toContain(endpoint);
@@ -51,6 +51,14 @@ describe("the MCP guide", () => {
     expect(owner).toContain("### 后台");
     expect(owner).toContain("`account_set_project_role`");
     expect(owner).toContain("后台角色：所有者");
+  });
+
+  it("explains tokens for clients without OAuth, without ever holding one", () => {
+    const markdown = guideToMarkdown(guideFor(null));
+    expect(markdown).toContain("## 客户端不支持 OAuth 时：用令牌");
+    expect(markdown).toContain(`--header "Authorization: Bearer <令牌>"`);
+    expect(markdown).not.toMatch(/bsh_(pat|at|rt)_/);
+    expect(markdown).toContain("## 断线和重新登录");
   });
 
   it("says what an AI cannot do, and how to stay safe", () => {

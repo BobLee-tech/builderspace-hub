@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TbCheck, TbCopy, TbMarkdown } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
-import { toolsFor } from "@kan/hub/public";
+import { MCP_TOKEN_DAYS, MCP_TOKEN_NAME_MAX, toolsFor } from "@kan/hub/public";
 
 import type { Guide, GuideBlock } from "~/hub/lib/mcp-guide";
 import type { RouterOutputs } from "~/utils/api";
@@ -14,6 +14,8 @@ import {
   Card,
   ConfirmButton,
   ErrorText,
+  inputClass,
+  OneTimeSecret,
   PageHeader,
   Pill,
 } from "~/hub/ui/admin-primitives";
@@ -35,8 +37,9 @@ const timeFormat = new Intl.DateTimeFormat("zh-CN", {
 
 /**
  * 左侧「MCP」: how to connect an AI app to the Hub, which tools this person's
- * AI gets, and the apps already connected. The guide at its heart is data
- * (`mcp-guide.ts`), so 复制本页 Markdown hands an AI exactly what is shown.
+ * AI gets, the apps and tokens that can act as them, and a form to generate a
+ * token for apps that cannot sign in with OAuth. The guide at its heart is
+ * data (`mcp-guide.ts`), so 复制本页 Markdown hands an AI exactly what is shown.
  */
 export function McpPage() {
   const me = api.hub.me.get.useQuery(undefined, {
@@ -70,6 +73,7 @@ export function McpPage() {
       {overview.data && (
         <div className="space-y-4">
           <Connections connections={overview.data.connections} />
+          {overview.data.endpoint !== null && <NewToken />}
           {overview.data.endpoint === null ? (
             <Card>
               <p className="text-sm text-light-900 dark:text-dark-900">
@@ -207,10 +211,13 @@ function Connections({ connections }: { connections: Connection[] }) {
               className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-light-1000 dark:text-dark-1000">
-                  {connection.clientName}
-                </p>
-                <p className="text-xs text-light-900 dark:text-dark-900">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-sm font-medium text-light-1000 dark:text-dark-1000">
+                    {connection.name}
+                  </p>
+                  <Pill>{text.connections.kinds[connection.kind]}</Pill>
+                </div>
+                <p className="text-xs leading-5 text-light-900 dark:text-dark-900">
                   {text.connections.connectedAt(
                     timeFormat.format(connection.createdAt),
                   )}
@@ -218,10 +225,22 @@ function Connections({ connections }: { connections: Connection[] }) {
                   {text.connections.lastUsed(
                     timeFormat.format(connection.lastUsedAt),
                   )}
+                  {" · "}
+                  {connection.kind === "token"
+                    ? text.connections.expiresAt(
+                        timeFormat.format(connection.expiresAt),
+                      )
+                    : text.connections.oauthExpiry(
+                        timeFormat.format(connection.expiresAt),
+                      )}
                 </p>
               </div>
               <ConfirmButton
-                label={text.connections.disconnect}
+                label={
+                  connection.kind === "token"
+                    ? text.connections.revoke
+                    : text.connections.disconnect
+                }
                 isPending={disconnect.isPending}
                 onConfirm={() =>
                   disconnect.mutate({
@@ -234,6 +253,77 @@ function Connections({ connections }: { connections: Connection[] }) {
         </ul>
       )}
       <ErrorText message={disconnect.error?.message} />
+    </Card>
+  );
+}
+
+/** 生成令牌: a label and a lifetime in, the token out, once. */
+function NewToken() {
+  const utils = api.useUtils();
+  const [name, setName] = useState("");
+  const [days, setDays] = useState<number>(30);
+  const create = api.hub.mcp.createToken.useMutation({
+    onSuccess: () => {
+      setName("");
+      void utils.hub.mcp.overview.invalidate();
+    },
+  });
+
+  return (
+    <Card title={text.tokens.title} hint={text.tokens.hint}>
+      <form
+        className="flex flex-col gap-3 sm:flex-row sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          create.mutate({ name, days });
+        }}
+      >
+        <label className="block min-w-0 flex-1">
+          <span className="mb-1 block text-xs font-medium text-light-900 dark:text-dark-900">
+            {text.tokens.nameLabel}
+          </span>
+          <input
+            className={inputClass}
+            value={name}
+            maxLength={MCP_TOKEN_NAME_MAX}
+            placeholder={text.tokens.namePlaceholder}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-light-900 dark:text-dark-900">
+            {text.tokens.daysLabel}
+          </span>
+          <select
+            className={inputClass}
+            value={days}
+            onChange={(event) => setDays(Number(event.target.value))}
+          >
+            {MCP_TOKEN_DAYS.map((option) => (
+              <option key={option} value={option}>
+                {text.tokens.days(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          className={buttonClass.primary}
+          disabled={create.isPending || name.trim().length === 0}
+        >
+          {create.isPending ? text.tokens.creating : text.tokens.create}
+        </button>
+      </form>
+      <ErrorText message={create.error?.message} />
+      {create.data && (
+        <div className="mt-4">
+          <OneTimeSecret
+            label={text.tokens.created}
+            value={create.data.token}
+            note={text.tokens.warning}
+          />
+        </div>
+      )}
     </Card>
   );
 }

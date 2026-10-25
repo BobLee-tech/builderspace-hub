@@ -21,20 +21,26 @@ describe("the MCP tool catalog", () => {
     expect(tools.every((tool) => tool.needs === null)).toBe(true);
     expect(names(tools)).toContain("task_create");
     expect(names(tools)).not.toContain("doc_create");
+    expect(names(tools)).not.toContain("doc_audience_options");
     expect(names(tools)).not.toContain("account_list");
   });
 
   it("adds the back office by role", () => {
     const viewer = names(toolsFor({ role: "viewer", siteAccess: null }));
-    expect(viewer).toContain("account_list");
+    expect(viewer).toEqual(
+      expect.arrayContaining(["account_list", "department_list"]),
+    );
     expect(viewer).not.toContain("account_set_project_role");
+    expect(viewer).not.toContain("department_set_member");
     expect(viewer).not.toContain("audit_list");
 
     const admin = names(toolsFor({ role: "admin", siteAccess: null }));
     expect(admin).toEqual(
       expect.arrayContaining([
         "doc_create",
+        "doc_audience_options",
         "account_set_project_role",
+        "department_set_member",
         "grant_revoke",
         "audit_list",
       ]),

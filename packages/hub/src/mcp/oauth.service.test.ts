@@ -11,6 +11,7 @@ import {
   approveAuthorization,
   authenticateMcpRequest,
   checkAuthorizeRequest,
+  createMcpToken,
   denyAuthorization,
   describeRedirect,
   disconnectMcp,
@@ -258,12 +259,14 @@ describe("trading a code for tokens", () => {
 
     const [connection] = await db.select().from(hubMcpConnections);
     expect(connection?.accessTokenHash).not.toContain(tokens.access_token);
-    expect(await listMcpConnections(db, me.id)).toEqual([
+    expect(await listMcpConnections(db, me.id, now)).toEqual([
       {
         publicId: connection?.publicId,
-        clientName: "Claude Code",
+        name: "Claude Code",
+        kind: "oauth",
         createdAt: now,
         lastUsedAt: now,
+        expiresAt: later(30 * DAY),
       },
     ]);
 
@@ -553,11 +556,11 @@ describe("authenticateMcpRequest", () => {
     const tokens = await connect();
     const header = `Bearer ${tokens.access_token}`;
     await authenticateMcpRequest(db, header, later(MINUTE));
-    const [unchanged] = await listMcpConnections(db, me.id);
+    const [unchanged] = await listMcpConnections(db, me.id, now);
     expect(unchanged?.lastUsedAt).toEqual(now);
 
     await authenticateMcpRequest(db, header, later(10 * MINUTE));
-    const [touched] = await listMcpConnections(db, me.id);
+    const [touched] = await listMcpConnections(db, me.id, now);
     expect(touched?.lastUsedAt).toEqual(later(10 * MINUTE));
   });
 });
@@ -565,7 +568,7 @@ describe("authenticateMcpRequest", () => {
 describe("ending a connection", () => {
   it("disconnects from the MCP page, with a log entry", async () => {
     const tokens = await connect();
-    const [connection] = await listMcpConnections(db, me.id);
+    const [connection] = await listMcpConnections(db, me.id, now);
     if (!connection) throw new Error("no connection");
 
     await disconnectMcp(
@@ -573,7 +576,7 @@ describe("ending a connection", () => {
       { userId: me.id, email: me.email },
       connection.publicId,
     );
-    expect(await listMcpConnections(db, me.id)).toEqual([]);
+    expect(await listMcpConnections(db, me.id, now)).toEqual([]);
     expect(
       await authenticateMcpRequest(db, `Bearer ${tokens.access_token}`, now),
     ).toBeNull();
@@ -589,7 +592,7 @@ describe("ending a connection", () => {
 
   it("cannot disconnect someone else's app", async () => {
     await connect();
-    const [connection] = await listMcpConnections(db, me.id);
+    const [connection] = await listMcpConnections(db, me.id, now);
     const stranger = await seedUser(db);
     await expect(
       disconnectMcp(
@@ -598,13 +601,13 @@ describe("ending a connection", () => {
         connection?.publicId ?? "",
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(await listMcpConnections(db, me.id)).toHaveLength(1);
+    expect(await listMcpConnections(db, me.id, now)).toHaveLength(1);
   });
 
   it("lets the app sign out with either of its tokens", async () => {
     const tokens = await connect();
     await revokeToken(db, { token: tokens.refresh_token, client_id: clientId });
-    expect(await listMcpConnections(db, me.id)).toEqual([]);
+    expect(await listMcpConnections(db, me.id, now)).toEqual([]);
     const [entry] = await db
       .select()
       .from(hubAuditLog)
@@ -628,7 +631,7 @@ describe("ending a connection", () => {
       token: `bsh_at_${"b".repeat(43)}`,
       client_id: clientId,
     });
-    expect(await listMcpConnections(db, me.id)).toHaveLength(1);
+    expect(await listMcpConnections(db, me.id, now)).toHaveLength(1);
 
     const missing = await oauthErrorOf(
       revokeToken(db, { client_id: clientId }),
@@ -652,5 +655,165 @@ describe("hubMcpUrls", () => {
     ).toBe("https://hub.example.test");
     expect(hubMcpUrls({})).toBeNull();
     expect(hubMcpUrls({ NEXT_PUBLIC_BASE_URL: "not a url" })).toBeNull();
+  });
+});
+
+describe("keeping the list tidy", () => {
+  it("lets a new sign-in from the same app replace the old one", async () => {
+    const first = await connect();
+    const second = await connect(later(HOUR));
+    const connections = await listMcpConnections(db, me.id, later(HOUR));
+    expect(connections).toHaveLength(1);
+    expect(
+      await authenticateMcpRequest(
+        db,
+        `Bearer ${first.access_token}`,
+        later(HOUR),
+      ),
+    ).toBeNull();
+    expect(
+      await authenticateMcpRequest(
+        db,
+        `Bearer ${second.access_token}`,
+        later(HOUR),
+      ),
+    ).not.toBeNull();
+  });
+
+  it("keeps other apps' connections when one app signs in again", async () => {
+    await connect();
+    const other = await registerClient(
+      db,
+      { client_name: "Cursor", redirect_uris: [redirectUri] },
+      now,
+    );
+    clientId = other.client_id;
+    await connect();
+    expect(
+      (await listMcpConnections(db, me.id, now)).map((c) => c.name).sort(),
+    ).toEqual(["Claude Code", "Cursor"]);
+  });
+
+  it("leaves out connections that can no longer refresh", async () => {
+    await connect();
+    expect(await listMcpConnections(db, me.id, later(31 * DAY))).toEqual([]);
+  });
+});
+
+describe("generated tokens", () => {
+  const actor = () => ({ userId: me.id, email: me.email });
+
+  it("works at the MCP endpoint until it expires, and is listed and logged", async () => {
+    const { token, publicId, expiresAt } = await createMcpToken(
+      db,
+      actor(),
+      { name: "  脚本 \u202E ", days: 7 },
+      now,
+    );
+    expect(token).toMatch(/^bsh_pat_[A-Za-z0-9_-]{43}$/);
+    expect(expiresAt).toEqual(later(7 * DAY));
+
+    const [row] = await db.select().from(hubMcpConnections);
+    expect(row).toMatchObject({ clientId: null, name: "脚本" });
+    expect(row?.accessTokenHash).not.toContain(token);
+
+    expect(
+      await authenticateMcpRequest(db, `Bearer ${token}`, later(6 * DAY)),
+    ).toMatchObject({ user: { id: me.id }, clientName: "脚本" });
+    expect(
+      await authenticateMcpRequest(db, `Bearer ${token}`, later(7 * DAY)),
+    ).toBeNull();
+
+    expect(await listMcpConnections(db, me.id, now)).toEqual([
+      {
+        publicId,
+        name: "脚本",
+        kind: "token",
+        createdAt: now,
+        // Using it on day six wrote that down.
+        lastUsedAt: later(6 * DAY),
+        expiresAt: later(7 * DAY),
+      },
+    ]);
+    expect(await listMcpConnections(db, me.id, later(8 * DAY))).toEqual([]);
+
+    const [entry] = await db.select().from(hubAuditLog);
+    expect(entry).toMatchObject({
+      action: "mcp.connected",
+      actorEmail: me.email,
+      summary: "生成了 MCP 令牌「脚本」，7 天有效",
+    });
+  });
+
+  it("stops working the moment it is revoked", async () => {
+    const { token, publicId } = await createMcpToken(
+      db,
+      actor(),
+      { name: "Codex", days: 30 },
+      now,
+    );
+    await disconnectMcp(db, actor(), publicId);
+    expect(await authenticateMcpRequest(db, `Bearer ${token}`, now)).toBeNull();
+    const summaries = await db
+      .select({ summary: hubAuditLog.summary })
+      .from(hubAuditLog)
+      .where(eq(hubAuditLog.action, "mcp.disconnected"));
+    expect(summaries).toEqual([{ summary: "撤销了 MCP 令牌「Codex」" }]);
+  });
+
+  it("cannot be refreshed or revoked through the OAuth endpoints", async () => {
+    const { token } = await createMcpToken(
+      db,
+      actor(),
+      { name: "x", days: 7 },
+      now,
+    );
+    const refreshed = await oauthErrorOf(
+      exchangeToken(
+        db,
+        {
+          grant_type: "refresh_token",
+          refresh_token: token,
+          client_id: clientId,
+        },
+        resource,
+        now,
+      ),
+    );
+    expect(refreshed.error).toBe("invalid_grant");
+    await revokeToken(db, { token, client_id: clientId });
+    expect(await listMcpConnections(db, me.id, now)).toHaveLength(1);
+  });
+
+  it.each([
+    ["no name", { name: "  ", days: 7 }, "名字"],
+    ["a long name", { name: "x".repeat(41), days: 7 }, "40"],
+    ["another lifetime", { name: "x", days: 365 }, "7 / 30 / 90"],
+    ["nothing", null, ""],
+  ])("refuses %s", async (_label, input, message) => {
+    await expect(createMcpToken(db, actor(), input, now)).rejects.toMatchObject(
+      {
+        code: "INVALID_INPUT",
+        message: expect.stringContaining(message) as unknown,
+      },
+    );
+    expect(await db.select().from(hubMcpConnections)).toHaveLength(0);
+  });
+
+  it("allows ten live tokens at a time", async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await createMcpToken(db, actor(), { name: `t${i}`, days: 7 }, now);
+    }
+    await expect(
+      createMcpToken(db, actor(), { name: "one more", days: 7 }, now),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    // Expired ones do not count, and are cleared away.
+    await createMcpToken(
+      db,
+      actor(),
+      { name: "later", days: 7 },
+      later(8 * DAY),
+    );
+    expect(await db.select().from(hubMcpConnections)).toHaveLength(1);
   });
 });

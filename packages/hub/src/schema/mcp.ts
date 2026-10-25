@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
+  check,
   index,
   jsonb,
   pgTable,
@@ -62,17 +64,24 @@ export const hubOauthCodes = pgTable(
 
 /**
  * One AI app connected to one person's account: a row on the MCP page, and
- * what 断开 deletes. Holds the current access and refresh token; a refresh
- * replaces both, so a refresh token works once.
+ * what 断开 deletes. Two kinds:
+ *
+ * - signed in with OAuth (`clientId` set): holds the current access and
+ *   refresh token; a refresh replaces both, so a refresh token works once.
+ * - a token the person generated on the MCP page, for apps that cannot do
+ *   OAuth (`clientId` null, `name` is their label): one access token that
+ *   lives until `accessExpiresAt`, no refresh token.
  */
 export const hubMcpConnections = pgTable(
   "hub_mcp_connection",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     publicId: varchar("publicId", { length: 12 }).notNull().unique(),
-    clientId: bigint("clientId", { mode: "number" })
-      .notNull()
-      .references(() => hubOauthClients.id, { onDelete: "cascade" }),
+    clientId: bigint("clientId", { mode: "number" }).references(
+      () => hubOauthClients.id,
+      { onDelete: "cascade" },
+    ),
+    name: varchar("name", { length: 80 }),
     userId: uuid("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -80,12 +89,16 @@ export const hubMcpConnections = pgTable(
       .notNull()
       .unique(),
     accessExpiresAt: timestamp("accessExpiresAt").notNull(),
-    refreshTokenHash: varchar("refreshTokenHash", { length: 64 })
-      .notNull()
-      .unique(),
-    refreshExpiresAt: timestamp("refreshExpiresAt").notNull(),
+    refreshTokenHash: varchar("refreshTokenHash", { length: 64 }).unique(),
+    refreshExpiresAt: timestamp("refreshExpiresAt"),
     lastUsedAt: timestamp("lastUsedAt").defaultNow().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => [index("hub_mcp_connection_user_idx").on(table.userId)],
+  (table) => [
+    index("hub_mcp_connection_user_idx").on(table.userId),
+    check(
+      "hub_mcp_connection_kind_check",
+      sql`(${table.clientId} IS NOT NULL AND ${table.refreshTokenHash} IS NOT NULL AND ${table.refreshExpiresAt} IS NOT NULL) OR (${table.clientId} IS NULL AND ${table.name} IS NOT NULL AND ${table.refreshTokenHash} IS NULL)`,
+    ),
+  ],
 ).enableRLS();

@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   approveAuthorization,
   checkAuthorizeRequest,
+  createMcpToken,
   denyAuthorization,
   disconnectMcp,
   hubMcpUrls,
@@ -15,12 +16,12 @@ import { hubProcedure, runHub } from "../procedures";
 
 /**
  * `hub.mcp.*`: the pages around MCP sign-in. The consent page checks an
- * authorization request and answers it; the MCP page lists the AI apps
- * connected to my account and disconnects them.
+ * authorization request and answers it; the MCP page lists the AI apps and
+ * tokens that can act as me, generates tokens and disconnects them.
  *
- * The authorization request's parameters are the input. None is a secret (the
- * PKCE challenge is a hash, `state` is the app's own), so it is fine that the
- * logging middleware records them. The code only ever appears in an output.
+ * No input is a secret: the authorization request's parameters (the PKCE
+ * challenge is a hash, `state` is the app's own) and a token's label and
+ * lifetime may all be logged. Codes and tokens only ever appear in outputs.
  */
 
 const authorizeQuery = z
@@ -39,11 +40,23 @@ function requireUrls() {
 }
 
 export const mcpRouter = createTRPCRouter({
-  /** The MCP endpoint's address and my connected apps, for the MCP page. */
+  /** The MCP endpoint's address, and my connected apps and tokens. */
   overview: hubProcedure.query(async ({ ctx }) => ({
     endpoint: hubMcpUrls()?.resource ?? null,
-    connections: await listMcpConnections(ctx.db, ctx.actor.userId),
+    connections: await listMcpConnections(ctx.db, ctx.actor.userId, new Date()),
   })),
+
+  /** A token for an app that cannot sign in with OAuth; shown once. */
+  createToken: hubProcedure
+    .input(
+      z.object({
+        name: z.string().max(200),
+        days: z.number().int(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      runHub(() => createMcpToken(ctx.db, ctx.actor, input, new Date())),
+    ),
 
   disconnect: hubProcedure
     .input(z.object({ connectionPublicId: z.string().min(1).max(32) }))

@@ -99,6 +99,13 @@
       "when": 1792855006769,
       "tag": "20261024151646_AddDepartmentsAndDocumentReaders",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792916613082,
+      "tag": "20261025082333_AddMcpSignIn",
+      "breakpoints": true
     }
   ]
 }

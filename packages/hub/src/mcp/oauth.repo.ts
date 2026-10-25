@@ -1,4 +1,16 @@
-import { and, desc, eq, gt, lt, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { DbOrTx } from "../db";
 import { hubMcpConnections, hubOauthClients, hubOauthCodes } from "../schema";
@@ -61,20 +73,91 @@ export interface TokenHashes {
   refreshExpiresAt: Date;
 }
 
+/** An OAuth connection (`clientId`), or a generated token (`name`, access token only). */
 export async function insertConnection(
   db: DbOrTx,
-  values: TokenHashes & {
-    publicId: string;
-    clientId: number;
-    userId: string;
-    now: Date;
-  },
+  values: { publicId: string; userId: string; now: Date } & (
+    | (TokenHashes & { clientId: number })
+    | { name: string; accessTokenHash: string; accessExpiresAt: Date }
+  ),
 ): Promise<void> {
   const { now, ...row } = values;
   await db
     .insert(hubMcpConnections)
     .values({ ...row, createdAt: now, lastUsedAt: now });
 }
+
+/** A new sign-in from the same app replaces the old one instead of piling up. */
+export async function deleteClientConnections(
+  db: DbOrTx,
+  userId: string,
+  clientId: number,
+): Promise<void> {
+  await db
+    .delete(hubMcpConnections)
+    .where(
+      and(
+        eq(hubMcpConnections.userId, userId),
+        eq(hubMcpConnections.clientId, clientId),
+      ),
+    );
+}
+
+/** Live: an OAuth connection that can still refresh, or a token not yet expired. */
+const isLive = (now: Date) =>
+  or(
+    and(
+      isNotNull(hubMcpConnections.clientId),
+      gt(hubMcpConnections.refreshExpiresAt, now),
+    ),
+    and(
+      isNull(hubMcpConnections.clientId),
+      gt(hubMcpConnections.accessExpiresAt, now),
+    ),
+  );
+
+/** Connections nothing can use any more: no refresh left, or a token past its date. */
+export async function deleteDeadConnections(
+  db: DbOrTx,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .delete(hubMcpConnections)
+    .where(
+      and(
+        eq(hubMcpConnections.userId, userId),
+        or(
+          lte(hubMcpConnections.refreshExpiresAt, now),
+          and(
+            isNull(hubMcpConnections.clientId),
+            lte(hubMcpConnections.accessExpiresAt, now),
+          ),
+        ),
+      ),
+    );
+}
+
+export async function countLiveTokens(
+  db: DbOrTx,
+  userId: string,
+  now: Date,
+): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(hubMcpConnections)
+    .where(
+      and(
+        eq(hubMcpConnections.userId, userId),
+        isNull(hubMcpConnections.clientId),
+        gt(hubMcpConnections.accessExpiresAt, now),
+      ),
+    );
+  return row?.total ?? 0;
+}
+
+/** The app's own name for an OAuth connection, the person's label for a token. */
+const displayName = sql<string>`coalesce(${hubOauthClients.name}, ${hubMcpConnections.name}, '')`;
 
 /**
  * Swaps a live refresh token for new tokens in one statement, so of two
@@ -114,10 +197,10 @@ export async function findLiveConnection(
       publicId: hubMcpConnections.publicId,
       userId: hubMcpConnections.userId,
       lastUsedAt: hubMcpConnections.lastUsedAt,
-      clientName: hubOauthClients.name,
+      clientName: displayName,
     })
     .from(hubMcpConnections)
-    .innerJoin(
+    .leftJoin(
       hubOauthClients,
       eq(hubOauthClients.id, hubMcpConnections.clientId),
     )
@@ -142,20 +225,27 @@ export async function touchConnection(
     .where(eq(hubMcpConnections.id, id));
 }
 
-export async function listUserConnections(db: DbOrTx, userId: string) {
+export async function listLiveConnections(
+  db: DbOrTx,
+  userId: string,
+  now: Date,
+) {
   return db
     .select({
       publicId: hubMcpConnections.publicId,
-      clientName: hubOauthClients.name,
+      name: displayName,
+      clientId: hubMcpConnections.clientId,
       createdAt: hubMcpConnections.createdAt,
       lastUsedAt: hubMcpConnections.lastUsedAt,
+      accessExpiresAt: hubMcpConnections.accessExpiresAt,
+      refreshExpiresAt: hubMcpConnections.refreshExpiresAt,
     })
     .from(hubMcpConnections)
-    .innerJoin(
+    .leftJoin(
       hubOauthClients,
       eq(hubOauthClients.id, hubMcpConnections.clientId),
     )
-    .where(eq(hubMcpConnections.userId, userId))
+    .where(and(eq(hubMcpConnections.userId, userId), isLive(now)))
     .orderBy(desc(hubMcpConnections.lastUsedAt), desc(hubMcpConnections.id));
 }
 
@@ -194,10 +284,11 @@ export async function findUserConnection(
     .select({
       id: hubMcpConnections.id,
       publicId: hubMcpConnections.publicId,
-      clientName: hubOauthClients.name,
+      clientName: displayName,
+      clientId: hubMcpConnections.clientId,
     })
     .from(hubMcpConnections)
-    .innerJoin(
+    .leftJoin(
       hubOauthClients,
       eq(hubOauthClients.id, hubMcpConnections.clientId),
     )

@@ -143,6 +143,38 @@ export function buildMcpGuide(input: {
         ],
       },
       {
+        id: "token",
+        heading: text.token.heading,
+        blocks: [
+          { kind: "paragraph", text: text.token.intro },
+          {
+            kind: "client",
+            name: text.token.claudeCode,
+            code: {
+              language: "bash",
+              code: `claude mcp add --transport http ${MCP_SERVER_NAME} ${endpoint} --header "Authorization: Bearer ${text.token.placeholder}"`,
+            },
+          },
+          {
+            kind: "client",
+            name: text.token.json,
+            code: {
+              language: "json",
+              code: json({
+                mcpServers: {
+                  [MCP_SERVER_NAME]: {
+                    url: endpoint,
+                    headers: {
+                      Authorization: `Bearer ${text.token.placeholder}`,
+                    },
+                  },
+                },
+              }),
+            },
+          },
+        ],
+      },
+      {
         id: "tools",
         heading: text.tools.heading,
         blocks: [
@@ -165,6 +197,11 @@ export function buildMcpGuide(input: {
           { kind: "paragraph", text: text.notOffered.intro },
           { kind: "list", items: mcpNotOffered },
         ],
+      },
+      {
+        id: "reconnect",
+        heading: text.reconnect.heading,
+        blocks: [{ kind: "list", items: text.reconnect.items }],
       },
       {
         id: "safety",

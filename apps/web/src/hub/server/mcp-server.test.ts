@@ -11,7 +11,7 @@ import { createHubMcpServer } from "./mcp-server";
 
 // Loading the tools loads the whole API router, whose import routes need a key.
 vi.hoisted(() => {
-  process.env.BETTER_AUTH_SECRET ??= "mcp-server-test";
+  vi.stubEnv("BETTER_AUTH_SECRET", "mcp-server-test");
 });
 
 vi.mock("@kan/logger", () => ({

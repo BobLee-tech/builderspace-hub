@@ -69,13 +69,30 @@ describe("hub.mcp", () => {
     const overview = await hub.mcp.overview();
     expect(overview.endpoint).toBe(resource);
     expect(overview.connections).toEqual([
-      expect.objectContaining({ clientName: "Cursor" }),
+      expect.objectContaining({ name: "Cursor", kind: "oauth" }),
     ]);
 
     await hub.mcp.disconnect({
       connectionPublicId: overview.connections[0]?.publicId ?? "",
     });
     expect((await hub.mcp.overview()).connections).toEqual([]);
+  });
+
+  it("generates a token once, lists it, and revokes it", async () => {
+    const hub = createHubCaller(db, me);
+    const created = await hub.mcp.createToken({ name: "Codex", days: 30 });
+    expect(created.token).toMatch(/^bsh_pat_/);
+
+    const [listed] = (await hub.mcp.overview()).connections;
+    expect(listed).toMatchObject({ name: "Codex", kind: "token" });
+    expect(JSON.stringify(listed)).not.toContain(created.token);
+
+    await hub.mcp.disconnect({ connectionPublicId: created.publicId });
+    expect((await hub.mcp.overview()).connections).toEqual([]);
+
+    await expect(
+      hub.mcp.createToken({ name: "x", days: 3 }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("sends a refusal back to the app", async () => {

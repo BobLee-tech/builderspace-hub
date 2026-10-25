@@ -222,6 +222,12 @@ describe("tasks", () => {
     ).toMatchObject({ ok: false });
   });
 
+  it("explains Kan's English refusals in Chinese", async () => {
+    expect(await refusal(member, "task_get", { task: "doesnotexist1" })).toBe(
+      "找不到：id 不对，或者当前账号看不到它（Card with public ID doesnotexist1 not found）",
+    );
+  });
+
   it("refuses arguments that do not fit, with the reason", async () => {
     expect(
       await call(member, "task_create", {
@@ -253,7 +259,7 @@ describe("documents", () => {
     expect(read).toMatchObject({
       title: "讲稿",
       filename: "讲稿.md",
-      visibleToEveryone: false,
+      audience: "editors",
       content: "# 讲稿\n",
     });
 
@@ -280,6 +286,64 @@ describe("documents", () => {
     expect(
       await call(owner, "doc_update", { document: created.publicId }),
     ).toEqual({ ok: false, message: "没有要改的内容" });
+  });
+
+  it("shares a document with one department of a project, and only its people read it", async () => {
+    const colleague = await seedUser(db, { email: "colleague@example.test" });
+    await ensureProjectMemberForTests(db, colleague, club.id, "member");
+
+    const options = (await value(owner, "doc_audience_options")) as {
+      departments: { publicId: string; name: string }[];
+    };
+    const tech = options.departments.find((d) => d.name === "技术");
+    if (!tech) throw new Error("no 技术 department");
+
+    await value(owner, "department_set_member", {
+      department: tech.publicId,
+      project: club.publicId,
+      user_id: member.id,
+      member: true,
+    });
+    const created = await value(owner, "doc_create", {
+      title: "技术周会",
+      content: "议程",
+      audience: "selected",
+      readers: {
+        groups: [{ project: club.publicId, department: tech.publicId }],
+      },
+    });
+    expect(created.audience).toBe("selected");
+
+    const titles = async (person: Person) =>
+      ((await value(person, "doc_list")).documents as { title: string }[]).map(
+        (d) => d.title,
+      );
+    expect(await titles(member)).toEqual(["技术周会"]);
+    expect(await titles(colleague)).toEqual([]);
+
+    const read = await value(owner, "doc_read", { document: created.publicId });
+    expect(read.audience).toBe("selected");
+    expect(JSON.stringify(read.readers)).toContain("技术");
+  });
+
+  it("lets a document go to everyone, and asks who when it is selected", async () => {
+    await value(owner, "doc_create", {
+      title: "社团章程",
+      content: "x",
+      audience: "all",
+    });
+    expect(
+      ((await value(member, "doc_list")).documents as { title: string }[]).map(
+        (d) => d.title,
+      ),
+    ).toEqual(["社团章程"]);
+    expect(
+      await refusal(owner, "doc_create", {
+        title: "x",
+        content: "y",
+        audience: "selected",
+      }),
+    ).toContain("readers");
   });
 
   it("leaves creating documents to owners and admins", async () => {
@@ -335,6 +399,25 @@ describe("the back office", () => {
       await value(owner, "account_list", { search: "member" }),
     ).toMatchObject({ total: 1 });
     expect(await value(owner, "grant_list")).toMatchObject({ items: [] });
+  });
+
+  it("shows departments to back-office members and leaves changes to those who manage accounts", async () => {
+    const directory = await value(owner, "department_list");
+    expect(
+      (directory.departments as { name: string }[]).map((d) => d.name),
+    ).toEqual(expect.arrayContaining(["技术", "活动", "运营"]));
+    expect(await refusal(member, "department_list")).toBe(
+      "没有执行这个操作的权限",
+    );
+    const first = (directory.departments as { publicId: string }[])[0];
+    expect(
+      await refusal(member, "department_set_member", {
+        department: first?.publicId,
+        project: club.publicId,
+        user_id: member.id,
+        member: true,
+      }),
+    ).toBe("没有执行这个操作的权限");
   });
 
   it("answers plainly when the website's database is not connected", async () => {

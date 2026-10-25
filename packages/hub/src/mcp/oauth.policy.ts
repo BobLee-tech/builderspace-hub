@@ -382,6 +382,8 @@ export function tokenResponse(tokens: IssuedTokens) {
 
 export const ACCESS_TOKEN_PREFIX = "bsh_at_";
 export const REFRESH_TOKEN_PREFIX = "bsh_rt_";
+/** A token generated on the MCP page; works like an access token, for longer. */
+export const MCP_TOKEN_PREFIX = "bsh_pat_";
 
 /** Cheap shape check so junk never reaches a query. */
 export function isTokenShape(value: string, prefix: string): boolean {

@@ -126,6 +126,41 @@ function noList(boardName: string, wanted: keyof typeof stageNames): never {
   });
 }
 
+type Audience = NonNullable<
+  Parameters<HubCaller["hub"]["documents"]["createText"]>[0]["audience"]
+>;
+
+/** The document's readers, in the shape the procedure takes. */
+function audienceOf(
+  kind: "all" | "selected" | "editors",
+  readers:
+    | {
+        user_ids: string[];
+        groups: { project: string; department: string | null }[];
+      }
+    | undefined,
+): Audience {
+  if (kind !== "selected") return { kind };
+  if (
+    !readers ||
+    (readers.user_ids.length === 0 && readers.groups.length === 0)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "audience 选了 selected，就要在 readers 里给出至少一个人、项目或部门",
+    });
+  }
+  return {
+    kind,
+    userIds: readers.user_ids,
+    groups: readers.groups.map((group) => ({
+      projectPublicId: group.project,
+      departmentPublicId: group.department,
+    })),
+  };
+}
+
 // --- The tools ----------------------------------------------------------------
 
 interface ToolImpl<Shape extends z.ZodRawShape> {
@@ -333,7 +368,7 @@ export const mcpToolImplementations = {
           title: document.title,
           filename: document.filename,
           folderPath: document.folderPath,
-          visibleToEveryone: document.readable,
+          audience: document.audience,
           canEdit: document.canEdit,
           updatedAt: document.updatedAt,
         })),
@@ -354,7 +389,8 @@ export const mcpToolImplementations = {
       description: detail.description,
       filename: detail.filename,
       folderPath: detail.folderPath,
-      visibleToEveryone: detail.readable,
+      audience: detail.audience,
+      readers: detail.readers,
       canEditText: detail.canEditText,
       updatedAt: text.updatedAt.toISOString(),
       content: text.content,
@@ -373,23 +409,50 @@ export const mcpToolImplementations = {
       content: z.string().max(400_000).describe("全文"),
       description: z.string().max(2000).optional(),
       folder: publicId("文件夹").optional(),
-      visible_to_everyone: z
-        .boolean()
-        .default(false)
-        .describe("所有成员都能看；默认只有所有者和编辑者"),
+      audience: z
+        .enum(["all", "selected", "editors"])
+        .default("editors")
+        .describe(
+          "谁能看：editors 只有所有者和编辑者（默认）、all 所有成员、selected 指定的人（要给 readers）",
+        ),
+      readers: z
+        .object({
+          user_ids: z
+            .array(z.string().uuid())
+            .max(500)
+            .default([])
+            .describe("指定的人的 userId"),
+          groups: z
+            .array(
+              z.object({
+                project: publicId("项目"),
+                department: publicId("部门")
+                  .nullable()
+                  .default(null)
+                  .describe("不传或 null 是整个项目"),
+              }),
+            )
+            .max(200)
+            .default([]),
+        })
+        .optional()
+        .describe("audience 是 selected 时必填；从 doc_audience_options 拿 id"),
     },
     async (hub, args) => {
+      const audience = audienceOf(args.audience, args.readers);
       const created = await hub.hub.documents.createText({
         title: args.title,
         filename: args.filename ?? `${args.title}.md`,
         content: args.content,
         description: args.description,
         folderPublicId: args.folder,
-        readable: args.visible_to_everyone,
+        audience,
       });
-      return created;
+      return { ...created, audience: audience.kind };
     },
   ),
+
+  doc_audience_options: tool({}, (hub) => hub.hub.documents.audienceOptions()),
 
   doc_update: tool(
     {
@@ -465,6 +528,31 @@ export const mcpToolImplementations = {
     },
   ),
 
+  department_list: tool({}, (hub) => hub.hub.departments.directory()),
+
+  department_set_member: tool(
+    {
+      department: publicId("部门"),
+      project: publicId("项目"),
+      user_id: z.string().uuid().describe("成员的 userId"),
+      member: z.boolean().describe("true 放进部门，false 移出"),
+    },
+    async (hub, args) => {
+      await hub.hub.departments.setMember({
+        departmentPublicId: args.department,
+        projectPublicId: args.project,
+        userId: args.user_id,
+        member: args.member,
+      });
+      return {
+        department: args.department,
+        project: args.project,
+        userId: args.user_id,
+        member: args.member,
+      };
+    },
+  ),
+
   grant_list: tool({ page }, (hub, args) => hub.hub.grants.list(args)),
 
   grant_revoke: tool({ grant: publicId("注册链接") }, async (hub, args) => {
@@ -514,7 +602,30 @@ export type McpToolOutcome =
   | { ok: true; value: unknown }
   | { ok: false; message: string };
 
-/** Errors a person caused come back as the procedure's own message; bugs do not leak. */
+const HAS_CHINESE = /[\u4e00-\u9fff]/;
+
+/** What a refusal means, for Kan's procedures, which answer in English. */
+const MEANING: Partial<Record<TRPCError["code"], string>> = {
+  NOT_FOUND: "找不到：id 不对，或者当前账号看不到它",
+  FORBIDDEN: "当前账号没有权限做这件事",
+  BAD_REQUEST: "参数不对",
+  CONFLICT: "和现在的数据冲突了，先重新读一遍",
+  TOO_MANY_REQUESTS: "请求太频繁，稍后再试",
+  PRECONDITION_FAILED: "现在还做不了",
+  UNAUTHORIZED: "需要重新登录",
+};
+
+/** A refusal in words the person can act on: the Hub's own Chinese, or Kan's English explained. */
+export function refusalMessage(error: TRPCError): string {
+  if (error.cause instanceof z.ZodError) {
+    return error.cause.issues[0]?.message ?? MEANING.BAD_REQUEST ?? "参数不对";
+  }
+  if (HAS_CHINESE.test(error.message)) return error.message;
+  const meaning = MEANING[error.code];
+  return meaning ? `${meaning}（${error.message}）` : error.message;
+}
+
+/** Errors a person caused come back as a message they can act on; bugs do not leak. */
 export async function runMcpTool(
   name: McpToolName,
   hub: HubCaller,
@@ -531,7 +642,7 @@ export async function runMcpTool(
       return { ok: false, message: error.issues[0]?.message ?? "参数不对" };
     }
     if (error instanceof TRPCError && error.code !== "INTERNAL_SERVER_ERROR") {
-      return { ok: false, message: error.message };
+      return { ok: false, message: refusalMessage(error) };
     }
     throw error;
   }
