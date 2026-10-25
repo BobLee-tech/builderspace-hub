@@ -287,6 +287,16 @@ describe("reading an authorization request", () => {
     ).toBe(code);
   });
 
+  it("turns away a huge crafted resource at once", () => {
+    const crafted = `${"/".repeat(1_000_000)}x`;
+    const started = performance.now();
+    expect(isOurResource(crafted, resource)).toBe(false);
+    expect(isOurResource(`${resource}${"/".repeat(100_000)}`, resource)).toBe(
+      false,
+    );
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
   it("recognises our resource with or without a trailing slash", () => {
     expect(isOurResource(`${resource}//`, resource)).toBe(true);
     expect(isOurResource("https://hub.example.test", resource)).toBe(false);

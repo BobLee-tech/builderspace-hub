@@ -289,9 +289,16 @@ export function clientOfRequest(query: Query): {
   return { clientId, redirectUri };
 }
 
-/** A resource indicator (RFC 8707) names us when it is this endpoint, slash or not. */
+/**
+ * A resource indicator (RFC 8707) names us when it is this endpoint, slash or
+ * not. No regular expression: the value comes straight from a request body,
+ * and stripping trailing slashes with one is quadratic on a crafted value.
+ */
 export function isOurResource(value: string, resource: string): boolean {
-  return value.replace(/\/+$/, "") === resource;
+  if (value.length > resource.length + 8) return false;
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* "/" */) end -= 1;
+  return value.slice(0, end) === resource;
 }
 
 const CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
