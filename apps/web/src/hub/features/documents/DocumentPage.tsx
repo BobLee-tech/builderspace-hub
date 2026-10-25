@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { TbChevronRight } from "react-icons/tb";
 
+import type { ReaderList } from "./AudiencePicker";
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
 import {
@@ -15,6 +16,11 @@ import {
 } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 import { AccessPanel } from "./AccessPanel";
+import {
+  audienceFrom,
+  AudiencePicker,
+  isEmptySelection,
+} from "./AudiencePicker";
 import {
   documentFileUrl,
   documentsHref,
@@ -99,8 +105,11 @@ export function DocumentPage() {
                   {doc.uploadedByName && (
                     <span>· {text.detail.createdBy(doc.uploadedByName)}</span>
                   )}
-                  {!doc.readable && (
+                  {doc.audience === "editors" && (
                     <Pill tone="alert">{text.badges.hidden}</Pill>
+                  )}
+                  {doc.audience === "selected" && (
+                    <Pill>{text.badges.selected}</Pill>
                   )}
                   {doc.canEdit && (
                     <Pill tone="strong">{text.badges.canEdit}</Pill>
@@ -192,6 +201,10 @@ export function DocumentPage() {
               preview={doc.preview}
             />
 
+            {doc.readers && (
+              <ReadersCard audience={doc.audience} readers={doc.readers} />
+            )}
+
             <AccessPanel detail={doc} />
           </div>
         )}
@@ -209,7 +222,8 @@ function EditForm({
     title: string;
     description: string | null;
     folderPublicId: string | null;
-    readable: boolean;
+    audience: "all" | "selected" | "editors";
+    readers: ReaderList | null;
     folderOptions: { publicId: string; path: string }[];
   };
   onDone: () => void;
@@ -217,7 +231,8 @@ function EditForm({
   const [title, setTitle] = useState(doc.title);
   const [description, setDescription] = useState(doc.description ?? "");
   const [folder, setFolder] = useState(doc.folderPublicId ?? "");
-  const [readable, setReadable] = useState(doc.readable);
+  const [initialAudience] = useState(() => audienceFrom(doc));
+  const [audience, setAudience] = useState(initialAudience);
   const update = api.hub.documents.update.useMutation({ onSuccess: onDone });
 
   return (
@@ -231,7 +246,11 @@ function EditForm({
             title,
             description,
             folderPublicId: folder || null,
-            readable,
+            // Only when changed: a list that names someone since suspended
+            // would otherwise be refused, and with it the title change.
+            ...(JSON.stringify(audience) === JSON.stringify(initialAudience)
+              ? {}
+              : { audience }),
           });
         }}
       >
@@ -268,30 +287,54 @@ function EditForm({
             ))}
           </select>
         </label>
-        <div className="text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={readable}
-              onChange={(event) => setReadable(event.target.checked)}
-            />
-            {text.detail.readable}
-          </label>
-          <p className="mt-1 text-xs text-light-900 dark:text-dark-900">
-            {text.detail.readableHint}
-          </p>
+        <div className="md:col-span-2">
+          <AudiencePicker
+            value={audience}
+            onChange={setAudience}
+            known={doc.readers}
+          />
         </div>
         <div className="flex items-center gap-2 md:col-span-2">
           <button
             type="submit"
             className={buttonClass.primary}
-            disabled={update.isPending}
+            disabled={update.isPending || isEmptySelection(audience)}
           >
             {text.actions.save}
           </button>
           <ErrorText message={update.error?.message} />
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** 谁能看, for the people who can change it. */
+function ReadersCard({
+  audience,
+  readers,
+}: {
+  audience: "all" | "selected" | "editors";
+  readers: ReaderList;
+}) {
+  const names = [
+    ...readers.groups.map((g) => g.label),
+    ...readers.users.map((u) => u.name),
+  ];
+  return (
+    <Card title={text.audience.label}>
+      <p className="text-sm text-light-900 dark:text-dark-900">
+        {text.audience.summary[audience]}
+      </p>
+      {audience === "selected" && (
+        <ul className="mt-2 flex flex-wrap gap-1.5">
+          {names.map((name, index) => (
+            <li key={index}>
+              <Pill>{name}</Pill>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

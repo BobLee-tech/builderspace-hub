@@ -232,7 +232,10 @@ export function DocumentsPage() {
                               {doc.canEdit && (
                                 <Pill tone="strong">{text.badges.canEdit}</Pill>
                               )}
-                              {!doc.readable && (
+                              {doc.audience === "selected" && (
+                                <Pill>{text.badges.selected}</Pill>
+                              )}
+                              {doc.audience === "editors" && (
                                 <Pill tone="alert">{text.badges.hidden}</Pill>
                               )}
                             </div>

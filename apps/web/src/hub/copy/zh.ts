@@ -384,6 +384,7 @@ export const zh = {
     badges: {
       canEdit: "可修改",
       hidden: "仅编辑者可见",
+      selected: "指定的人可见",
     },
     actions: {
       newFolder: "新建文件夹",
@@ -415,8 +416,6 @@ export const zh = {
       formatLabel: "格式",
       contentLabel: "内容",
       contentPlaceholder: "在这里写……",
-      readable: "所有成员可读",
-      readableHint: "取消勾选后，只有能修改这份文档的人看得到它。",
       create: "创建",
       formats: {
         md: "Markdown（.md）",
@@ -448,13 +447,11 @@ export const zh = {
       descriptionLabel: "说明",
       folder: "所在文件夹",
       topLevel: "最上层",
-      readable: "所有成员可读",
-      readableHint: "关闭后，只有能修改这份文档的人看得到它。",
       deleteConfirm: "删除",
     },
     access: {
       title: "修改权限",
-      hint: "查看对所有成员开放。修改权限按文档分配：所有者拥有全部，其他人需要被指派。",
+      hint: "修改权限按文档分配：所有者拥有全部，其他人需要被指派。能修改的人始终能看。",
       editors: "可以修改的人",
       nobody: "还没有被指派的人（所有者始终可以修改）。",
       you: "你",
@@ -477,6 +474,38 @@ export const zh = {
       approve: "同意",
       deny: "拒绝",
       noPending: "没有待处理的申请。",
+    },
+    audience: {
+      label: "谁能看",
+      options: {
+        all: { label: "所有成员", hint: "登录的成员都能看" },
+        selected: {
+          label: "指定的人",
+          hint: "选项目、项目里的部门，或者单个成员",
+        },
+        editors: {
+          label: "只有能修改的人",
+          hint: "所有者和被指派修改的人（包括你）",
+        },
+      },
+      chosen: (count: number) => `已选 ${count} 项`,
+      noneChosen: "还没选：勾下面的项目、部门或成员。",
+      remove: "去掉",
+      search: "搜索成员",
+      noMatch: "没有匹配的成员。",
+      loading: "读取成员中…",
+      wholeProject: "整个项目",
+      departments: "部门",
+      members: "成员",
+      people: (count: number) => `${count} 人`,
+      inWholeProject: "已包含在整个项目里",
+      noMembers: "这个项目还没有成员。",
+      departmentsWhere: "部门里有谁，在后台的「部门」页设置。",
+      summary: {
+        all: "所有成员都能看。",
+        editors: "只有能修改这份文档的人看得到。",
+        selected: "除了能修改的人，下面这些也能看：",
+      },
     },
     requests: {
       title: "修改权限申请",
@@ -984,6 +1013,10 @@ export const zh = {
       siteHint:
         "能不能查看和处理官网上提交的数据，和后台角色无关。名单：看志愿者申请和加入登记，改志愿者的状态和备注；管理：在名单之外还能审核项目卡和项目进展。只有所有者能设置。",
       siteNone: "无",
+      departmentsHeading: "部门",
+      departmentsHint:
+        "这个人在各个项目里属于哪些部门，可以多选。部门名单在「部门」页维护。",
+      departmentsNone: "先把这个人加入项目，才能分部门。",
     },
     grants: {
       title: "注册链接",
@@ -1017,6 +1050,27 @@ export const zh = {
       saved: "已保存。",
       reset: "恢复默认",
       readOnly: "只有所有者和管理员能修改颜色。",
+    },
+    departments: {
+      title: "部门",
+      description:
+        "社团的部门，所有项目共用一套。在这里设置每个项目里谁在哪个部门；分享文档时可以直接选某个项目的某个部门。部门只能新建和改名，不能删除。",
+      listTitle: "部门列表",
+      listHint: "排在前面的部门在各处先显示。新建的部门会出现在每个项目里。",
+      namePlaceholder: "新部门的名称",
+      create: "新建部门",
+      rename: "改名",
+      save: "保存",
+      cancel: "取消",
+      up: "上移",
+      down: "下移",
+      count: (count: number) => `${count} 人`,
+      projectHint: "勾选每个人所在的部门，一个人可以在多个部门。",
+      member: "成员",
+      noMembers: "这个项目还没有成员。",
+      search: "搜索成员",
+      noMatch: "没有匹配的成员。",
+      readOnly: "只有所有者和管理员能调整部门。",
     },
     repos: {
       title: "项目仓库",

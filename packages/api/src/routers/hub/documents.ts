@@ -7,6 +7,7 @@ import {
   deleteDocument,
   deleteFolder,
   findEditorCandidates,
+  getAudienceOptions,
   getDocumentDetail,
   getDocumentStorage,
   getLibrary,
@@ -33,6 +34,21 @@ import { hubProcedure, runHub } from "./procedures";
 const id = z.string().min(1).max(32);
 const documentInput = z.object({ documentPublicId: id });
 const userInput = documentInput.extend({ userId: z.string().uuid() });
+
+/** Who can read a document; checked in full by the use case. */
+const audienceInput = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("all") }),
+  z.object({ kind: z.literal("editors") }),
+  z.object({
+    kind: z.literal("selected"),
+    userIds: z.array(z.string().max(64)).max(500),
+    groups: z
+      .array(
+        z.object({ projectPublicId: id, departmentPublicId: id.nullable() }),
+      )
+      .max(200),
+  }),
+]);
 
 export const documentsRouter = createTRPCRouter({
   /** A folder's contents (or the top level), or search results. */
@@ -91,7 +107,7 @@ export const documentsRouter = createTRPCRouter({
         content: z.string().max(410_000),
         description: z.string().max(2000).nullish(),
         folderPublicId: id.nullish(),
-        readable: z.boolean().optional(),
+        audience: audienceInput.optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
@@ -144,12 +160,17 @@ export const documentsRouter = createTRPCRouter({
         title: z.string().max(300).optional(),
         description: z.string().max(2000).nullish(),
         folderPublicId: id.nullish(),
-        readable: z.boolean().optional(),
+        audience: audienceInput.optional(),
       }),
     )
     .mutation(({ ctx, input }) =>
       runHub(() => updateDocument(ctx.db, ctx.actor, input)),
     ),
+
+  /** Projects, departments and members to pick 指定的人 from. */
+  audienceOptions: hubProcedure.query(({ ctx }) =>
+    runHub(() => getAudienceOptions(ctx.db, ctx.actor)),
+  ),
 
   delete: hubProcedure
     .input(documentInput)

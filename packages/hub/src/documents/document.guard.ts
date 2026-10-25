@@ -1,13 +1,18 @@
 import type { AdminActor } from "../accounts/account.service";
 import type { Db, DbOrTx } from "../db";
+import type { Reader } from "./document.policy";
 import type { DocumentRow } from "./document.repo";
+import { effectiveDepartments } from "../departments/department.policy";
+import { departmentsOfUser } from "../departments/department.repo";
+import { listMemberships } from "../kan/accounts.gateway";
 import { HubError } from "../shared/errors";
 import {
   canEditDocument,
   canManageEditors,
   canReadDocument,
+  isListedReader,
 } from "./document.policy";
-import { findDocument, isEditor } from "./document.repo";
+import { findDocument, isEditor, listReaders } from "./document.repo";
 
 /** Everything the rules need to know about one person and one document. */
 export interface DocumentAccess {
@@ -39,6 +44,25 @@ export function accessFor(
   };
 }
 
+/** The projects and departments that decide whether someone is among 指定的人. */
+export async function loadReader(db: DbOrTx, userId: string): Promise<Reader> {
+  const [memberships, placements] = await Promise.all([
+    listMemberships(db, [userId]),
+    departmentsOfUser(db, userId),
+  ]);
+  const projectIds = new Set(
+    (memberships.get(userId) ?? []).map((m) => m.workspaceId),
+  );
+  return {
+    userId,
+    projectIds,
+    departments: effectiveDepartments({
+      rows: placements,
+      activeProjectIds: projectIds,
+    }),
+  };
+}
+
 /**
  * Loads a document for someone who must be able to read it. A document that
  * does not exist and one they may not read get the same answer, so the
@@ -58,7 +82,21 @@ export async function loadReadable(
     userId,
     await isEditor(db, row.id, userId),
   );
-  if (!canReadDocument({ readable: row.readable, canEdit: access.canEdit })) {
+  // Only a document closed to the viewer needs its list of 指定的人.
+  const isListed =
+    !row.readable &&
+    !access.canEdit &&
+    isListedReader(
+      await listReaders(db, [row.id]),
+      await loadReader(db, userId),
+    );
+  if (
+    !canReadDocument({
+      readable: row.readable,
+      canEdit: access.canEdit,
+      isListed,
+    })
+  ) {
     throw new HubError("NOT_FOUND", "找不到这份文档");
   }
   return access;

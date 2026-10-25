@@ -15,7 +15,9 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import { users } from "@kan/db/schema";
+import { users, workspaces } from "@kan/db/schema";
+
+import { hubDepartments } from "./departments";
 
 export const editRequestStatuses = ["pending", "approved", "denied"] as const;
 export type EditRequestStatus = (typeof editRequestStatuses)[number];
@@ -52,8 +54,9 @@ export const hubDocumentFolders = pgTable(
  * A stored file with its details. The bytes live in object storage under
  * `storageKey`; the database holds only the metadata and who may do what.
  *
- * `readable` is the per-document read switch. Every document is readable for
- * now; one switched off is shown only to the people who can edit it.
+ * `readable` is the per-document read switch: on, every member can read it.
+ * Off, only the people who can edit it can, plus whoever is listed in
+ * `hub_document_reader` (指定的人). With nobody listed it is 仅编辑者可见.
  * `sha256` is set when the server saw the bytes (the import command) and is
  * what makes importing the same file twice a no-op.
  */
@@ -103,6 +106,54 @@ export const hubDocumentEditors = pgTable(
     grantedAt: timestamp("grantedAt").defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.documentId, table.userId] })],
+).enableRLS();
+
+/**
+ * 指定的人: who may read a document whose `readable` switch is off, besides
+ * the people who can edit it. Each row is one person (`userId`), a whole
+ * project (`workspaceId`), or one department of a project (`workspaceId` and
+ * `departmentId`).
+ *
+ * Rows are only kept while `readable` is off: switching it on clears them, so
+ * "readable, with a list" never exists. Deleting the last listed person or
+ * project leaves the document to its editors, never open to everyone.
+ */
+export const hubDocumentReaders = pgTable(
+  "hub_document_reader",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    documentId: bigint("documentId", { mode: "number" })
+      .notNull()
+      .references(() => hubDocuments.id, { onDelete: "cascade" }),
+    userId: uuid("userId").references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: bigint("workspaceId", { mode: "number" }).references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
+    departmentId: bigint("departmentId", { mode: "number" }).references(
+      () => hubDepartments.id,
+      { onDelete: "restrict" },
+    ),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    index("hub_document_reader_document_idx").on(table.documentId),
+    uniqueIndex("hub_document_reader_user_idx")
+      .on(table.documentId, table.userId)
+      .where(sql`${table.userId} IS NOT NULL`),
+    uniqueIndex("hub_document_reader_group_idx")
+      .on(
+        table.documentId,
+        table.workspaceId,
+        sql`coalesce(${table.departmentId}, 0)`,
+      )
+      .where(sql`${table.workspaceId} IS NOT NULL`),
+    check(
+      "hub_document_reader_target_check",
+      sql`(${table.userId} IS NULL) <> (${table.workspaceId} IS NULL)
+        AND (${table.departmentId} IS NULL OR ${table.workspaceId} IS NOT NULL)`,
+    ),
+  ],
 ).enableRLS();
 
 /**

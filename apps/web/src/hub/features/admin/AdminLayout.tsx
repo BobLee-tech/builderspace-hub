@@ -70,6 +70,11 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: text.grants.title,
         access: { permission: "admin.view" },
       },
+      {
+        href: "/admin/departments",
+        label: text.departments.title,
+        access: { permission: "admin.view" },
+      },
     ],
   },
   {

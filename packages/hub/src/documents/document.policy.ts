@@ -1,5 +1,6 @@
 import type { HubRole } from "../accounts/roles";
 import { can } from "../accounts/roles";
+import { departmentRef } from "../departments/department.policy";
 
 /**
  * Largest document the server reads or writes. Text written in the page
@@ -218,12 +219,112 @@ export function canManageEditors(input: {
   return input.role === "owner" || (input.role === "admin" && input.isEditor);
 }
 
-/** Every document is readable for now; one marked unreadable is only for editors. */
+/**
+ * Who can read a document, besides the people who can edit it (they always
+ * can): every member, 指定的人 (people, projects and departments listed for
+ * it), or nobody else.
+ */
+export type Audience = "all" | "selected" | "editors";
+
+/**
+ * Stored as the `readable` switch plus the list of 指定的人; the list is only
+ * kept while the switch is off.
+ */
+export function audienceOf(input: {
+  readable: boolean;
+  hasReaders: boolean;
+}): Audience {
+  if (input.readable) return "all";
+  return input.hasReaders ? "selected" : "editors";
+}
+
+/** One entry of a document's 指定的人: a person, a project, or a department. */
+export interface ReaderTarget {
+  userId: string | null;
+  workspaceId: number | null;
+  departmentId: number | null;
+}
+
+/** What decides whether someone is among 指定的人. */
+export interface Reader {
+  userId: string;
+  /** Projects they are an active member of. */
+  projectIds: ReadonlySet<number>;
+  /** Their departments, as `departmentRef` strings, in those projects only. */
+  departments: ReadonlySet<string>;
+}
+
+export function isListedReader(
+  targets: readonly ReaderTarget[],
+  reader: Reader,
+): boolean {
+  return targets.some((target) => {
+    if (target.userId !== null) return target.userId === reader.userId;
+    if (target.workspaceId === null) return false;
+    return target.departmentId === null
+      ? reader.projectIds.has(target.workspaceId)
+      : reader.departments.has(
+          departmentRef(target.workspaceId, target.departmentId),
+        );
+  });
+}
+
+/**
+ * Readable by every member when the switch is on; otherwise by the people who
+ * can edit it and by its 指定的人.
+ */
 export function canReadDocument(input: {
   readable: boolean;
   canEdit: boolean;
+  isListed: boolean;
 }): boolean {
-  return input.readable || input.canEdit;
+  return input.readable || input.canEdit || input.isListed;
+}
+
+/** Most people and projects/departments one document can be shared with. */
+export const MAX_READER_USERS = 200;
+export const MAX_READER_GROUPS = 60;
+
+export interface ReaderGroupChoice {
+  projectPublicId: string;
+  /** Null for the whole project. */
+  departmentPublicId: string | null;
+}
+
+/**
+ * The 指定的人 as chosen, without repeats, and without departments of a project
+ * that was chosen as a whole (its departments are already in it).
+ */
+export function normaliseSelection(input: {
+  userIds: readonly string[];
+  groups: readonly ReaderGroupChoice[];
+}): { userIds: string[]; groups: ReaderGroupChoice[] } {
+  const wholeProjects = new Set(
+    input.groups
+      .filter((group) => group.departmentPublicId === null)
+      .map((group) => group.projectPublicId),
+  );
+  const seen = new Set<string>();
+  const groups = input.groups.filter((group) => {
+    if (
+      group.departmentPublicId !== null &&
+      wholeProjects.has(group.projectPublicId)
+    ) {
+      return false;
+    }
+    const key = `${group.projectPublicId}:${group.departmentPublicId ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { userIds: [...new Set(input.userIds)], groups };
+}
+
+/** A stable key per target, to tell whether a new list differs from the old. */
+export function readerTargetKey(target: ReaderTarget): string {
+  return target.userId !== null
+    ? `user:${target.userId}`
+    : `group:${target.workspaceId}:${target.departmentId ?? ""}`;
 }
 
 export function canRequestEdit(input: {
