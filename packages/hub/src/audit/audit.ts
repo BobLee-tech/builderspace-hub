@@ -62,7 +62,9 @@ export type AuditAction =
   | "form.deleted"
   | "form.manager_added"
   | "form.manager_removed"
-  | "form_response.deleted";
+  | "form_response.deleted"
+  | "mcp.connected"
+  | "mcp.disconnected";
 
 export interface AuditActor {
   userId: string | null;

@@ -77,6 +77,19 @@ export {
 
 export { IMPORT_ACCEPT, importSizeProblem } from "./documents/document.policy";
 
+export type { McpToolGroup, McpToolInfo, McpUrls } from "./mcp/catalog";
+export {
+  HUB_MCP_AUTHORIZE_PATH,
+  HUB_MCP_GUIDE_PATH,
+  HUB_MCP_PATH,
+  mcpNotOffered,
+  mcpToolGroupLabels,
+  mcpToolGroups,
+  mcpTools,
+  mcpUrls,
+  toolsFor,
+} from "./mcp/catalog";
+
 export type {
   AnswerInput,
   ChoiceField,

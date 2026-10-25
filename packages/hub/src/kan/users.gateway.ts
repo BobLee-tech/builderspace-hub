@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import * as userRepo from "@kan/db/repository/user.repo";
 import { users } from "@kan/db/schema";
@@ -43,4 +43,33 @@ export async function findUsersByIds(
     .select({ id: users.id, name: users.name, email: users.email })
     .from(users)
     .where(inArray(users.id, [...userIds]));
+}
+
+/** A user the way Kan's request context carries one, for calls made on their behalf. */
+export async function findSessionUser(
+  db: Db,
+  userId: string,
+): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  image: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+} | null> {
+  const [row] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      emailVerified: users.emailVerified,
+      image: users.image,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row ? { ...row, name: row.name ?? "" } : null;
 }

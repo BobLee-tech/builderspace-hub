@@ -20,6 +20,10 @@
       "types": "./src/trpc-context.ts",
       "default": "./src/trpc-context.ts"
     },
+    "./hub-mcp": {
+      "types": "./src/routers/hub/mcp/index.ts",
+      "default": "./src/routers/hub/mcp/index.ts"
+    },
     "./types": {
       "types": "./src/types/router.types.ts",
       "default": "./src/types/router.types.ts"

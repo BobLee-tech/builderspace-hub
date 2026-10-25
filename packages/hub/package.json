@@ -36,6 +36,10 @@
       "types": "./src/forms/index.ts",
       "default": "./src/forms/index.ts"
     },
+    "./mcp": {
+      "types": "./src/mcp/index.ts",
+      "default": "./src/mcp/index.ts"
+    },
     "./nudges": {
       "types": "./src/nudges/index.ts",
       "default": "./src/nudges/index.ts"

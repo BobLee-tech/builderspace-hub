@@ -3,6 +3,8 @@ import createJiti from "jiti";
 import { env } from "next-runtime-env";
 import { configureRuntimeEnv } from "next-runtime-env/build/configure.js";
 
+import { hubRewrites } from "./src/hub/next-rewrites.js"; // hub-seam
+
 // Import env files to validate at build time. Use jiti so we can load .ts files in here.
 createJiti(fileURLToPath(import.meta.url))("./src/env");
 
@@ -79,6 +81,8 @@ const config = {
         source: "/settings",
         destination: "/settings/account",
       },
+      // hub-seam: MCP sign-in discovery lives at the origin (docs/hub/UPSTREAM_SEAMS.md)
+      ...hubRewrites,
     ];
   },
 };

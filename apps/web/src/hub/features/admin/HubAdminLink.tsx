@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { TbFiles, TbForms, TbShieldLock } from "react-icons/tb";
+import {
+  TbFiles,
+  TbForms,
+  TbPlugConnected,
+  TbShieldLock,
+} from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
-import { can } from "@kan/hub/public";
+import { can, HUB_MCP_GUIDE_PATH } from "@kan/hub/public";
 
 import { copy } from "~/hub/copy/zh";
 import { adminHome } from "~/hub/lib/routes";
@@ -13,9 +18,9 @@ const linkClass =
   "mt-1 flex items-center gap-3 rounded-md p-1.5 text-sm font-medium text-neutral-600 hover:bg-light-200 hover:text-light-1000 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000";
 
 /**
- * The Hub's own sidebar links, rendered once under Kan's navigation: 文档 and
- * 表单 for every member, 后台 for back-office members and for those with website
- * access (who land in the 官网 section). They live in one component so the
+ * The Hub's own sidebar links, rendered once under Kan's navigation: 文档,
+ * 表单 and MCP for every member, 后台 for back-office members and for those with
+ * website access (who land in the 官网 section). They live in one component so the
  * sidebar needs a single registered edit (docs/hub/UPSTREAM_SEAMS.md).
  */
 export function HubAdminLink({
@@ -60,6 +65,20 @@ export function HubAdminLink({
       >
         <TbForms size={18} className="shrink-0" />
         {!isCollapsed && copy.forms.entry}
+      </Link>
+      <Link
+        href={HUB_MCP_GUIDE_PATH}
+        onClick={onCloseSideNav}
+        title={copy.mcp.entry}
+        className={twMerge(
+          linkClass,
+          isCollapsed && "justify-center",
+          pathname.startsWith(HUB_MCP_GUIDE_PATH) &&
+            "bg-light-200 dark:bg-dark-200",
+        )}
+      >
+        <TbPlugConnected size={18} className="shrink-0" />
+        {!isCollapsed && copy.mcp.entry}
       </Link>
       {showAdmin && (
         <Link
