@@ -6,6 +6,12 @@ export {
   requestEdit,
   revokeEditor,
 } from "./access.service";
+export type {
+  AudienceChoice,
+  AudienceOptions,
+  ReaderList,
+} from "./audience.service";
+export { getAudienceOptions } from "./audience.service";
 export {
   deleteDocument,
   openDocument,
@@ -33,7 +39,7 @@ export {
   REQUEST_NOTE_MAX_LENGTH,
   TITLE_MAX_LENGTH,
 } from "./document.policy";
-export type { PreviewKind } from "./document.policy";
+export type { Audience, PreviewKind } from "./document.policy";
 export type { DocumentSource, DocumentStorage } from "./storage";
 export { getDocumentStorage } from "./storage.config";
 export { DatabaseDocumentStorage, DB_STORAGE_MAX_BYTES } from "./storage.db";

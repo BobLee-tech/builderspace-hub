@@ -24,6 +24,10 @@
       "types": "./src/db.ts",
       "default": "./src/db.ts"
     },
+    "./departments": {
+      "types": "./src/departments/index.ts",
+      "default": "./src/departments/index.ts"
+    },
     "./documents": {
       "types": "./src/documents/index.ts",
       "default": "./src/documents/index.ts"

@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import type { ImportedDocument } from "@kan/hub/documents/file-import";
 
+import type { AudienceChoice } from "./AudiencePicker";
 import { copy } from "~/hub/copy/zh";
 import { buttonClass, ErrorText, inputClass } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
+import { AudiencePicker, isEmptySelection } from "./AudiencePicker";
 
 const text = copy.documents.newText;
 
@@ -31,7 +33,7 @@ export function NewDocumentDialog({
   const [title, setTitle] = useState(initial?.title ?? "");
   const [format, setFormat] = useState<Format>(initial?.format ?? "md");
   const [content, setContent] = useState(initial?.content ?? "");
-  const [readable, setReadable] = useState(true);
+  const [audience, setAudience] = useState<AudienceChoice>({ kind: "all" });
   const create = api.hub.documents.createText.useMutation({
     onSuccess: (created) => onCreated(created.publicId),
   });
@@ -54,7 +56,7 @@ export function NewDocumentDialog({
             filename: `${name || "untitled"}.${format}`,
             content,
             folderPublicId: folderPublicId ?? null,
-            readable,
+            audience,
           });
         }}
       >
@@ -112,18 +114,8 @@ export function NewDocumentDialog({
           />
         </label>
 
-        <div className="mt-4 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={readable}
-              onChange={(event) => setReadable(event.target.checked)}
-            />
-            {text.readable}
-          </label>
-          <p className="mt-1 text-xs text-light-900 dark:text-dark-900">
-            {text.readableHint}
-          </p>
+        <div className="mt-4">
+          <AudiencePicker value={audience} onChange={setAudience} />
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2">
@@ -139,7 +131,12 @@ export function NewDocumentDialog({
           <button
             type="submit"
             className={buttonClass.primary}
-            disabled={create.isPending || !title.trim() || !content}
+            disabled={
+              create.isPending ||
+              !title.trim() ||
+              !content ||
+              isEmptySelection(audience)
+            }
           >
             {text.create}
           </button>

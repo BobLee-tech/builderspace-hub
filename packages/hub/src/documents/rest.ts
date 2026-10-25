@@ -105,6 +105,7 @@ function documentJson(doc: DocumentSummary) {
     size: doc.size,
     folderPublicId: doc.folderPublicId,
     readable: doc.readable,
+    audience: doc.audience,
     canEdit: doc.canEdit,
     updatedAt: doc.updatedAt.toISOString(),
   };

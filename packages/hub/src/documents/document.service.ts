@@ -4,20 +4,26 @@ import { createLogger } from "@kan/logger";
 
 import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
+import type { AudienceChoice } from "./audience.service";
+import type { ReaderTarget } from "./document.policy";
 import type { DocumentSource, DocumentStorage } from "./storage";
 import { recordAudit, withAudit } from "../audit";
 import { HubError } from "../shared/errors";
+import { audienceSchema, resolveAudience } from "./audience.service";
 import { loadReadable, requireEdit } from "./document.guard";
 import {
   contentDisposition,
   DESCRIPTION_MAX_LENGTH,
   normaliseName,
+  readerTargetKey,
   TITLE_MAX_LENGTH,
   viewContentType,
 } from "./document.policy";
 import {
   deleteDocument as deleteDocumentRow,
   findFolder,
+  listReaders,
+  replaceReaders,
   updateDocument as updateDocumentRow,
 } from "./document.repo";
 
@@ -76,6 +82,14 @@ const updateSchema = z.object({
   description: descriptionSchema.nullish(),
   /** `null` moves it to the top level. */
   folderPublicId: idSchema.nullish(),
+  /** Who can read it. */
+  audience: audienceSchema.optional(),
+  /**
+   * The older on/off form of `audience`, still sent by the command line:
+   * true is every member, false only the editors. Ignored when `audience` is
+   * given, and when it matches the switch already (so a document shared with
+   * 指定的人 stays that way).
+   */
   readable: z.boolean().optional(),
 });
 
@@ -116,11 +130,26 @@ export async function updateDocument(
       changes.push(folder ? `移到文件夹「${folder.name}」` : "移到最上层");
     }
   }
-  const readableChanged =
-    input.readable !== undefined && input.readable !== row.readable;
-  if (readableChanged) patch.readable = input.readable;
+  let choice: AudienceChoice | undefined = input.audience;
+  if (
+    !choice &&
+    input.readable !== undefined &&
+    input.readable !== row.readable
+  ) {
+    choice = { kind: input.readable ? "all" : "editors" };
+  }
+  const audience = choice ? await resolveAudience(db, choice) : null;
+  const before = await listReaders(db, [row.id]);
+  const sameTargets = (targets: readonly ReaderTarget[]) =>
+    targets.length === before.length &&
+    new Set([...targets, ...before].map(readerTargetKey)).size ===
+      before.length;
+  const audienceChanged =
+    audience !== null &&
+    (audience.readable !== row.readable || !sameTargets(audience.targets));
+  if (audienceChanged) patch.readable = audience.readable;
 
-  if (changes.length === 0 && !readableChanged) return;
+  if (changes.length === 0 && !audienceChanged) return;
 
   await db.transaction(async (tx) => {
     await updateDocumentRow(tx, row.id, patch, now);
@@ -133,13 +162,15 @@ export async function updateDocument(
         summary: `「${row.title}」：${changes.join("，")}`,
       });
     }
-    if (readableChanged) {
+    if (audienceChanged) {
+      await replaceReaders(tx, row.id, audience.targets);
       await recordAudit(tx, {
         actor,
         action: "document.readable_changed",
         entityType: "document",
         entityId: row.publicId,
-        summary: `「${row.title}」${input.readable ? "设为所有成员可读" : "设为仅编辑者可见"}`,
+        summary: `「${row.title}」${audience.summary}`,
+        detail: audience.chosen,
       });
     }
   });
