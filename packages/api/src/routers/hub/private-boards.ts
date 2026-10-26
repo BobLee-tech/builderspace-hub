@@ -7,14 +7,14 @@ import {
 
 import { runHub } from "./run-hub";
 
-// The three places Kan's own API meets 仅自己可见 boards. Each is called from a
-// one-line hub-seam in an upstream file (docs/hub/UPSTREAM_SEAMS.md); the rules
-// live in @kan/hub/private-boards.
+// The three places Kan's own API meets private boards (仅自己可见 and
+// 仅管理员可见). Each is called from a one-line hub-seam in an upstream file
+// (docs/hub/UPSTREAM_SEAMS.md); the rules live in @kan/hub/private-boards.
 
 /**
  * Runs before every Kan and Hub procedure, signed in or not. Refuses, with
  * NOT_FOUND, any request whose input names something inside a private board
- * the caller does not own. Requests that name no board cost no query.
+ * the caller may not see. Requests that name no board cost no query.
  */
 export function guardPrivateBoards(
   db: dbClient,
@@ -25,7 +25,10 @@ export function guardPrivateBoards(
   return runHub(() => assertRequestAllowed(db, { viewerId, path, input }));
 }
 
-/** `board.all`: a project's boards, minus other people's private ones. */
+/**
+ * `board.all`: a project's boards, minus the private ones the caller may not
+ * see.
+ */
 export function visibleBoardsOnly<T extends { publicId: string }>(
   db: dbClient,
   viewerId: string,
@@ -36,7 +39,8 @@ export function visibleBoardsOnly<T extends { publicId: string }>(
 
 /**
  * `workspace.search`: a condition Kan's search query adds to its own, so
- * other people's private boards and their cards never take up its limits.
+ * private boards the caller may not see, and their cards, never take up its
+ * limits.
  */
 export function boardsVisibleTo(db: dbClient, viewerId: string) {
   return boardVisibleTo(db, viewerId);

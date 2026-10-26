@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   boardBeingPublished,
-  canChangeOnlyMe,
   canSeePrivateBoard,
+  canSwitchAudience,
   collectBoardRefs,
   countBoardRefs,
   MAX_BOARD_REFS,
@@ -107,15 +107,37 @@ describe("collectBoardRefs", () => {
 });
 
 describe("canSeePrivateBoard", () => {
-  it("lets only the owner see it", () => {
-    expect(canSeePrivateBoard("u1", "u1")).toBe(true);
-    expect(canSeePrivateBoard("u1", "u2")).toBe(false);
-    expect(canSeePrivateBoard("u1", null)).toBe(false);
+  const viewer = (id: string | null, ...adminOf: number[]) => ({
+    id,
+    adminOf: new Set(adminOf),
+  });
+  const onlyMe = (ownerUserId: string | null) => ({
+    audience: "owner" as const,
+    ownerUserId,
+    workspaceId: 1,
+  });
+  const adminsOnly = {
+    audience: "admins" as const,
+    ownerUserId: "u1",
+    workspaceId: 1,
+  };
+
+  it("shows 仅自己可见 to its owner only, even over a project admin", () => {
+    expect(canSeePrivateBoard(onlyMe("u1"), viewer("u1"))).toBe(true);
+    expect(canSeePrivateBoard(onlyMe("u1"), viewer("u2", 1))).toBe(false);
+    expect(canSeePrivateBoard(onlyMe("u1"), viewer(null))).toBe(false);
   });
 
-  it("hides it from everyone once the owner is gone", () => {
-    expect(canSeePrivateBoard(null, "u1")).toBe(false);
-    expect(canSeePrivateBoard(null, null)).toBe(false);
+  it("hides 仅自己可见 from everyone once the owner is gone", () => {
+    expect(canSeePrivateBoard(onlyMe(null), viewer("u1", 1))).toBe(false);
+    expect(canSeePrivateBoard(onlyMe(null), viewer(null))).toBe(false);
+  });
+
+  it("shows 仅管理员可见 to the admins of its own project, whoever set it", () => {
+    expect(canSeePrivateBoard(adminsOnly, viewer("u2", 1))).toBe(true);
+    expect(canSeePrivateBoard(adminsOnly, viewer("u1"))).toBe(false);
+    expect(canSeePrivateBoard(adminsOnly, viewer("u2", 2))).toBe(false);
+    expect(canSeePrivateBoard(adminsOnly, viewer(null, 1))).toBe(false);
   });
 });
 
@@ -158,22 +180,63 @@ describe("boardBeingPublished", () => {
   });
 });
 
-describe("canChangeOnlyMe", () => {
-  const shared = (createdBy: string | null) => ({ createdBy, privateTo: null });
-  const onlyMe = (createdBy: string | null, ownerUserId: string | null) => ({
-    createdBy,
-    privateTo: { ownerUserId },
+describe("canSwitchAudience", () => {
+  const board = (
+    createdBy: string | null,
+    hidden: { audience: "owner" | "admins"; ownerUserId: string | null } | null,
+  ) => ({ workspaceId: 1, createdBy, private: hidden });
+  const member = (id: string) => ({ id, adminOf: new Set<number>() });
+  const admin = (id: string) => ({ id, adminOf: new Set([1]) });
+  const shared = board("u1", null);
+
+  it("lets only the creator make a board 仅自己可见", () => {
+    expect(canSwitchAudience(shared, member("u1"), "owner")).toBe(true);
+    expect(canSwitchAudience(shared, admin("u2"), "owner")).toBe(false);
+    expect(canSwitchAudience(board(null, null), admin("u1"), "owner")).toBe(
+      false,
+    );
   });
 
-  it("lets the creator turn it on, and nobody else", () => {
-    expect(canChangeOnlyMe(shared("u1"), "u1")).toBe(true);
-    expect(canChangeOnlyMe(shared("u1"), "u2")).toBe(false);
-    expect(canChangeOnlyMe(shared(null), "u1")).toBe(false);
+  it("lets only an admin of its project make a board 仅管理员可见", () => {
+    expect(canSwitchAudience(shared, admin("u2"), "admins")).toBe(true);
+    expect(canSwitchAudience(shared, member("u1"), "admins")).toBe(false);
+    expect(
+      canSwitchAudience(shared, { id: "u2", adminOf: new Set([2]) }, "admins"),
+    ).toBe(false);
   });
 
-  it("lets the owner turn it off, and nobody else", () => {
-    expect(canChangeOnlyMe(onlyMe("u1", "u1"), "u1")).toBe(true);
-    expect(canChangeOnlyMe(onlyMe("u1", "u1"), "u2")).toBe(false);
-    expect(canChangeOnlyMe(onlyMe("u1", null), "u1")).toBe(false);
+  it("lets only the owner hand 仅自己可见 back, or pass it to the admins if they are one", () => {
+    const onlyMe = board("u1", { audience: "owner", ownerUserId: "u1" });
+    expect(canSwitchAudience(onlyMe, member("u1"), null)).toBe(true);
+    expect(canSwitchAudience(onlyMe, member("u1"), "admins")).toBe(false);
+    expect(canSwitchAudience(onlyMe, admin("u1"), "admins")).toBe(true);
+    expect(canSwitchAudience(onlyMe, admin("u2"), null)).toBe(false);
+    expect(
+      canSwitchAudience(
+        board("u1", { audience: "owner", ownerUserId: null }),
+        admin("u1"),
+        null,
+      ),
+    ).toBe(false);
+  });
+
+  it("lets any admin hand 仅管理员可见 back; only its creator may make it 仅自己可见", () => {
+    const adminsOnly = board("u1", { audience: "admins", ownerUserId: "u3" });
+    expect(canSwitchAudience(adminsOnly, admin("u2"), null)).toBe(true);
+    expect(canSwitchAudience(adminsOnly, member("u2"), null)).toBe(false);
+    expect(canSwitchAudience(adminsOnly, admin("u2"), "owner")).toBe(false);
+    expect(canSwitchAudience(adminsOnly, admin("u1"), "owner")).toBe(true);
+    expect(canSwitchAudience(adminsOnly, member("u1"), "owner")).toBe(false);
+  });
+
+  it("does not count staying where it is as a move", () => {
+    expect(canSwitchAudience(shared, admin("u1"), null)).toBe(false);
+    expect(
+      canSwitchAudience(
+        board("u1", { audience: "admins", ownerUserId: "u1" }),
+        admin("u1"),
+        "admins",
+      ),
+    ).toBe(false);
   });
 });

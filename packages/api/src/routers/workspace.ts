@@ -632,7 +632,7 @@ export const workspaceRouter = createTRPCRouter({
         workspace.id,
         input.query,
         input.limit,
-        boardsVisibleTo(ctx.db, userId), // hub-seam: leaves out others' 仅自己可见 boards
+        boardsVisibleTo(ctx.db, userId), // hub-seam: leaves out private boards the caller may not see
       );
 
       return result;

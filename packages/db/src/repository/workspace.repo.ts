@@ -430,7 +430,7 @@ export const searchBoardsAndCards = async (
   workspaceId: number,
   query: string,
   limit = 20,
-  boardFilter?: SQL, // hub-seam: leaves out others' 仅自己可见 boards before the limits apply
+  boardFilter?: SQL, // hub-seam: leaves out private boards the caller may not see before the limits apply
 ) => {
   const searchQuery = `%${query}%`;
 
