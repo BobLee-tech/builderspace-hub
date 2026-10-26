@@ -154,7 +154,7 @@ Kan 的看板只有两种可见性：`public`（不登录拿到链接也能看�
 - **渲染：** Markdown 在页面里用 react-markdown 加 remark-gfm 渲染（支持 GitHub 的表格、任务列表、删除线；不解释原始 HTML，去掉危险的链接地址），不需要沙箱。HTML 是唯一能带代码的格式，只在沙箱里显示：`<iframe sandbox="allow-scripts …">` 没有 `allow-same-origin`，页面被当作来自「无处」，能跑脚本，但读不到本站的 cookie、存储和接口；文件接口的响应头再加一道 `Content-Security-Policy: sandbox`，直接打开链接也一样。
 - **读内容有两个出口：** 页面里的 `hub.documents.content`（tRPC，给编辑器和 Markdown 渲染），和 `GET /api/hub/documents/<id>/file`（给 HTML 的 iframe 和「下载」）。两者都先检查登录状态和权限，不缓存（读的权利可以被收回），文件接口不接受 API key。
 - **写内容** 都走 `text.service.ts`：页面里的「新建文档」「编辑内容」和命令行的 `bshub doc`。保存时带上打开时的 `updatedAt`，别人在此之后改过就拒绝，不会悄悄覆盖。上限 400 KB（页面里写的内容要经过 Kan 的 tRPC 路由，请求体上限 1 MB，转义后会变大）。
-- **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文档或转让编辑权，这些只在网页里做。读不到的文档回 404，和不存在一样。
+- **给命令行的 REST 接口** `GET/POST /api/hub/v1/documents…`（`documents/rest.ts` 只管路由和参数，不含任何权限规则；`pages/api/hub/v1/documents/[[...path]].ts` 管 HTTP）。新建和修改文档时可以传 `audience`（所有成员 / 指定的人 / 仅编辑者，和网页的「谁能看」同一套规则），`GET …/documents/audience-options` 列出能指定的人、项目和部门。看板的可见范围走 `GET/PUT /api/hub/v1/boards/{publicId}/audience`（`private-boards/rest.ts`，调用和看板页同一个 `setBoardAudience`），认证和文档接口一样。**只认 API key**，不认浏览器会话：cookie 会随别的网页发出的请求一起带上，而这套接口不需要它；查 key 之前先去掉 cookie 头。**刻意不提供**删除文档和删除文件夹、指派/收回/处理修改权限：API key 现在没有权限范围，泄露后不应该能删文档或转让编辑权，这些只在网页里做。读不到的文档回 404，和不存在一样。
 - **每个改数据的用例都有操作日志。**
 - **已知的局限**：没有版本历史（保存会覆盖旧内容）；只有 Markdown 和 HTML，没有附件；还没加入项目的成员被 Kan 的外壳重定向到首页，看不到文档。
 

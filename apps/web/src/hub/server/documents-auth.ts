@@ -54,7 +54,8 @@ export async function authenticateDocumentRequest(
 }
 
 /**
- * Who is calling the document API, or a refusal already written to `res`.
+ * Who is calling the document API (or the board API, which follows the same
+ * rules), or a refusal already written to `res`.
  *
  * This one is for the command line and takes an API key only. A browser
  * session is deliberately not accepted here: cookies ride along on requests

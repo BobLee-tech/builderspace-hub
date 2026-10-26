@@ -54,7 +54,7 @@ EchoAgent       →   技术 / 活动 / 运营
 
 **渲染**：Markdown 在页面里直接渲染（里面的原始 HTML 不会被当成 HTML，危险的链接地址会被去掉）；HTML 在沙箱里显示：脚本能运行，但碰不到本站的登录状态和数据。HTML 要自成一体：外链样式、本地图片不会自动带上，需要内联或用 https 地址。
 
-**命令行**：`bshub doc +create --title "讲稿" --file 讲稿.md --private`（[CLI 仓库](https://github.com/EdwinjJ1/builderspace-hub-cli)）走 `/api/hub/v1/documents`，用 API key 登录。可以读、新建、改信息、换内容；**不能删除，也不能分配修改权限**，这两件只在网页里做。只收 `.md` 和 `.html`。
+**命令行**：`bshub doc +create --title "讲稿" --file 讲稿.md --private`（[CLI 仓库](https://github.com/EdwinjJ1/builderspace-hub-cli)）走 `/api/hub/v1/documents`，用 API key 登录。可以读、新建、改信息、换内容、设置谁能看；看板的可见范围（所有成员 / 仅管理员可见 / 仅自己可见）走 `/api/hub/v1/boards/{publicId}/audience`；**不能删除，也不能分配修改权限**，这两件只在网页里做。只收 `.md` 和 `.html`。
 
 ## 表单
 

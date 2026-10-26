@@ -2,10 +2,11 @@ import { z } from "zod";
 
 import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
-import type { HubErrorCode } from "../shared/errors";
-import type { DocumentSummary } from "./library.service";
+import type { RestRequest, RestResponse } from "../shared/rest";
+import type { DocumentDetail, DocumentSummary } from "./library.service";
 import type { DocumentStorage } from "./storage";
 import { HubError } from "../shared/errors";
+import { audienceSchema, getAudienceOptions } from "./audience.service";
 import { updateDocument } from "./document.service";
 import { createFolder, getDocumentDetail, getLibrary } from "./library.service";
 import {
@@ -13,6 +14,9 @@ import {
   readTextContent,
   replaceTextContent,
 } from "./text.service";
+
+export type { RestRequest, RestResponse } from "../shared/rest";
+export { statusOfHubError } from "../shared/rest";
 
 /**
  * The document library as a REST API, for the command line (`bshub doc`).
@@ -22,37 +26,14 @@ import {
  * authentication (an API key or a browser session), the rate limit and the
  * reading and writing of HTTP. Every rule still lives in the use cases, so the
  * API can do exactly what the web app can do for the same person, and no more.
+ * That includes choosing who can read a document (`audience`), which the web
+ * app's 谁能看 does for anyone who can edit it.
  *
  * Deliberately not here, whatever the caller's rights: deleting a document or a
  * folder, and handing out or deciding edit rights. An API key has no scope yet,
  * so a leaked one must not be able to remove files or pass on the right to
  * change them. Those stay in the web app.
  */
-
-export interface RestRequest {
-  method: string;
-  /** The path after /documents, split on "/". */
-  segments: string[];
-  query: Record<string, string | undefined>;
-  body: unknown;
-}
-
-export interface RestResponse {
-  status: number;
-  body: unknown;
-}
-
-const STATUS_OF: Record<HubErrorCode, number> = {
-  INVALID_INPUT: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAVAILABLE: 503,
-};
-
-export function statusOfHubError(code: HubErrorCode): number {
-  return STATUS_OF[code];
-}
 
 const id = z.string().min(1).max(32);
 
@@ -62,6 +43,8 @@ const createBody = z.object({
   content: z.string(),
   description: z.string().nullish(),
   folderPublicId: id.nullish(),
+  /** Who can read it; wins over `readable`. */
+  audience: audienceSchema.optional(),
   readable: z.boolean().optional(),
 });
 
@@ -69,6 +52,8 @@ const patchBody = z.object({
   title: z.string().optional(),
   description: z.string().nullish(),
   folderPublicId: id.nullish(),
+  /** Who can read it; wins over `readable`. */
+  audience: audienceSchema.optional(),
   readable: z.boolean().optional(),
 });
 
@@ -111,6 +96,11 @@ function documentJson(doc: DocumentSummary) {
   };
 }
 
+/** One document on its own also names its 指定的人, for those who can change them. */
+function detailJson(doc: DocumentDetail) {
+  return { ...documentJson(doc), readers: doc.readers };
+}
+
 const ok = (payload: unknown, status = 200): RestResponse => ({
   status,
   body: payload,
@@ -132,7 +122,7 @@ export async function handleDocumentsRest(
 ): Promise<RestResponse> {
   const { method, segments } = request;
   const detail = async (publicId: string) =>
-    documentJson(await getDocumentDetail(db, storage, actor, publicId));
+    detailJson(await getDocumentDetail(db, storage, actor, publicId));
 
   // /documents
   if (segments.length === 0) {
@@ -174,6 +164,13 @@ export async function handleDocumentsRest(
       },
       201,
     );
+  }
+
+  // /documents/audience-options: who 指定的人 can be, with their userIds
+  if (first === "audience-options") {
+    if (segments.length !== 1) return notFound();
+    if (method !== "GET") return wrongMethod();
+    return ok(await getAudienceOptions(db, actor));
   }
 
   // /documents/{id} and /documents/{id}/content

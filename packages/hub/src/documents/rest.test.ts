@@ -172,6 +172,97 @@ describe("changing", () => {
   });
 });
 
+describe("who can read it", () => {
+  const titlesFor = async (actor: AdminActor) =>
+    (
+      (await call(actor, "GET", "/")).body as {
+        documents: { title: string }[];
+      }
+    ).documents.map((doc) => doc.title);
+
+  it("creates a document for 指定的人 that only they and its editors can read", async () => {
+    const reader = actorOf(await seedUser(db, { name: "Rita" }), null);
+    const doc = await create({
+      audience: { kind: "selected", userIds: [reader.userId] },
+    });
+    expect(doc).toMatchObject({ readable: false, audience: "selected" });
+
+    expect(await titlesFor(reader)).toEqual(["讲稿"]);
+    expect(await titlesFor(member)).toEqual([]);
+    await expect(
+      call(member, "GET", `/${doc.publicId}/content`),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("moves a document between everyone, 指定的人 and editors only; the detail names the readers", async () => {
+    const reader = actorOf(await seedUser(db, { name: "Rita" }), null);
+    const doc = await create();
+
+    const shared = await call(owner, "PATCH", `/${doc.publicId}`, {
+      audience: { kind: "selected", userIds: [reader.userId] },
+    });
+    expect(shared.body).toMatchObject({
+      readable: false,
+      audience: "selected",
+      readers: { users: [{ userId: reader.userId, name: "Rita" }], groups: [] },
+    });
+    // The list of 指定的人 is for the people who can change it.
+    expect((await call(reader, "GET", `/${doc.publicId}`)).body).toMatchObject({
+      audience: "selected",
+      readers: null,
+    });
+
+    const hidden = await call(owner, "PATCH", `/${doc.publicId}`, {
+      audience: { kind: "editors" },
+    });
+    expect(hidden.body).toMatchObject({ audience: "editors" });
+    expect(await titlesFor(reader)).toEqual([]);
+
+    const open = await call(owner, "PATCH", `/${doc.publicId}`, {
+      audience: { kind: "all" },
+    });
+    expect(open.body).toMatchObject({ readable: true, audience: "all" });
+    expect(await titlesFor(member)).toEqual(["讲稿"]);
+  });
+
+  it("refuses 指定的人 with nobody in it, and people who do not exist", async () => {
+    const doc = await create();
+    await expect(
+      call(owner, "PATCH", `/${doc.publicId}`, {
+        audience: { kind: "selected" },
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(
+      call(owner, "PATCH", `/${doc.publicId}`, {
+        audience: {
+          kind: "selected",
+          userIds: ["00000000-0000-4000-8000-000000000000"],
+        },
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      call(member, "PATCH", `/${doc.publicId}`, {
+        audience: { kind: "all" },
+      }),
+    ).rejects.toBeDefined();
+  });
+
+  it("lists who 指定的人 can be, only for people who can choose", async () => {
+    const options = await call(owner, "GET", "/audience-options");
+    expect(options.status).toBe(200);
+    const body = options.body as {
+      projects: unknown[];
+      departments: { name: string }[];
+    };
+    expect(body.projects).toEqual([]);
+    expect(body.departments.map((d) => d.name)).toContain("技术");
+    await expect(
+      call(member, "GET", "/audience-options"),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect((await call(owner, "POST", "/audience-options")).status).toBe(405);
+  });
+});
+
 describe("what used to be uploads and downloads", () => {
   it("is gone: there is no upload or download address any more", async () => {
     // "uploads" is now read as a document id, and a document id takes no POST.
