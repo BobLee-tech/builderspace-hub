@@ -1,0 +1,2 @@
+ALTER TABLE "hub_private_board" ADD COLUMN "audience" varchar(16) DEFAULT 'owner' NOT NULL;--> statement-breakpoint
+ALTER TABLE "hub_private_board" ADD CONSTRAINT "hub_private_board_audience_check" CHECK ("hub_private_board"."audience" IN ('owner', 'admins'));

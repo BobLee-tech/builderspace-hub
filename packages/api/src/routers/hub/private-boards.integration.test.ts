@@ -25,10 +25,10 @@ const createAppCaller = (database: dbClient, user: User | null) =>
   appRouter.createCaller(callerContext(database, user));
 
 /**
- * 仅自己可见 through the real API: Kan's own procedures, unchanged, refuse or
- * leave out other people's private boards because of the middleware in
- * trpc.ts and the two filters in board.all and workspace.search. The rules
- * themselves are tested in @kan/hub.
+ * 仅自己可见 and 仅管理员可见 through the real API: Kan's own procedures,
+ * unchanged, refuse or leave out private boards the caller may not see
+ * because of the middleware in trpc.ts and the two filters in board.all and
+ * workspace.search. The rules themselves are tested in @kan/hub.
  */
 
 interface User {
@@ -39,6 +39,7 @@ interface User {
 let db: dbClient;
 let creator: User;
 let teammate: User;
+let member: User;
 let project: { id: number; publicId: string };
 let shared: { board: string; list: string; card: string };
 let hidden: { board: string; list: string; card: string };
@@ -50,13 +51,15 @@ beforeEach(async () => {
   creator = await seedUser(db, { email: "creator@example.test" });
   teammate = await seedUser(db, { email: "teammate@example.test" });
   project = await seedProject(db, creator, { name: "BuilderSpace" });
+  member = await seedUser(db, { email: "member@example.test" });
   await ensureProjectMemberForTests(db, teammate, project.id, "admin");
+  await ensureProjectMemberForTests(db, member, project.id, "member");
 
   shared = await seedBoard("Roadmap");
   hidden = await seedBoard("Diary");
-  await createHubCaller(db, creator).boards.setOnlyMe({
+  await createHubCaller(db, creator).boards.setAudience({
     boardPublicId: hidden.board,
-    onlyMe: true,
+    audience: "owner",
   });
 });
 
@@ -210,9 +213,9 @@ describe("a 仅自己可见 board", () => {
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
-    await createHubCaller(db, creator).boards.setOnlyMe({
+    await createHubCaller(db, creator).boards.setAudience({
       boardPublicId: hidden.board,
-      onlyMe: false,
+      audience: null,
     });
     await asOwner.board.update({
       boardPublicId: hidden.board,
@@ -228,18 +231,94 @@ describe("a 仅自己可见 board", () => {
   });
 });
 
+describe("a 仅管理员可见 board", () => {
+  let admins: { board: string; list: string; card: string };
+
+  beforeEach(async () => {
+    admins = await seedBoard("Budget");
+    await createHubCaller(db, teammate).boards.setAudience({
+      boardPublicId: admins.board,
+      audience: "admins",
+    });
+  });
+
+  it("is listed, opened and found by the project's admins only", async () => {
+    const names = async (user: User) =>
+      (
+        await createAppCaller(db, user).board.all({
+          workspacePublicId: project.publicId,
+        })
+      ).map((board) => board.name);
+    expect(await names(teammate)).toEqual(["Budget", "Roadmap"]);
+    expect(await names(member)).toEqual(["Roadmap"]);
+
+    expect(
+      (
+        await createAppCaller(db, creator).card.byId({
+          cardPublicId: admins.card,
+        })
+      ).title,
+    ).toBe("Budget card");
+    const asMember = createAppCaller(db, member);
+    await expect(
+      asMember.board.byId({ boardPublicId: admins.board }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      asMember.card.update({ cardPublicId: admins.card, title: "seen it" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      createAppCaller(db, null).card.byId({ cardPublicId: admins.card }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const found = async (user: User) =>
+      (
+        await createAppCaller(db, user).workspace.search({
+          workspacePublicId: project.publicId,
+          query: "Budget",
+        })
+      ).map((result) => result.title);
+    expect(await found(teammate)).toEqual(
+      expect.arrayContaining(["Budget", "Budget card"]),
+    );
+    expect(await found(member)).toEqual([]);
+  });
+
+  it("cannot go on the public link, even for an admin", async () => {
+    await expect(
+      createAppCaller(db, teammate).board.update({
+        boardPublicId: admins.board,
+        visibility: "public",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});
+
 describe("hub.boards", () => {
-  it("tells each person whether the board is private and whether they may change it", async () => {
+  it("tells each person whether the board is private and where they may move it", async () => {
     expect(
       await createHubCaller(db, creator).boards.privacy({
         boardPublicId: hidden.board,
       }),
-    ).toEqual({ onlyMe: true, canChange: true });
+    ).toEqual({
+      audience: "owner",
+      canSwitchTo: { members: true, owner: false, admins: true },
+    });
     expect(
       await createHubCaller(db, teammate).boards.privacy({
         boardPublicId: shared.board,
       }),
-    ).toEqual({ onlyMe: false, canChange: false });
+    ).toEqual({
+      audience: null,
+      canSwitchTo: { members: false, owner: false, admins: true },
+    });
+    expect(
+      await createHubCaller(db, member).boards.privacy({
+        boardPublicId: shared.board,
+      }),
+    ).toEqual({
+      audience: null,
+      canSwitchTo: { members: false, owner: false, admins: false },
+    });
     await expect(
       createHubCaller(db, teammate).boards.privacy({
         boardPublicId: hidden.board,
@@ -247,27 +326,33 @@ describe("hub.boards", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("lets only the creator hide a board, and refuses API keys", async () => {
+  it("lets only the creator make a board 仅自己可见 and only admins 仅管理员可见, and refuses API keys", async () => {
     await expect(
-      createHubCaller(db, teammate).boards.setOnlyMe({
+      createHubCaller(db, teammate).boards.setAudience({
         boardPublicId: shared.board,
-        onlyMe: true,
+        audience: "owner",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      createHubCaller(db, member).boards.setAudience({
+        boardPublicId: shared.board,
+        audience: "admins",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       createHubCaller(db, creator, {
         "x-api-key": "anything",
-      }).boards.setOnlyMe({
+      }).boards.setAudience({
         boardPublicId: shared.board,
-        onlyMe: true,
+        audience: "owner",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     expect(
-      await createHubCaller(db, creator).boards.setOnlyMe({
+      await createHubCaller(db, creator).boards.setAudience({
         boardPublicId: shared.board,
-        onlyMe: true,
+        audience: "owner",
       }),
-    ).toEqual({ onlyMe: true, canChange: true });
+    ).toMatchObject({ audience: "owner" });
   });
 });

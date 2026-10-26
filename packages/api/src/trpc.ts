@@ -105,7 +105,7 @@ const loggingMiddleware = t.middleware(
   },
 );
 
-// hub-seam: 仅自己可见 boards are refused before any procedure runs (docs/hub/UPSTREAM_SEAMS.md)
+// hub-seam: private boards (仅自己可见 / 仅管理员可见) are refused before any procedure runs (docs/hub/UPSTREAM_SEAMS.md)
 const hubPrivateBoards = t.middleware(
   async ({ ctx, path, getRawInput, next }) => {
     const input = await getRawInput().catch(() => undefined);

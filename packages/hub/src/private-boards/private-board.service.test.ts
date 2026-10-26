@@ -9,11 +9,12 @@ import { ensureProjectMember } from "../kan/members.gateway";
 import { hubPrivateBoards } from "../schema";
 import { getTaskBoard, getVisibleTasks } from "../tasks/task.service";
 import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
+import { switchPrivateBoard } from "./private-board.repo";
 import {
   assertRequestAllowed,
   getBoardPrivacy,
   onlyVisibleBoards,
-  setBoardOnlyMe,
+  setBoardAudience,
 } from "./private-board.service";
 
 interface User {
@@ -39,6 +40,7 @@ const now = new Date("2026-10-23T00:00:00Z");
 let db: Db;
 let creator: User;
 let teammate: User;
+let member: User;
 let outsider: User;
 let project: { id: number; publicId: string; name: string };
 let uid = 0;
@@ -50,6 +52,7 @@ beforeEach(async () => {
   db = await createHubTestDb();
   creator = await seedUser(db, { email: "creator@example.test" });
   teammate = await seedUser(db, { email: "teammate@example.test" });
+  member = await seedUser(db, { email: "member@example.test" });
   outsider = await seedUser(db, { email: "outsider@example.test" });
   project = await seedProject(db, creator, { name: "BuilderSpace" });
   await ensureProjectMember(db, {
@@ -59,7 +62,29 @@ beforeEach(async () => {
     role: "admin",
     addedBy: creator.id,
   });
+  await ensureProjectMember(db, {
+    userId: member.id,
+    email: member.email,
+    workspaceId: project.id,
+    role: "member",
+    addedBy: creator.id,
+  });
 });
+
+const privacy = (
+  audience: "owner" | "admins" | null,
+  canSwitchTo: { members?: boolean; owner?: boolean; admins?: boolean } = {},
+) => ({
+  audience,
+  canSwitchTo: { members: false, owner: false, admins: false, ...canSwitchTo },
+});
+
+async function setProjectRole(user: User, role: "admin" | "member") {
+  await db
+    .update(kanSchema.workspaceMembers)
+    .set({ role })
+    .where(eq(kanSchema.workspaceMembers.userId, user.id));
+}
 
 async function seedBoard(name: string, createdBy: User): Promise<SeededBoard> {
   const ids = {
@@ -156,16 +181,16 @@ function everyRef(board: SeededBoard): Record<string, string>[] {
   ];
 }
 
-describe("setBoardOnlyMe", () => {
+describe("setBoardAudience to 仅自己可见", () => {
   it("lets the creator hide their board, takes it off the public link, and logs it without its name", async () => {
     const board = await seedBoard("private", creator);
 
     expect(
-      await setBoardOnlyMe(db, actor(creator), {
+      await setBoardAudience(db, actor(creator), {
         boardPublicId: board.board,
-        onlyMe: true,
+        audience: "owner",
       }),
-    ).toEqual({ onlyMe: true, canChange: true });
+    ).toEqual(privacy("owner", { members: true, admins: true }));
 
     expect(await kanVisibility(board.id)).toBe("private");
     const [entry] = await listAudit(db, { limit: 5, offset: 0 });
@@ -183,15 +208,15 @@ describe("setBoardOnlyMe", () => {
     const board = await seedBoard("roadmap", creator);
 
     await expect(
-      setBoardOnlyMe(db, actor(teammate), {
+      setBoardAudience(db, actor(teammate), {
         boardPublicId: board.board,
-        onlyMe: true,
+        audience: "owner",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
-      setBoardOnlyMe(db, actor(outsider), {
+      setBoardAudience(db, actor(outsider), {
         boardPublicId: board.board,
-        onlyMe: true,
+        audience: "owner",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
@@ -202,45 +227,44 @@ describe("setBoardOnlyMe", () => {
 
   it("lets the owner turn it off; the board stays off the public link", async () => {
     const board = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: board.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     await expect(
-      setBoardOnlyMe(db, actor(teammate), {
+      setBoardAudience(db, actor(teammate), {
         boardPublicId: board.board,
-        onlyMe: false,
+        audience: null,
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     expect(
-      await setBoardOnlyMe(db, actor(creator), {
+      await setBoardAudience(db, actor(creator), {
         boardPublicId: board.board,
-        onlyMe: false,
+        audience: null,
       }),
-    ).toEqual({ onlyMe: false, canChange: true });
+    ).toEqual(privacy(null, { owner: true, admins: true }));
     expect(await db.select().from(hubPrivateBoards)).toEqual([]);
     expect(await kanVisibility(board.id)).toBe("private");
-    expect(await getBoardPrivacy(db, teammate.id, board.board)).toEqual({
-      onlyMe: false,
-      canChange: false,
-    });
+    expect(await getBoardPrivacy(db, teammate.id, board.board)).toEqual(
+      privacy(null, { admins: true }),
+    );
   });
 
   it("does nothing, and logs nothing, when the board is already that way", async () => {
     const board = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: board.board,
-      onlyMe: false,
+      audience: null,
     });
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: board.board,
-      onlyMe: true,
+      audience: "owner",
     });
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: board.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     expect(await listAudit(db, { limit: 5, offset: 0 })).toHaveLength(1);
@@ -255,23 +279,273 @@ describe("setBoardOnlyMe", () => {
 
     for (const boardPublicId of [board.board, "nonexistent1"]) {
       await expect(
-        setBoardOnlyMe(db, actor(creator), { boardPublicId, onlyMe: true }),
+        setBoardAudience(db, actor(creator), {
+          boardPublicId,
+          audience: "owner",
+        }),
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
   });
 });
 
+describe("setBoardAudience to 仅管理员可见", () => {
+  const hideFromMembers = (board: SeededBoard, by: User = teammate) =>
+    setBoardAudience(db, actor(by), {
+      boardPublicId: board.board,
+      audience: "admins",
+    });
+
+  it("lets a project admin hide any board from the other members, and logs it without its name", async () => {
+    const board = await seedBoard("admin", member);
+
+    expect(await hideFromMembers(board)).toEqual(
+      privacy("admins", { members: true }),
+    );
+
+    expect(await kanVisibility(board.id)).toBe("private");
+    const [entry] = await listAudit(db, { limit: 5, offset: 0 });
+    expect(entry).toMatchObject({
+      action: "board.privacy_changed",
+      entityId: board.board,
+      actorEmail: teammate.email,
+      summary: "把一个看板设为仅管理员可见",
+    });
+    expect(JSON.stringify(entry)).not.toContain("admin task");
+  });
+
+  it("refuses a member, even the board's creator, and changes nothing", async () => {
+    const board = await seedBoard("roadmap", member);
+
+    await expect(hideFromMembers(board, member)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(hideFromMembers(board, outsider)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await db.select().from(hubPrivateBoards)).toEqual([]);
+    expect(await kanVisibility(board.id)).toBe("public");
+  });
+
+  it("lets every admin into the board, and nobody else", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+    const otherAdmin = await seedUser(db, { email: "other@example.test" });
+    await seedProject(db, otherAdmin, { name: "Elsewhere" });
+
+    for (const input of everyRef(board)) {
+      for (const viewerId of [creator.id, teammate.id]) {
+        await expect(
+          assertRequestAllowed(db, { viewerId, path: "x", input }),
+        ).resolves.toBeUndefined();
+      }
+      for (const viewerId of [member.id, otherAdmin.id, null]) {
+        await expect(
+          assertRequestAllowed(db, { viewerId, path: "x", input }),
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      }
+    }
+    await expect(
+      getBoardPrivacy(db, member.id, board.board),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("follows whoever is an admin now", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+    await setProjectRole(member, "admin");
+    await setProjectRole(teammate, "member");
+
+    const allowed = (user: User) =>
+      assertRequestAllowed(db, {
+        viewerId: user.id,
+        path: "board.byId",
+        input: { boardPublicId: board.board },
+      });
+    await expect(allowed(member)).resolves.toBeUndefined();
+    await expect(allowed(teammate)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("stays hidden when whoever set it loses their account", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+    await db.delete(kanSchema.users).where(eq(kanSchema.users.id, teammate.id));
+
+    expect(await getBoardPrivacy(db, creator.id, board.board)).toEqual(
+      privacy("admins", { members: true, owner: true }),
+    );
+    await expect(
+      assertRequestAllowed(db, {
+        viewerId: member.id,
+        path: "board.byId",
+        input: { boardPublicId: board.board },
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("moves to and from 仅自己可见 without passing through the members", async () => {
+    const board = await seedBoard("admin", creator);
+    await setBoardAudience(db, actor(creator), {
+      boardPublicId: board.board,
+      audience: "owner",
+    });
+
+    await hideFromMembers(board, creator);
+    expect(await db.select().from(hubPrivateBoards)).toEqual([
+      expect.objectContaining({ audience: "admins", ownerUserId: creator.id }),
+    ]);
+    await expect(
+      setBoardAudience(db, actor(teammate), {
+        boardPublicId: board.board,
+        audience: "owner",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await setBoardAudience(db, actor(creator), {
+      boardPublicId: board.board,
+      audience: "owner",
+    });
+
+    expect(
+      (await listAudit(db, { limit: 5, offset: 0 })).map((e) => e.summary),
+    ).toEqual([
+      "把一个看板从仅管理员可见改为仅自己可见",
+      "把一个看板从仅自己可见改为仅管理员可见",
+      "把自己建的一个看板设为仅自己可见",
+    ]);
+  });
+
+  it("goes back to every member at any admin's word", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board, creator);
+
+    expect(
+      await setBoardAudience(db, actor(teammate), {
+        boardPublicId: board.board,
+        audience: null,
+      }),
+    ).toEqual(privacy(null, { admins: true }));
+    expect(await getBoardPrivacy(db, member.id, board.board)).toEqual(
+      privacy(null),
+    );
+    const [entry] = await listAudit(db, { limit: 1, offset: 0 });
+    expect(entry?.summary).toBe("把一个仅管理员可见的看板改回社团成员可见");
+  });
+
+  it("lets only one of two changes made at the same moment through", async () => {
+    // Its creator, a member, hides it from everyone else while an admin hides
+    // it from the members. Whoever writes second must not overwrite the
+    // first: the creator may not leave 仅管理员可见, nor the admin 仅自己可见.
+    const board = await seedBoard("roadmap", member);
+
+    const outcomes = await Promise.allSettled([
+      setBoardAudience(db, actor(member), {
+        boardPublicId: board.board,
+        audience: "owner",
+      }),
+      hideFromMembers(board),
+    ]);
+
+    const won = outcomes.flatMap((outcome, i) =>
+      outcome.status === "fulfilled" ? [i] : [],
+    );
+    expect(won).toHaveLength(1);
+    const lost = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(lost?.reason).toMatchObject({
+      code: expect.stringMatching(/^(CONFLICT|NOT_FOUND)$/) as unknown,
+    });
+    expect(await db.select().from(hubPrivateBoards)).toEqual([
+      expect.objectContaining({
+        audience: won[0] === 0 ? "owner" : "admins",
+      }),
+    ]);
+    expect(await listAudit(db, { limit: 5, offset: 0 })).toHaveLength(1);
+  });
+
+  it("refuses a change made from a setting that is no longer current", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+
+    // What a request that read the board before that change would write.
+    await expect(
+      db.transaction((tx) =>
+        switchPrivateBoard(tx, board.id, {
+          from: null,
+          to: "owner",
+          ownerUserId: creator.id,
+        }),
+      ),
+    ).resolves.toBe(false);
+    for (const from of ["owner", null] as const) {
+      await expect(
+        db.transaction((tx) =>
+          switchPrivateBoard(tx, board.id, {
+            from,
+            to: from === null ? "admins" : null,
+            ownerUserId: creator.id,
+          }),
+        ),
+      ).resolves.toBe(false);
+    }
+    expect(await db.select().from(hubPrivateBoards)).toEqual([
+      expect.objectContaining({ audience: "admins", ownerUserId: teammate.id }),
+    ]);
+  });
+
+  it("cannot go on the public link", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+
+    await expect(
+      assertRequestAllowed(db, {
+        viewerId: teammate.id,
+        path: "board.update",
+        input: { boardPublicId: board.board, visibility: "public" },
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "这个看板仅管理员可见。要公开，先把它改回社团成员可见。",
+    });
+  });
+
+  it("is left out of lists, the home page and 总版 for members only", async () => {
+    const shared = await seedBoard("技术", creator);
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+    const items = [shared, board].map((b) => ({ publicId: b.board }));
+
+    expect(
+      await onlyVisibleBoards(db, member.id, items, (item) => item.publicId),
+    ).toEqual([{ publicId: shared.board }]);
+    expect(
+      await onlyVisibleBoards(db, teammate.id, items, (item) => item.publicId),
+    ).toEqual(items);
+
+    const titles = async (user: User) =>
+      (await getVisibleTasks(db, { userId: user.id, now }))
+        .map((t) => t.title)
+        .sort();
+    expect(await titles(teammate)).toEqual(["admin task", "技术 task"]);
+    expect(await titles(member)).toEqual(["技术 task"]);
+
+    const boardsOn = async (user: User) =>
+      (
+        await getTaskBoard(db, { userId: user.id, now, view: "all" })
+      ).boards.map((b) => b.name);
+    expect((await boardsOn(creator)).sort()).toEqual(["admin", "技术"]);
+    expect(await boardsOn(member)).toEqual(["技术"]);
+  });
+});
+
 describe("getBoardPrivacy", () => {
-  it("tells the creator they can hide it, and others that they cannot", async () => {
-    const board = await seedBoard("roadmap", creator);
-    expect(await getBoardPrivacy(db, creator.id, board.board)).toEqual({
-      onlyMe: false,
-      canChange: true,
-    });
-    expect(await getBoardPrivacy(db, teammate.id, board.board)).toEqual({
-      onlyMe: false,
-      canChange: false,
-    });
+  it("tells each person where they may move the board", async () => {
+    const board = await seedBoard("roadmap", member);
+    expect(await getBoardPrivacy(db, member.id, board.board)).toEqual(
+      privacy(null, { owner: true }),
+    );
+    expect(await getBoardPrivacy(db, teammate.id, board.board)).toEqual(
+      privacy(null, { admins: true }),
+    );
     await expect(
       getBoardPrivacy(db, outsider.id, board.board),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -281,9 +555,9 @@ describe("getBoardPrivacy", () => {
 describe("assertRequestAllowed", () => {
   it("refuses every id inside someone else's private board, and lets the owner through", async () => {
     const hidden = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     for (const input of everyRef(hidden)) {
@@ -302,9 +576,9 @@ describe("assertRequestAllowed", () => {
   it("refuses a request that mixes an ordinary board with a hidden one", async () => {
     const shared = await seedBoard("roadmap", creator);
     const hidden = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     // Moving a card into a list of the hidden board.
@@ -345,9 +619,9 @@ describe("assertRequestAllowed", () => {
 
   it("hides the board from everyone once its owner's account is deleted", async () => {
     const hidden = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
     await db.delete(kanSchema.users).where(eq(kanSchema.users.id, creator.id));
 
@@ -363,9 +637,9 @@ describe("assertRequestAllowed", () => {
   it("refuses putting a private board on the public link, even for its owner", async () => {
     const hidden = await seedBoard("private", creator);
     const shared = await seedBoard("roadmap", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     await expect(
@@ -390,9 +664,9 @@ describe("onlyVisibleBoards", () => {
     const first = await seedBoard("alpha", creator);
     const hidden = await seedBoard("private", creator);
     const last = await seedBoard("omega", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
     const items = [first, hidden, last].map((b) => ({ publicId: b.board }));
 
@@ -412,9 +686,9 @@ describe("the home page and 总版", () => {
   it("show a private board's cards to its owner only", async () => {
     await seedBoard("技术", creator);
     const hidden = await seedBoard("private", creator);
-    await setBoardOnlyMe(db, actor(creator), {
+    await setBoardAudience(db, actor(creator), {
       boardPublicId: hidden.board,
-      onlyMe: true,
+      audience: "owner",
     });
 
     const titles = async (user: User) =>

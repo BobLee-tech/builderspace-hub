@@ -61,31 +61,72 @@ export function countBoardRefs(refs: BoardRefs): number {
 }
 
 /**
- * Whether `viewerId` may see a board that is set to 仅自己可见 and owned by
- * `ownerUserId`. Only the owner may; nobody may once the owner's account is
- * gone, and a signed-out visitor never may.
+ * Who a private board is for, beyond Kan's own rules: 仅自己可见 (`owner`) or
+ * 仅管理员可见 (`admins`, whoever is a project admin at the time).
  */
-export function canSeePrivateBoard(
-  ownerUserId: string | null,
-  viewerId: string | null,
-): boolean {
-  return ownerUserId !== null && ownerUserId === viewerId;
+export const boardAudiences = ["owner", "admins"] as const;
+export type BoardAudience = (typeof boardAudiences)[number];
+
+/** A board set to 仅自己可见 or 仅管理员可见. */
+export interface PrivateBoard {
+  audience: BoardAudience;
+  /** Who set it; for 仅自己可见, the only person who may see it. */
+  ownerUserId: string | null;
+  workspaceId: number;
+}
+
+/** The person asking, or a signed-out visitor, and the projects they run. */
+export interface BoardViewer {
+  id: string | null;
+  adminOf: ReadonlySet<number>;
 }
 
 /**
- * Who may turn 仅自己可见 on or off. On: the person who created the board, so
- * nobody can hide someone else's board from them. Off: its owner.
+ * Whether `viewer` may see a private board. 仅自己可见: only its owner; nobody
+ * once the owner's account is gone. 仅管理员可见: the admins of its project,
+ * whoever they are now. A signed-out visitor never may.
  */
-export function canChangeOnlyMe(
-  board: {
-    createdBy: string | null;
-    privateTo: { ownerUserId: string | null } | null;
-  },
-  viewerId: string,
+export function canSeePrivateBoard(
+  board: PrivateBoard,
+  viewer: BoardViewer,
 ): boolean {
-  return board.privateTo
-    ? board.privateTo.ownerUserId === viewerId
-    : board.createdBy === viewerId;
+  if (viewer.id === null) return false;
+  return board.audience === "admins"
+    ? viewer.adminOf.has(board.workspaceId)
+    : board.ownerUserId === viewer.id;
+}
+
+/**
+ * Whether `viewer` may move a board from where it is (`current`, null for
+ * every project member) to `target`. They must be allowed to leave the one and
+ * enter the other:
+ *
+ * - leave 仅自己可见: its owner; leave 仅管理员可见: a project admin;
+ * - enter 仅自己可见: the board's creator, so nobody can hide someone else's
+ *   board from them; enter 仅管理员可见: a project admin.
+ *
+ * Going back to every member needs nothing more than leaving. Staying where
+ * it is is not a move.
+ */
+export function canSwitchAudience(
+  board: {
+    workspaceId: number;
+    createdBy: string | null;
+    private: { audience: BoardAudience; ownerUserId: string | null } | null;
+  },
+  viewer: { id: string; adminOf: ReadonlySet<number> },
+  target: BoardAudience | null,
+): boolean {
+  const current = board.private?.audience ?? null;
+  if (target === current) return false;
+  const isAdmin = viewer.adminOf.has(board.workspaceId);
+  const mayLeave =
+    current === null ||
+    (current === "owner" ? board.private?.ownerUserId === viewer.id : isAdmin);
+  const mayEnter =
+    target === null ||
+    (target === "owner" ? board.createdBy === viewer.id : isAdmin);
+  return mayLeave && mayEnter;
 }
 
 /**
