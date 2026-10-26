@@ -80,7 +80,7 @@ export const boardRouter = createTRPCRouter({
         }
       );
 
-      return visibleBoardsOnly(ctx.db, userId, await result); // hub-seam: hide others' 仅自己可见 boards
+      return visibleBoardsOnly(ctx.db, userId, await result); // hub-seam: hide private boards the caller may not see
     }),
   byId: protectedProcedure
     .meta({

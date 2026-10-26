@@ -46,7 +46,11 @@ import {
   getPermissionMatrix,
   setProjectRolePermission,
 } from "@kan/hub/permissions";
-import { getBoardPrivacy, setBoardOnlyMe } from "@kan/hub/private-boards";
+import {
+  boardAudiences,
+  getBoardPrivacy,
+  setBoardAudience,
+} from "@kan/hub/private-boards";
 import { can } from "@kan/hub/public";
 import {
   blockInputs,
@@ -450,7 +454,9 @@ const nudgesRouter = createTRPCRouter({
 const boardInput = z.object({ boardPublicId: z.string().min(1).max(32) });
 
 const boardsRouter = createTRPCRouter({
-  /** Whether a board is 仅自己可见, and whether I may change that. */
+  /**
+   * Whether a board is 仅自己可见 or 仅管理员可见, and where I may move it.
+   */
   privacy: hubProcedure
     .input(boardInput)
     .query(({ ctx, input }) =>
@@ -459,10 +465,11 @@ const boardsRouter = createTRPCRouter({
       ),
     ),
 
-  setOnlyMe: hubProcedure
-    .input(boardInput.extend({ onlyMe: z.boolean() }))
+  /** `audience: null` hands the board back to every project member. */
+  setAudience: hubProcedure
+    .input(boardInput.extend({ audience: z.enum(boardAudiences).nullable() }))
     .mutation(({ ctx, input }) =>
-      runHub(() => setBoardOnlyMe(ctx.db, ctx.actor, input)),
+      runHub(() => setBoardAudience(ctx.db, ctx.actor, input)),
     ),
 });
 

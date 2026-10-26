@@ -1,17 +1,19 @@
 import { eq } from "drizzle-orm";
 
 import type { DbOrTx } from "../db";
+import type { BoardAudience } from "./private-board.policy";
 import { hubPrivateBoards } from "../schema";
 
-export async function insertPrivateBoard(
+/** Makes the board private to `audience`, or moves it to that audience. */
+export async function upsertPrivateBoard(
   db: DbOrTx,
   boardId: number,
-  ownerUserId: string,
+  setting: { audience: BoardAudience; ownerUserId: string },
 ): Promise<void> {
   await db
     .insert(hubPrivateBoards)
-    .values({ boardId, ownerUserId })
-    .onConflictDoNothing();
+    .values({ boardId, ...setting })
+    .onConflictDoUpdate({ target: hubPrivateBoards.boardId, set: setting });
 }
 
 export async function deletePrivateBoard(

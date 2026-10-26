@@ -1,6 +1,16 @@
 import type { SQL } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { and, eq, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  ne,
+  not,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import * as boardRepo from "@kan/db/repository/board.repo";
 import {
@@ -12,12 +22,15 @@ import {
   comments,
   labels,
   lists,
+  workspaceMembers,
 } from "@kan/db/schema";
 
 import type { Db, DbOrTx } from "../db";
 import type {
+  BoardAudience,
   BoardRefKind,
   BoardRefs,
+  PrivateBoard,
 } from "../private-boards/private-board.policy";
 import { boardRefKinds } from "../private-boards/private-board.policy";
 import { hubPrivateBoards } from "../schema";
@@ -27,11 +40,14 @@ export interface PrivacyBoard {
   publicId: string;
   workspaceId: number;
   createdBy: string | null;
-  /** Null when the board is not set to 仅自己可见. */
-  privateTo: { ownerUserId: string | null } | null;
+  /** Null when every project member may see it. */
+  private: { audience: BoardAudience; ownerUserId: string | null } | null;
 }
 
-/** One live board and whether it is set to 仅自己可见, or undefined. */
+/**
+ * One live board and whether it is set to 仅自己可见 or 仅管理员可见, or
+ * undefined.
+ */
 export async function findPrivacyBoard(
   db: DbOrTx,
   boardPublicId: string,
@@ -44,56 +60,81 @@ export async function findPrivacyBoard(
       createdBy: boards.createdBy,
       isPrivate: sql<boolean>`${hubPrivateBoards.boardId} IS NOT NULL`,
       ownerUserId: hubPrivateBoards.ownerUserId,
+      audience: hubPrivateBoards.audience,
     })
     .from(boards)
     .leftJoin(hubPrivateBoards, eq(hubPrivateBoards.boardId, boards.id))
     .where(and(eq(boards.publicId, boardPublicId), isNull(boards.deletedAt)))
     .limit(1);
   if (!row) return undefined;
-  const { isPrivate, ownerUserId, ...board } = row;
-  return { ...board, privateTo: isPrivate ? { ownerUserId } : null };
+  const { isPrivate, ownerUserId, audience, ...board } = row;
+  return {
+    ...board,
+    private: isPrivate && audience ? { audience, ownerUserId } : null,
+  };
+}
+
+/** The projects `userId` is an active admin of. */
+export async function projectsAdministeredBy(
+  db: DbOrTx,
+  userId: string,
+): Promise<Set<number>> {
+  const rows = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(adminMembership(userId));
+  return new Set(rows.map((row) => row.workspaceId));
 }
 
 /**
- * The owners of the 仅自己可见 boards that the given ids live in. Boards
- * without the setting are left out, so an empty answer means every id is in
- * an ordinary board (or does not exist). Soft-deleted rows count: Kan answers
- * NOT_FOUND for those itself, and a deleted card is still the owner's.
+ * The private boards that the given ids live in. Ordinary boards are left
+ * out, so an empty answer means every id is in an ordinary board (or does not
+ * exist). Soft-deleted rows count: Kan answers NOT_FOUND for those itself, and
+ * a deleted card is still the owner's.
  */
-export async function ownersOfPrivateBoards(
+export async function privateBoardsOf(
   db: DbOrTx,
   refs: BoardRefs,
-): Promise<(string | null)[]> {
+): Promise<PrivateBoard[]> {
   const found = await Promise.all(
     boardRefKinds
       .filter((kind) => refs[kind].length > 0)
-      .map((kind) => ownersVia(db, kind, refs[kind])),
+      .map((kind) => privateBoardsVia(db, kind, refs[kind])),
   );
-  return found.flat().map((row) => row.ownerUserId);
+  return found.flat();
 }
 
-/** The 仅自己可见 boards among these, with their owners. */
-export async function privateBoardOwners(
+/** The private boards among these, by public id. */
+export async function privateBoardsAmong(
   db: DbOrTx,
   boardPublicIds: readonly string[],
-): Promise<Map<string, string | null>> {
+): Promise<Map<string, PrivateBoard>> {
   if (boardPublicIds.length === 0) return new Map();
   const rows = await db
-    .select({
-      publicId: boards.publicId,
-      ownerUserId: hubPrivateBoards.ownerUserId,
-    })
+    .select({ publicId: boards.publicId, ...privateBoardColumns })
     .from(boards)
     .innerJoin(hubPrivateBoards, eq(hubPrivateBoards.boardId, boards.id))
     .where(inArray(boards.publicId, [...new Set(boardPublicIds)]));
-  return new Map(rows.map((row) => [row.publicId, row.ownerUserId]));
+  return new Map(rows.map(({ publicId, ...board }) => [publicId, board]));
 }
 
 /**
- * A condition for queries over Kan's `board` table: the board is not set to
- * 仅自己可见, or `viewerId` owns it.
+ * A condition for queries over Kan's `board` table: the board is not private,
+ * or `viewerId` may see it (`canSeePrivateBoard`, in SQL): they own a
+ * 仅自己可见 board, or are an admin of a 仅管理员可见 board's project.
  */
 export function boardVisibleTo(db: DbOrTx, viewerId: string): SQL {
+  const viewerIsAdmin = exists(
+    db
+      .select({ one: sql`1` })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, boards.workspaceId),
+          adminMembership(viewerId),
+        ),
+      ),
+  );
   return notExists(
     db
       .select({ one: sql`1` })
@@ -102,8 +143,14 @@ export function boardVisibleTo(db: DbOrTx, viewerId: string): SQL {
         and(
           eq(hubPrivateBoards.boardId, boards.id),
           or(
-            isNull(hubPrivateBoards.ownerUserId),
-            ne(hubPrivateBoards.ownerUserId, viewerId),
+            and(
+              eq(hubPrivateBoards.audience, "owner"),
+              or(
+                isNull(hubPrivateBoards.ownerUserId),
+                ne(hubPrivateBoards.ownerUserId, viewerId),
+              ),
+            ),
+            and(eq(hubPrivateBoards.audience, "admins"), not(viewerIsAdmin)),
           ),
         ),
       ),
@@ -127,70 +174,75 @@ export async function makeKanBoardPrivate(
   });
 }
 
-function ownersVia(db: DbOrTx, kind: BoardRefKind, publicIds: string[]) {
-  const owner = { ownerUserId: hubPrivateBoards.ownerUserId };
+// Kan's legacy role column; it is what the board page's `isAdmin` and Kan's
+// own admin-only checks read, and Hub's 项目权限 page keeps admins fixed.
+function adminMembership(userId: string): SQL | undefined {
+  return and(
+    eq(workspaceMembers.userId, userId),
+    eq(workspaceMembers.role, "admin"),
+    eq(workspaceMembers.status, "active"),
+    isNull(workspaceMembers.deletedAt),
+  );
+}
+
+const privateBoardColumns = {
+  audience: hubPrivateBoards.audience,
+  ownerUserId: hubPrivateBoards.ownerUserId,
+  workspaceId: boards.workspaceId,
+};
+
+function privateBoardsVia(db: DbOrTx, kind: BoardRefKind, publicIds: string[]) {
   const ids = [...new Set(publicIds)];
-  const privateBoard = (boardId: AnyPgColumn) =>
-    eq(hubPrivateBoards.boardId, boardId);
+  // Starts from the board, so every kind has its project to hand.
+  const privateBoards = () =>
+    db
+      .select(privateBoardColumns)
+      .from(boards)
+      .innerJoin(hubPrivateBoards, eq(hubPrivateBoards.boardId, boards.id));
 
   switch (kind) {
     case "board":
-      return db
-        .select(owner)
-        .from(boards)
-        .innerJoin(hubPrivateBoards, privateBoard(boards.id))
-        .where(inArray(boards.publicId, ids));
+      return privateBoards().where(inArray(boards.publicId, ids));
     case "list":
-      return db
-        .select(owner)
-        .from(lists)
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
         .where(inArray(lists.publicId, ids));
     case "label":
-      return db
-        .select(owner)
-        .from(labels)
-        .innerJoin(hubPrivateBoards, privateBoard(labels.boardId))
+      return privateBoards()
+        .innerJoin(labels, eq(labels.boardId, boards.id))
         .where(inArray(labels.publicId, ids));
     case "card":
-      return db
-        .select(owner)
-        .from(cards)
-        .innerJoin(lists, eq(lists.id, cards.listId))
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
+        .innerJoin(cards, eq(cards.listId, lists.id))
         .where(inArray(cards.publicId, ids));
     case "checklist":
-      return db
-        .select(owner)
-        .from(checklists)
-        .innerJoin(cards, eq(cards.id, checklists.cardId))
-        .innerJoin(lists, eq(lists.id, cards.listId))
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
+        .innerJoin(cards, eq(cards.listId, lists.id))
+        .innerJoin(checklists, eq(checklists.cardId, cards.id))
         .where(inArray(checklists.publicId, ids));
     case "checklistItem":
-      return db
-        .select(owner)
-        .from(checklistItems)
-        .innerJoin(checklists, eq(checklists.id, checklistItems.checklistId))
-        .innerJoin(cards, eq(cards.id, checklists.cardId))
-        .innerJoin(lists, eq(lists.id, cards.listId))
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
+        .innerJoin(cards, eq(cards.listId, lists.id))
+        .innerJoin(checklists, eq(checklists.cardId, cards.id))
+        .innerJoin(
+          checklistItems,
+          eq(checklistItems.checklistId, checklists.id),
+        )
         .where(inArray(checklistItems.publicId, ids));
     case "comment":
-      return db
-        .select(owner)
-        .from(comments)
-        .innerJoin(cards, eq(cards.id, comments.cardId))
-        .innerJoin(lists, eq(lists.id, cards.listId))
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
+        .innerJoin(cards, eq(cards.listId, lists.id))
+        .innerJoin(comments, eq(comments.cardId, cards.id))
         .where(inArray(comments.publicId, ids));
     case "attachment":
-      return db
-        .select(owner)
-        .from(cardAttachments)
-        .innerJoin(cards, eq(cards.id, cardAttachments.cardId))
-        .innerJoin(lists, eq(lists.id, cards.listId))
-        .innerJoin(hubPrivateBoards, privateBoard(lists.boardId))
+      return privateBoards()
+        .innerJoin(lists, eq(lists.boardId, boards.id))
+        .innerJoin(cards, eq(cards.listId, lists.id))
+        .innerJoin(cardAttachments, eq(cardAttachments.cardId, cards.id))
         .where(inArray(cardAttachments.publicId, ids));
   }
 }
