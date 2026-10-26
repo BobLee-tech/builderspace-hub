@@ -24,7 +24,7 @@ import {
   countBoardRefs,
   MAX_BOARD_REFS,
 } from "./private-board.policy";
-import { deletePrivateBoard, upsertPrivateBoard } from "./private-board.repo";
+import { switchPrivateBoard } from "./private-board.repo";
 
 export interface BoardPrivacy {
   /** Null when every project member may see it, by Kan's own rules. */
@@ -153,13 +153,22 @@ export async function setBoardAudience(
   }
   await withAudit(
     db,
-    (tx) =>
-      to === null
-        ? deletePrivateBoard(tx, board.id)
-        : upsertPrivateBoard(tx, board.id, {
-            audience: to,
-            ownerUserId: actor.userId,
-          }),
+    async (tx) => {
+      // The check above read the board before this transaction. If someone
+      // changed it since, this change was never checked against the new
+      // setting, so it is refused rather than written over it.
+      const switched = await switchPrivateBoard(tx, board.id, {
+        from,
+        to,
+        ownerUserId: actor.userId,
+      });
+      if (!switched) {
+        throw new HubError(
+          "CONFLICT",
+          "这个看板的可见范围刚被别人改过，刷新后再试。",
+        );
+      }
+    },
     () => ({
       actor,
       action: "board.privacy_changed",

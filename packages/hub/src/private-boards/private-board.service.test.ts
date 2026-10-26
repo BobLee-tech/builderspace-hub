@@ -9,6 +9,7 @@ import { ensureProjectMember } from "../kan/members.gateway";
 import { hubPrivateBoards } from "../schema";
 import { getTaskBoard, getVisibleTasks } from "../tasks/task.service";
 import { createHubTestDb, seedProject, seedUser } from "../testing/test-db";
+import { switchPrivateBoard } from "./private-board.repo";
 import {
   assertRequestAllowed,
   getBoardPrivacy,
@@ -429,6 +430,66 @@ describe("setBoardAudience to 仅管理员可见", () => {
     );
     const [entry] = await listAudit(db, { limit: 1, offset: 0 });
     expect(entry?.summary).toBe("把一个仅管理员可见的看板改回社团成员可见");
+  });
+
+  it("lets only one of two changes made at the same moment through", async () => {
+    // Its creator, a member, hides it from everyone else while an admin hides
+    // it from the members. Whoever writes second must not overwrite the
+    // first: the creator may not leave 仅管理员可见, nor the admin 仅自己可见.
+    const board = await seedBoard("roadmap", member);
+
+    const outcomes = await Promise.allSettled([
+      setBoardAudience(db, actor(member), {
+        boardPublicId: board.board,
+        audience: "owner",
+      }),
+      hideFromMembers(board),
+    ]);
+
+    const won = outcomes.flatMap((outcome, i) =>
+      outcome.status === "fulfilled" ? [i] : [],
+    );
+    expect(won).toHaveLength(1);
+    const lost = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(lost?.reason).toMatchObject({
+      code: expect.stringMatching(/^(CONFLICT|NOT_FOUND)$/) as unknown,
+    });
+    expect(await db.select().from(hubPrivateBoards)).toEqual([
+      expect.objectContaining({
+        audience: won[0] === 0 ? "owner" : "admins",
+      }),
+    ]);
+    expect(await listAudit(db, { limit: 5, offset: 0 })).toHaveLength(1);
+  });
+
+  it("refuses a change made from a setting that is no longer current", async () => {
+    const board = await seedBoard("admin", creator);
+    await hideFromMembers(board);
+
+    // What a request that read the board before that change would write.
+    await expect(
+      db.transaction((tx) =>
+        switchPrivateBoard(tx, board.id, {
+          from: null,
+          to: "owner",
+          ownerUserId: creator.id,
+        }),
+      ),
+    ).resolves.toBe(false);
+    for (const from of ["owner", null] as const) {
+      await expect(
+        db.transaction((tx) =>
+          switchPrivateBoard(tx, board.id, {
+            from,
+            to: from === null ? "admins" : null,
+            ownerUserId: creator.id,
+          }),
+        ),
+      ).resolves.toBe(false);
+    }
+    expect(await db.select().from(hubPrivateBoards)).toEqual([
+      expect.objectContaining({ audience: "admins", ownerUserId: teammate.id }),
+    ]);
   });
 
   it("cannot go on the public link", async () => {
