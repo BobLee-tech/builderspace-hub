@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { TbChevronRight } from "react-icons/tb";
 
-import type { ReaderList } from "./AudiencePicker";
+import type { ReaderList } from "./audience-choice";
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
 import {
@@ -17,10 +17,11 @@ import {
 import { api } from "~/utils/api";
 import { AccessPanel } from "./AccessPanel";
 import {
+  audienceChanged,
   audienceFrom,
-  AudiencePicker,
-  isEmptySelection,
-} from "./AudiencePicker";
+  canSendAudience,
+} from "./audience-choice";
+import { AudiencePicker } from "./AudiencePicker";
 import {
   documentFileUrl,
   documentsHref,
@@ -248,9 +249,7 @@ function EditForm({
             folderPublicId: folder || null,
             // Only when changed: a list that names someone since suspended
             // would otherwise be refused, and with it the title change.
-            ...(JSON.stringify(audience) === JSON.stringify(initialAudience)
-              ? {}
-              : { audience }),
+            ...(audienceChanged(audience, initialAudience) ? { audience } : {}),
           });
         }}
       >
@@ -298,7 +297,9 @@ function EditForm({
           <button
             type="submit"
             className={buttonClass.primary}
-            disabled={update.isPending || isEmptySelection(audience)}
+            disabled={
+              update.isPending || !canSendAudience(audience, initialAudience)
+            }
           >
             {text.actions.save}
           </button>

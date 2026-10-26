@@ -2,48 +2,18 @@ import { useMemo, useState } from "react";
 import { TbChevronDown, TbChevronRight, TbX } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
-import type { RouterInputs, RouterOutputs } from "~/utils/api";
+import type { AudienceChoice, ReaderList } from "./audience-choice";
+import type { RouterOutputs } from "~/utils/api";
 import { copy } from "~/hub/copy/zh";
 import { ErrorText, inputClass } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
 
-export type AudienceChoice = NonNullable<
-  RouterInputs["hub"]["documents"]["update"]["audience"]
->;
 type Selected = Extract<AudienceChoice, { kind: "selected" }>;
 type Group = Selected["groups"][number];
 type Options = RouterOutputs["hub"]["documents"]["audienceOptions"];
-type Detail = RouterOutputs["hub"]["documents"]["get"];
-export type ReaderList = NonNullable<Detail["readers"]>;
 
 const text = copy.documents.audience;
 const kinds = ["all", "selected", "editors"] as const;
-
-/** The picker's starting value for a document as it is now. */
-export function audienceFrom(detail: {
-  audience: Detail["audience"];
-  readers: ReaderList | null;
-}): AudienceChoice {
-  if (detail.audience !== "selected") return { kind: detail.audience };
-  return {
-    kind: "selected",
-    userIds: detail.readers?.users.map((u) => u.userId) ?? [],
-    groups:
-      detail.readers?.groups.map((g) => ({
-        projectPublicId: g.projectPublicId,
-        departmentPublicId: g.departmentPublicId,
-      })) ?? [],
-  };
-}
-
-/** Nothing picked yet under 指定的人: the form should not be sent like that. */
-export function isEmptySelection(value: AudienceChoice): boolean {
-  return (
-    value.kind === "selected" &&
-    value.userIds.length === 0 &&
-    value.groups.length === 0
-  );
-}
 
 /**
  * 谁能看: every member, 指定的人 (projects, departments of a project and single
