@@ -160,13 +160,18 @@ export function ConfirmButton({
   );
 }
 
-/** A password or link the server returned once, with a copy button. */
+/**
+ * A password, link or token the server returned once, with a copy button.
+ * `note` replaces the default line about passing it on privately.
+ */
 export function OneTimeSecret({
   label,
   value,
+  note = copy.admin.oneTime,
 }: {
   label: string;
   value: string;
+  note?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -191,9 +196,7 @@ export function OneTimeSecret({
           {copied ? copy.admin.copied : copy.admin.copy}
         </button>
       </div>
-      <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">
-        {copy.admin.oneTime}
-      </p>
+      <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">{note}</p>
     </div>
   );
 }

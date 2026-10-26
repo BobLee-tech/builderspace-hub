@@ -9,6 +9,8 @@ export {
   DONE_COLUMN_LIMIT,
   DUE_SOON_DAYS,
   functionKeys,
+  stageNames,
+  stageOf,
   stages,
   taskViews,
 } from "./task.policy";

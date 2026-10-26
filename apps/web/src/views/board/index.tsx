@@ -899,7 +899,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             {!isTemplate && (
               <>
                 <VisibilityButton
-                  visibility={boardData?.visibility ?? "private"}
+                  visibility={
+                    boardData?.visibility === "public" ? "public" : "private"
+                  }
                   boardPublicId={boardId ?? ""}
                   boardSlug={boardData?.slug ?? ""}
                   queryParams={queryParams}

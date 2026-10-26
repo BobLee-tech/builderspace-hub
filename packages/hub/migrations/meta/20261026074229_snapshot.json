@@ -1,6 +1,6 @@
 {
   "id": "a46cb61a-c6b6-412d-8498-0506f8aa2362",
-  "prevId": "bd3aa117-524e-4381-878d-299cfcab352e",
+  "prevId": "e213d036-22ae-4fb5-ba69-b9e775467f6b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2871,6 +2871,322 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.hub_mcp_connection": {
+      "name": "hub_mcp_connection",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "publicId": {
+          "name": "publicId",
+          "type": "varchar(12)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accessTokenHash": {
+          "name": "accessTokenHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accessExpiresAt": {
+          "name": "accessExpiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refreshTokenHash": {
+          "name": "refreshTokenHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshExpiresAt": {
+          "name": "refreshExpiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastUsedAt": {
+          "name": "lastUsedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hub_mcp_connection_user_idx": {
+          "name": "hub_mcp_connection_user_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hub_mcp_connection_clientId_hub_oauth_client_id_fk": {
+          "name": "hub_mcp_connection_clientId_hub_oauth_client_id_fk",
+          "tableFrom": "hub_mcp_connection",
+          "tableTo": "hub_oauth_client",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "hub_mcp_connection_userId_user_id_fk": {
+          "name": "hub_mcp_connection_userId_user_id_fk",
+          "tableFrom": "hub_mcp_connection",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hub_mcp_connection_publicId_unique": {
+          "name": "hub_mcp_connection_publicId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "publicId"
+          ]
+        },
+        "hub_mcp_connection_accessTokenHash_unique": {
+          "name": "hub_mcp_connection_accessTokenHash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "accessTokenHash"
+          ]
+        },
+        "hub_mcp_connection_refreshTokenHash_unique": {
+          "name": "hub_mcp_connection_refreshTokenHash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "refreshTokenHash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "hub_mcp_connection_kind_check": {
+          "name": "hub_mcp_connection_kind_check",
+          "value": "(\"hub_mcp_connection\".\"clientId\" IS NOT NULL AND \"hub_mcp_connection\".\"refreshTokenHash\" IS NOT NULL AND \"hub_mcp_connection\".\"refreshExpiresAt\" IS NOT NULL) OR (\"hub_mcp_connection\".\"clientId\" IS NULL AND \"hub_mcp_connection\".\"name\" IS NOT NULL AND \"hub_mcp_connection\".\"refreshTokenHash\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.hub_oauth_client": {
+      "name": "hub_oauth_client",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redirectUris": {
+          "name": "redirectUris",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hub_oauth_client_clientId_unique": {
+          "name": "hub_oauth_client_clientId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "clientId"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.hub_oauth_code": {
+      "name": "hub_oauth_code",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "codeHash": {
+          "name": "codeHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redirectUri": {
+          "name": "redirectUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "codeChallenge": {
+          "name": "codeChallenge",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hub_oauth_code_expires_idx": {
+          "name": "hub_oauth_code_expires_idx",
+          "columns": [
+            {
+              "expression": "expiresAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hub_oauth_code_clientId_hub_oauth_client_id_fk": {
+          "name": "hub_oauth_code_clientId_hub_oauth_client_id_fk",
+          "tableFrom": "hub_oauth_code",
+          "tableTo": "hub_oauth_client",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "hub_oauth_code_userId_user_id_fk": {
+          "name": "hub_oauth_code_userId_user_id_fk",
+          "tableFrom": "hub_oauth_code",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hub_oauth_code_codeHash_unique": {
+          "name": "hub_oauth_code_codeHash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "codeHash"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": true

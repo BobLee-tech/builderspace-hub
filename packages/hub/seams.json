@@ -14,6 +14,7 @@
     "apps/web/src/pages/forms/",
     "apps/web/src/pages/home/",
     "apps/web/src/pages/me/",
+    "apps/web/src/pages/mcp/",
     "apps/web/src/pages/tasks/",
     "docs/hub/",
     ".github/workflows/hub-ci.yml",
@@ -60,7 +61,7 @@
     {
       "file": "packages/api/package.json",
       "marker": "\"@kan/hub\"",
-      "why": "The API package hosts the Hub's tRPC router and guards."
+      "why": "The API package hosts the Hub's tRPC router and guards, and exports the Hub's MCP tools (./hub-mcp) to the web app."
     },
     {
       "file": "packages/api/src/root.ts",
@@ -131,6 +132,16 @@
       "file": "apps/web/src/views/board/index.tsx",
       "marker": "hub-seam",
       "why": "Hides an action the person has no permission for instead of showing it disabled; renders the Hub's visibility menu, which adds 仅自己可见."
+    },
+    {
+      "file": "apps/web/next.config.js",
+      "marker": "hub-seam",
+      "why": "Adds the Hub's rewrites: MCP clients fetch the OAuth discovery documents from /.well-known on the site's origin, and the pages router only serves API routes under /api."
+    },
+    {
+      "file": ".github/workflows/test.yml",
+      "marker": "hub-seam",
+      "why": "Raises the unit-test job's time limit from 15 to 25 minutes: the Hub's integration tests boot an in-memory database each, and the suite already took 13-14 minutes."
     },
     {
       "file": "pnpm-lock.yaml",

@@ -78,6 +78,27 @@ export {
 export { IMPORT_ACCEPT, importSizeProblem } from "./documents/document.policy";
 
 export type {
+  McpTokenDays,
+  McpToolGroup,
+  McpToolInfo,
+  McpUrls,
+} from "./mcp/catalog";
+export {
+  MAX_MCP_TOKENS,
+  MCP_TOKEN_DAYS,
+  MCP_TOKEN_NAME_MAX,
+  HUB_MCP_AUTHORIZE_PATH,
+  HUB_MCP_GUIDE_PATH,
+  HUB_MCP_PATH,
+  mcpNotOffered,
+  mcpToolGroupLabels,
+  mcpToolGroups,
+  mcpTools,
+  mcpUrls,
+  toolsFor,
+} from "./mcp/catalog";
+
+export type {
   AnswerInput,
   ChoiceField,
   ChoiceOption,

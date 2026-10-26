@@ -71,6 +71,7 @@ import { createTRPCRouter } from "../../trpc";
 import { departmentsRouter } from "./departments";
 import { documentsRouter } from "./documents";
 import { formsRouter } from "./forms";
+import { mcpRouter } from "./mcp/router";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
 import { siteRouter } from "./site";
 
@@ -523,6 +524,7 @@ export const hubRouter = createTRPCRouter({
   archive: archiveRouter,
   boards: boardsRouter,
   nudges: nudgesRouter,
+  mcp: mcpRouter,
 
   projects: hubAdminProcedure("admin.view").query(({ ctx }) =>
     listProjects(ctx.db),

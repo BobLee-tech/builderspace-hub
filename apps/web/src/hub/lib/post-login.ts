@@ -1,4 +1,6 @@
-const MAX_LENGTH = 512;
+// Room for the MCP consent page's address, whose query carries a whole
+// authorization request (app id, redirect, PKCE challenge, state, resource).
+const MAX_LENGTH = 2048;
 
 // Printable ASCII only: no spaces, control characters or backslashes.
 const SAFE_PATH = /^\/[\x21-\x5B\x5D-\x7E]*$/;

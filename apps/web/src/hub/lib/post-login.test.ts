@@ -15,6 +15,12 @@ describe("resolvePostLoginTarget", () => {
     expect(resolvePostLoginTarget(next, FALLBACK)).toBe(next);
   });
 
+  it("keeps the MCP consent page with its whole authorization request", () => {
+    const next = `/mcp/authorize?response_type=code&client_id=mcp_${"a".repeat(24)}&redirect_uri=${encodeURIComponent("http://127.0.0.1:61234/oauth/callback")}&code_challenge=${"c".repeat(43)}&code_challenge_method=S256&state=${"s".repeat(300)}&resource=${encodeURIComponent("https://builderspace-hub.vercel.app/api/hub/mcp")}`;
+    expect(next.length).toBeGreaterThan(512);
+    expect(resolvePostLoginTarget(next, FALLBACK)).toBe(next);
+  });
+
   it.each([
     ["nothing", null],
     ["an empty string", ""],
@@ -26,7 +32,7 @@ describe("resolvePostLoginTarget", () => {
     ["a relative path", "boards"],
     ["a path with a control character", "/boards\n/evil"],
     ["an encoded protocol-relative URL", "/%2F%2Fevil.example"],
-    ["a path that is absurdly long", `/${"a".repeat(600)}`],
+    ["a path that is absurdly long", `/${"a".repeat(2100)}`],
   ])("falls back for %s", (_, next) => {
     expect(resolvePostLoginTarget(next, FALLBACK)).toBe(FALLBACK);
   });
