@@ -2,11 +2,12 @@ import { useState } from "react";
 
 import type { ImportedDocument } from "@kan/hub/documents/file-import";
 
-import type { AudienceChoice } from "./AudiencePicker";
+import type { AudienceChoice } from "./audience-choice";
 import { copy } from "~/hub/copy/zh";
 import { buttonClass, ErrorText, inputClass } from "~/hub/ui/admin-primitives";
 import { api } from "~/utils/api";
-import { AudiencePicker, isEmptySelection } from "./AudiencePicker";
+import { isEmptySelection } from "./audience-choice";
+import { AudiencePicker } from "./AudiencePicker";
 
 const text = copy.documents.newText;
 
